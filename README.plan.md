@@ -140,25 +140,3 @@ The Dexie schema lives in `src/db/` and supports versioning/migrations.
 ### Install
 ```bash
 pnpm install
-```
-
-### Run
-```bash
-pnpm dev
-```
-
-### Quality checks
-```bash
-pnpm lint
-pnpm format
-pnpm test
-pnpm test:e2e
-pnpm build
-```
-
-## CHANGELOG
-
-- Initialized core domain models, simulation engine, and worker-backed sim client.
-- Added local Dexie storage with repository interfaces for scenarios and runs.
-- Built minimal UI flows for scenario CRUD, run execution, and results visualization.
-- Added Vitest and Playwright scaffolding plus ESLint/Prettier scripts.
