@@ -147,6 +147,10 @@ pnpm install
 pnpm dev
 ```
 
+## GitHub Pages
+
+Deploys under `https://kirkhaines.github.io/replan/` using hash-based routing so refreshes work without server rewrites.
+
 ### Quality checks
 ```bash
 pnpm lint

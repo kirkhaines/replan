@@ -1,4 +1,4 @@
-import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
 import ScenarioListPage from '../features/scenarios/ScenarioListPage'
 import ScenarioDetailPage from '../features/scenarios/ScenarioDetailPage'
 import RunResultsPage from '../features/runs/RunResultsPage'
@@ -13,7 +13,7 @@ const NotFound = () => (
 )
 
 const App = () => (
-  <BrowserRouter>
+  <HashRouter>
     <div className="app">
       <header className="nav">
         <div className="brand">
@@ -33,7 +33,7 @@ const App = () => (
         </Routes>
       </main>
     </div>
-  </BrowserRouter>
+  </HashRouter>
 )
 
 export default App
