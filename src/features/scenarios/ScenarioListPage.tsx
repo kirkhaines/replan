@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   getCoreRowModel,
@@ -20,16 +20,16 @@ const ScenarioListPage = () => {
   const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  const loadScenarios = async () => {
+  const loadScenarios = useCallback(async () => {
     setIsLoading(true)
     const data = await storage.scenarioRepo.list()
     setScenarios(data)
     setIsLoading(false)
-  }
+  }, [storage])
 
   useEffect(() => {
     void loadScenarios()
-  }, [storage])
+  }, [loadScenarios])
 
   const columns = useMemo<ColumnDef<Scenario>[]>(
     () => [
@@ -51,6 +51,7 @@ const ScenarioListPage = () => {
     [],
   )
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: scenarios,
     columns,

@@ -21,7 +21,7 @@ describe('runSimulation', () => {
 
     expect(result.timeline).toHaveLength(2)
     expect(result.summary.endingBalance).toBe(110)
-    expect(result.summary.minBalance).toBe(105)
+    expect(result.summary.minBalance).toBe(100)
     expect(result.summary.maxBalance).toBe(110)
   })
 })

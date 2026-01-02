@@ -1,11 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { scenarioSchema, type Scenario, type SimulationRun } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
+import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenario } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
+
+const persistScenario = async (
+  values: Scenario,
+  storage: StorageClient,
+  setScenario: (scenario: Scenario) => void,
+  reset: (values: Scenario) => void,
+) => {
+  const now = Date.now()
+  const next = { ...values, updatedAt: now }
+  await storage.scenarioRepo.upsert(next)
+  setScenario(next)
+  reset(next)
+  return next
+}
 
 const ScenarioDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -28,7 +43,7 @@ const ScenarioDetailPage = () => {
     defaultValues,
   })
 
-  const loadScenario = async () => {
+  const loadScenario = useCallback(async () => {
     if (!id) {
       setScenario(null)
       setIsLoading(false)
@@ -46,38 +61,34 @@ const ScenarioDetailPage = () => {
     setScenario(data)
     reset(data)
     setIsLoading(false)
-  }
+  }, [id, reset, storage])
 
-  const loadRuns = async (scenarioId: string) => {
-    const data = await storage.runRepo.listForScenario(scenarioId)
-    setRuns(data)
-  }
+  const loadRuns = useCallback(
+    async (scenarioId: string) => {
+      const data = await storage.runRepo.listForScenario(scenarioId)
+      setRuns(data)
+    },
+    [storage],
+  )
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadScenario()
-  }, [id, storage])
+  }, [loadScenario])
 
   useEffect(() => {
     if (scenario?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadRuns(scenario.id)
     }
-  }, [scenario?.id, storage])
-
-  const persistScenario = async (values: Scenario) => {
-    const now = Date.now()
-    const next = { ...values, updatedAt: now }
-    await storage.scenarioRepo.upsert(next)
-    setScenario(next)
-    reset(next)
-    return next
-  }
+  }, [loadRuns, scenario?.id])
 
   const onSubmit = async (values: Scenario) => {
-    await persistScenario(values)
+    await persistScenario(values, storage, setScenario, reset)
   }
 
   const onRun = async (values: Scenario) => {
-    const saved = await persistScenario(values)
+    const saved = await persistScenario(values, storage, setScenario, reset)
     const run = await simClient.runScenario(saved)
     await storage.runRepo.add(run)
     await loadRuns(saved.id)
