@@ -110,6 +110,10 @@ class DexieSocialSecurityStrategyRepo implements SocialSecurityStrategyRepo {
 }
 
 class DexieNonInvestmentAccountRepo implements NonInvestmentAccountRepo {
+  async list() {
+    return db.nonInvestmentAccounts.orderBy('updatedAt').reverse().toArray()
+  }
+
   async get(id: string) {
     return db.nonInvestmentAccounts.get(id)
   }
@@ -120,6 +124,10 @@ class DexieNonInvestmentAccountRepo implements NonInvestmentAccountRepo {
 }
 
 class DexieInvestmentAccountRepo implements InvestmentAccountRepo {
+  async list() {
+    return db.investmentAccounts.orderBy('updatedAt').reverse().toArray()
+  }
+
   async get(id: string) {
     return db.investmentAccounts.get(id)
   }
@@ -135,6 +143,10 @@ class DexieInvestmentAccountHoldingRepo implements InvestmentAccountHoldingRepo 
       .where('investmentAccountId')
       .equals(accountId)
       .toArray()
+  }
+
+  async list() {
+    return db.investmentAccountHoldings.orderBy('updatedAt').reverse().toArray()
   }
 
   async get(id: string) {
@@ -221,4 +233,39 @@ export const createDexieStorageClient = (): StorageClient => ({
   spendingLineItemRepo: new DexieSpendingLineItemRepo(),
   personStrategyRepo: new DexiePersonStrategyRepo(),
   runRepo: new DexieRunRepo(),
+  clearAll: async () => {
+    await db.transaction(
+      'rw',
+      db.scenarios,
+      db.runs,
+      db.people,
+      db.socialSecurityEarnings,
+      db.socialSecurityStrategies,
+      db.nonInvestmentAccounts,
+      db.investmentAccounts,
+      db.investmentAccountHoldings,
+      db.futureWorkStrategies,
+      db.futureWorkPeriods,
+      db.spendingStrategies,
+      db.spendingLineItems,
+      db.personStrategies,
+      async () => {
+        await Promise.all([
+          db.scenarios.clear(),
+          db.runs.clear(),
+          db.people.clear(),
+          db.socialSecurityEarnings.clear(),
+          db.socialSecurityStrategies.clear(),
+          db.nonInvestmentAccounts.clear(),
+          db.investmentAccounts.clear(),
+          db.investmentAccountHoldings.clear(),
+          db.futureWorkStrategies.clear(),
+          db.futureWorkPeriods.clear(),
+          db.spendingStrategies.clear(),
+          db.spendingLineItems.clear(),
+          db.personStrategies.clear(),
+        ])
+      },
+    )
+  },
 })

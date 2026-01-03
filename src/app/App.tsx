@@ -1,7 +1,10 @@
-import { HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import ScenarioListPage from '../features/scenarios/ScenarioListPage'
 import ScenarioDetailPage from '../features/scenarios/ScenarioDetailPage'
 import RunResultsPage from '../features/runs/RunResultsPage'
+import PeopleListPage from '../features/people/PeopleListPage'
+import AccountsPage from '../features/accounts/AccountsPage'
+import { useAppStore } from '../state/appStore'
 
 const NotFound = () => (
   <section className="stack">
@@ -12,15 +15,32 @@ const NotFound = () => (
   </section>
 )
 
-const App = () => (
-  <HashRouter>
+const AppShell = () => {
+  const navigate = useNavigate()
+  const storage = useAppStore((state) => state.storage)
+
+  const handleClearData = async () => {
+    const confirmed = window.confirm('Clear all local data? This cannot be undone.')
+    if (!confirmed) {
+      return
+    }
+    await storage.clearAll()
+    navigate('/scenarios')
+  }
+
+  return (
     <div className="app">
       <header className="nav">
         <div className="brand">
           <Link to="/scenarios">RePlan</Link>
         </div>
-        <nav>
+        <nav className="nav-links">
           <Link to="/scenarios">Scenarios</Link>
+          <Link to="/people">People</Link>
+          <Link to="/accounts">Accounts</Link>
+          <button className="link-button" onClick={handleClearData} type="button">
+            Clear data
+          </button>
         </nav>
       </header>
       <main className="container">
@@ -29,10 +49,18 @@ const App = () => (
           <Route path="/scenarios" element={<ScenarioListPage />} />
           <Route path="/scenarios/:id" element={<ScenarioDetailPage />} />
           <Route path="/runs/:id" element={<RunResultsPage />} />
+          <Route path="/people" element={<PeopleListPage />} />
+          <Route path="/accounts" element={<AccountsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
     </div>
+  )
+}
+
+const App = () => (
+  <HashRouter>
+    <AppShell />
   </HashRouter>
 )
 

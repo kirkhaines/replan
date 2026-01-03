@@ -40,17 +40,20 @@ export interface SocialSecurityStrategyRepo {
 }
 
 export interface NonInvestmentAccountRepo {
+  list: () => Promise<NonInvestmentAccount[]>
   get: (id: string) => Promise<NonInvestmentAccount | undefined>
   upsert: (account: NonInvestmentAccount) => Promise<void>
 }
 
 export interface InvestmentAccountRepo {
+  list: () => Promise<InvestmentAccount[]>
   get: (id: string) => Promise<InvestmentAccount | undefined>
   upsert: (account: InvestmentAccount) => Promise<void>
 }
 
 export interface InvestmentAccountHoldingRepo {
   listForAccount: (accountId: string) => Promise<InvestmentAccountHolding[]>
+  list: () => Promise<InvestmentAccountHolding[]>
   get: (id: string) => Promise<InvestmentAccountHolding | undefined>
   upsert: (holding: InvestmentAccountHolding) => Promise<void>
 }

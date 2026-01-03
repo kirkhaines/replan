@@ -1,0 +1,191 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useAppStore } from '../../state/appStore'
+import type {
+  InvestmentAccount,
+  InvestmentAccountHolding,
+  NonInvestmentAccount,
+} from '../../core/models'
+import { createUuid } from '../../core/utils/uuid'
+import PageHeader from '../../components/PageHeader'
+
+const createNonInvestmentAccount = (): NonInvestmentAccount => {
+  const now = Date.now()
+  return {
+    id: createUuid(),
+    name: 'Cash',
+    balance: 10000,
+    interestRate: 0.01,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+const createInvestmentAccount = (): InvestmentAccount => {
+  const now = Date.now()
+  return {
+    id: createUuid(),
+    name: 'Brokerage',
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+const createHolding = (investmentAccountId: string): InvestmentAccountHolding => {
+  const now = Date.now()
+  return {
+    id: createUuid(),
+    name: 'S&P 500',
+    taxType: 'taxable',
+    balance: 50000,
+    holdingType: 'sp500',
+    return: 0.05,
+    risk: 0.15,
+    investmentAccountId,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+const AccountsPage = () => {
+  const storage = useAppStore((state) => state.storage)
+  const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
+  const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
+  const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const loadAccounts = useCallback(async () => {
+    setIsLoading(true)
+    const [cash, investments, holdingList] = await Promise.all([
+      storage.nonInvestmentAccountRepo.list(),
+      storage.investmentAccountRepo.list(),
+      storage.investmentAccountHoldingRepo.list(),
+    ])
+    setCashAccounts(cash)
+    setInvestmentAccounts(investments)
+    setHoldings(holdingList)
+    setIsLoading(false)
+  }, [storage])
+
+  useEffect(() => {
+    void loadAccounts()
+  }, [loadAccounts])
+
+  const handleCreateCash = async () => {
+    const account = createNonInvestmentAccount()
+    await storage.nonInvestmentAccountRepo.upsert(account)
+    await loadAccounts()
+  }
+
+  const handleCreateInvestment = async () => {
+    const account = createInvestmentAccount()
+    await storage.investmentAccountRepo.upsert(account)
+    const holding = createHolding(account.id)
+    await storage.investmentAccountHoldingRepo.upsert(holding)
+    await loadAccounts()
+  }
+
+  return (
+    <section className="stack">
+      <PageHeader
+        title="Accounts"
+        subtitle="Track cash and investment accounts."
+        actions={
+          <div className="button-row">
+            <button className="button" onClick={handleCreateCash}>
+              Add cash account
+            </button>
+            <button className="button secondary" onClick={handleCreateInvestment}>
+              Add investment account
+            </button>
+          </div>
+        }
+      />
+
+      <div className="card stack">
+        <h2>Cash accounts</h2>
+        {isLoading ? (
+          <p className="muted">Loading accounts...</p>
+        ) : cashAccounts.length === 0 ? (
+          <p className="muted">No cash accounts yet.</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Balance</th>
+                <th>Interest rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cashAccounts.map((account) => (
+                <tr key={account.id}>
+                  <td>{account.name}</td>
+                  <td>{account.balance.toLocaleString()}</td>
+                  <td>{account.interestRate}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="card stack">
+        <h2>Investment accounts</h2>
+        {isLoading ? (
+          <p className="muted">Loading accounts...</p>
+        ) : investmentAccounts.length === 0 ? (
+          <p className="muted">No investment accounts yet.</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              {investmentAccounts.map((account) => (
+                <tr key={account.id}>
+                  <td>{account.name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="card stack">
+        <h2>Holdings</h2>
+        {isLoading ? (
+          <p className="muted">Loading holdings...</p>
+        ) : holdings.length === 0 ? (
+          <p className="muted">No holdings loaded yet.</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Tax type</th>
+                <th>Balance</th>
+                <th>Return</th>
+                <th>Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              {holdings.map((holding) => (
+                <tr key={holding.id}>
+                  <td>{holding.name}</td>
+                  <td>{holding.taxType}</td>
+                  <td>{holding.balance.toLocaleString()}</td>
+                  <td>{holding.return}</td>
+                  <td>{holding.risk}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </section>
+  )
+}
+
+export default AccountsPage

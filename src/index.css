@@ -49,6 +49,21 @@ h2 {
   backdrop-filter: blur(12px);
 }
 
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-weight: 500;
+  cursor: pointer;
+}
+
 .brand a {
   font-size: 1.25rem;
   font-weight: 600;
@@ -129,6 +144,15 @@ h2 {
   border: 1px solid var(--border);
   font-size: 1rem;
   font-family: inherit;
+}
+
+.field select {
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 1rem;
+  font-family: inherit;
+  background: white;
 }
 
 .error {
