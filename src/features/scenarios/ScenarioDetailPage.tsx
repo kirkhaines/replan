@@ -141,15 +141,12 @@ const buildSimulationInput = (values: ScenarioEditorValues): SimulationInput => 
   }
 }
 
-const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
-  const scenario = {
-    ...values.scenario,
-    updatedAt: now,
-    personStrategyIds: [values.personStrategy.id],
-    nonInvestmentAccountIds: [values.nonInvestmentAccount.id],
-    investmentAccountIds: [values.investmentAccount.id],
-    spendingStrategyId: values.spendingStrategy.id,
-  }
+  const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
+    const scenario = {
+      ...values.scenario,
+      updatedAt: now,
+      spendingStrategyId: values.spendingStrategy.id,
+    }
 
   return {
     scenario,
@@ -384,7 +381,6 @@ const ScenarioDetailPage = () => {
   const applyInvestmentAccountSelection = useCallback(
     async (account: InvestmentAccount) => {
       setValue('investmentAccount', account, { shouldDirty: true })
-      setValue('scenario.investmentAccountIds', [account.id], { shouldDirty: true })
       const list = await loadHoldingsForAccount(account.id)
       if (list.length > 0) {
         applyHoldingSelection(list[0])
@@ -399,7 +395,6 @@ const ScenarioDetailPage = () => {
   const applyCashAccountSelection = useCallback(
     (account: NonInvestmentAccount) => {
       setValue('nonInvestmentAccount', account, { shouldDirty: true })
-      setValue('scenario.nonInvestmentAccountIds', [account.id], { shouldDirty: true })
     },
     [setValue],
   )
@@ -429,7 +424,6 @@ const ScenarioDetailPage = () => {
 
       setValue('person', person, { shouldDirty: true })
       setValue('personStrategy', personStrategy, { shouldDirty: true })
-      setValue('scenario.personStrategyIds', [personStrategy.id], { shouldDirty: true })
       setValue('socialSecurityStrategy', socialSecurityStrategy, { shouldDirty: true })
       setValue('futureWorkStrategy', futureWorkStrategy, { shouldDirty: true })
       setValue('futureWorkPeriod', futureWorkPeriods[0], { shouldDirty: true })
