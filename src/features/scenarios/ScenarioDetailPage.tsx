@@ -16,6 +16,8 @@ import {
   investmentAccountHoldingSchema,
   personStrategySchema,
   fundingStrategyTypeSchema,
+  inflationTypeSchema,
+  type InflationDefault,
   type Scenario,
   type SimulationRun,
   type Person,
@@ -35,6 +37,7 @@ import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
+import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -146,6 +149,19 @@ const normalizeSpendingLineItem = (item: SpendingLineItem): SpendingLineItem => 
   inflationType: item.inflationType ?? 'cpi',
 })
 
+const buildInflationMap = (
+  defaults: InflationDefault[],
+  current?: Record<string, number>,
+): Record<string, number> => {
+  const fallback = defaults.length > 0 ? defaults : inflationDefaultsSeed
+  return Object.fromEntries(
+    inflationTypeSchema.options.map((type) => [
+      type,
+      current?.[type] ?? fallback.find((item) => item.type === type)?.rate ?? 0,
+    ]),
+  )
+}
+
 const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
     const scenario = {
       ...values.scenario,
@@ -245,6 +261,7 @@ const ScenarioDetailPage = () => {
   const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
   const [investmentBalances, setInvestmentBalances] = useState<Record<string, number>>({})
+  const [inflationDefaults, setInflationDefaults] = useState<InflationDefault[]>([])
 
   const defaultValues = useMemo(() => {
     const bundle = createDefaultScenarioBundle()
@@ -264,6 +281,7 @@ const ScenarioDetailPage = () => {
   })
 
   const selectedSpendingStrategyId = watch('spendingStrategy.id')
+  const inflationAssumptions = watch('scenario.inflationAssumptions')
   const personStrategyIds = watch('scenario.personStrategyIds')
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
   const investmentAccountIds = watch('scenario.investmentAccountIds')
@@ -388,6 +406,7 @@ const ScenarioDetailPage = () => {
       cashData,
       investmentData,
       holdingData,
+      inflationData,
     ] = await Promise.all([
       storage.personRepo.list(),
       storage.personStrategyRepo.list(),
@@ -397,6 +416,7 @@ const ScenarioDetailPage = () => {
       storage.nonInvestmentAccountRepo.list(),
       storage.investmentAccountRepo.list(),
       storage.investmentAccountHoldingRepo.list(),
+      storage.inflationDefaultRepo.list(),
     ])
     setPeople(peopleData)
     setPersonStrategies(personStrategyData)
@@ -411,6 +431,7 @@ const ScenarioDetailPage = () => {
       return acc
     }, {})
     setInvestmentBalances(balanceMap)
+    setInflationDefaults(inflationData)
     return {
       peopleData,
       personStrategyData,
@@ -420,6 +441,15 @@ const ScenarioDetailPage = () => {
       holdingData,
     }
   }, [storage])
+
+  const inflationByType = useMemo(
+    () => new Map(inflationDefaults.map((item) => [item.type, item])),
+    [inflationDefaults],
+  )
+
+  const handleInflationChange = (type: InflationDefault['type'], value: number) => {
+    setValue(`scenario.inflationAssumptions.${type}`, value, { shouldDirty: true })
+  }
 
   const loadHoldingsForAccount = useCallback(
     async (accountId: string) => storage.investmentAccountHoldingRepo.listForAccount(accountId),
@@ -591,8 +621,9 @@ const ScenarioDetailPage = () => {
     return
   }
 
-  const bundle: ScenarioEditorValues = {
-    scenario: data,
+    const inflationAssumptions = buildInflationMap(inflationDefaults, data.inflationAssumptions)
+    const bundle: ScenarioEditorValues = {
+      scenario: { ...data, inflationAssumptions },
     person,
     socialSecurityStrategy,
     futureWorkStrategy,
@@ -605,12 +636,12 @@ const ScenarioDetailPage = () => {
     personStrategy,
   }
 
-  setScenario(data)
-  reset(bundle)
+    setScenario({ ...data, inflationAssumptions })
+    reset(bundle)
   setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
   setSelectionError(null)
   setIsLoading(false)
-}, [id, reset, storage])
+  }, [id, inflationDefaults, reset, storage])
 
   const loadRuns = useCallback(
     async (scenarioId: string) => {
@@ -950,6 +981,13 @@ const ScenarioDetailPage = () => {
           />
         ))}
         <input type="hidden" {...register('scenario.spendingStrategyId')} />
+        {inflationTypeSchema.options.map((type) => (
+          <input
+            key={type}
+            type="hidden"
+            {...register(`scenario.inflationAssumptions.${type}`, { valueAsNumber: true })}
+          />
+        ))}
         <input type="hidden" {...register('person.id')} />
         <input type="hidden" {...register('person.createdAt', { valueAsNumber: true })} />
         <input type="hidden" {...register('person.updatedAt', { valueAsNumber: true })} />
@@ -1317,6 +1355,29 @@ const ScenarioDetailPage = () => {
               </tbody>
             </table>
           )}
+        </div>
+
+        <div className="stack">
+          <div className="row">
+            <h2>Inflation assumptions</h2>
+          </div>
+          <div className="form-grid">
+            {inflationTypeSchema.options.map((type) => {
+              const currentValue =
+                inflationAssumptions?.[type] ?? inflationByType.get(type)?.rate ?? 0
+              return (
+                <label className="field" key={type}>
+                  <span>{type}</span>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={currentValue}
+                    onChange={(event) => handleInflationChange(type, Number(event.target.value))}
+                  />
+                </label>
+              )
+            })}
+          </div>
         </div>
 
         <div className="button-row">

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { inflationTypeSchema, type InflationDefault, type SsaWageIndex } from '../../core/models'
+import { inflationTypeSchema, type InflationDefault, type SsaBendPoint, type SsaWageIndex } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import { createUuid } from '../../core/utils/uuid'
 import { now } from '../../core/utils/time'
@@ -17,6 +17,7 @@ const DefaultsPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [inflationDefaults, setInflationDefaults] = useState<InflationDefault[]>([])
   const [wageIndex, setWageIndex] = useState<SsaWageIndex[]>([])
+  const [bendPoints, setBendPoints] = useState<SsaBendPoint[]>([])
   const [importText, setImportText] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
@@ -25,11 +26,17 @@ const DefaultsPage = () => {
     [wageIndex],
   )
 
+  const sortedBendPoints = useMemo(
+    () => [...bendPoints].sort((a, b) => b.year - a.year),
+    [bendPoints],
+  )
+
   const loadDefaults = useCallback(async () => {
     setIsLoading(true)
-    const [inflationData, wageData] = await Promise.all([
+    const [inflationData, wageData, bendPointData] = await Promise.all([
       storage.inflationDefaultRepo.list(),
       storage.ssaWageIndexRepo.list(),
+      storage.ssaBendPointRepo.list(),
     ])
     const inflationByType = new Map(inflationData.map((item) => [item.type, item]))
     const filled = inflationTypeSchema.options.map((type) => {
@@ -48,6 +55,7 @@ const DefaultsPage = () => {
     })
     setInflationDefaults(filled)
     setWageIndex(wageData)
+    setBendPoints(bendPointData)
     setIsLoading(false)
   }, [storage])
 
@@ -89,6 +97,45 @@ const DefaultsPage = () => {
       },
       ...current,
     ])
+  }
+
+  const handleAddBendPoint = () => {
+    const timestamp = now()
+    setBendPoints((current) => [
+      {
+        id: createUuid(),
+        year: new Date().getFullYear(),
+        first: 0,
+        second: 0,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      ...current,
+    ])
+  }
+
+  const handleRemoveBendPoint = (id: string) => {
+    setBendPoints((current) => current.filter((entry) => entry.id !== id))
+  }
+
+  const handleSaveBendPoints = async () => {
+    const timestamp = now()
+    const existing = await storage.ssaBendPointRepo.list()
+    const existingIds = new Set(existing.map((entry) => entry.id))
+    const nextIds = new Set(bendPoints.map((entry) => entry.id))
+    const removedIds = Array.from(existingIds).filter((entryId) => !nextIds.has(entryId))
+
+    await Promise.all(removedIds.map((entryId) => storage.ssaBendPointRepo.remove(entryId)))
+    await Promise.all(
+      bendPoints.map((entry) =>
+        storage.ssaBendPointRepo.upsert({
+          ...entry,
+          createdAt: entry.createdAt || timestamp,
+          updatedAt: timestamp,
+        }),
+      ),
+    )
+    await loadDefaults()
   }
 
   const handleRemoveWageIndex = (id: string) => {
@@ -207,6 +254,94 @@ const DefaultsPage = () => {
       </div>
 
       <div className="card stack">
+        <div className="stack">
+          <div className="row">
+            <h2>SSA bend points</h2>
+            <div className="button-row">
+              <button className="button secondary" type="button" onClick={handleAddBendPoint}>
+                Add row
+              </button>
+              <button className="button secondary" type="button" onClick={handleSaveBendPoints}>
+                Save bend points
+              </button>
+            </div>
+          </div>
+          {sortedBendPoints.length === 0 ? (
+            <p className="muted">No bend points yet.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Year</th>
+                  <th>First bend point</th>
+                  <th>Second bend point</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedBendPoints.map((entry) => (
+                  <tr key={entry.id}>
+                    <td>
+                      <input
+                        type="number"
+                        value={entry.year}
+                        onChange={(event) =>
+                          setBendPoints((current) =>
+                            current.map((item) =>
+                              item.id === entry.id
+                                ? { ...item, year: Number(event.target.value) }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={entry.first}
+                        onChange={(event) =>
+                          setBendPoints((current) =>
+                            current.map((item) =>
+                              item.id === entry.id
+                                ? { ...item, first: Number(event.target.value) }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={entry.second}
+                        onChange={(event) =>
+                          setBendPoints((current) =>
+                            current.map((item) =>
+                              item.id === entry.id
+                                ? { ...item, second: Number(event.target.value) }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={() => handleRemoveBendPoint(entry.id)}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
         <div className="row">
           <div>
             <h2>SSA wage index</h2>

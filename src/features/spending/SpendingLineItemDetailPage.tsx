@@ -79,7 +79,7 @@ const SpendingLineItemDetailPage = () => {
     const normalized = {
       ...data,
       inflationType:
-        data.inflationType && data.inflationType !== 'custom' ? data.inflationType : 'cpi',
+        data.inflationType ? data.inflationType : 'cpi',
     }
     setItem(normalized)
     setCategories(Array.from(new Set(allLineItems.map((item) => item.category))).filter(Boolean))

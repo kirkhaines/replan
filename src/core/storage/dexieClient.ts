@@ -15,6 +15,7 @@ import type {
   PersonStrategy,
   InflationDefault,
   SsaWageIndex,
+  SsaBendPoint,
 } from '../models'
 import type {
   RunRepo,
@@ -33,6 +34,7 @@ import type {
   PersonStrategyRepo,
   InflationDefaultRepo,
   SsaWageIndexRepo,
+  SsaBendPointRepo,
 } from './types'
 
 class DexieScenarioRepo implements ScenarioRepo {
@@ -303,6 +305,24 @@ class DexieSsaWageIndexRepo implements SsaWageIndexRepo {
   }
 }
 
+class DexieSsaBendPointRepo implements SsaBendPointRepo {
+  async list() {
+    return db.ssaBendPoints.orderBy('year').reverse().toArray()
+  }
+
+  async get(id: string) {
+    return db.ssaBendPoints.get(id)
+  }
+
+  async upsert(record: SsaBendPoint) {
+    await db.ssaBendPoints.put(record)
+  }
+
+  async remove(id: string) {
+    await db.ssaBendPoints.delete(id)
+  }
+}
+
 export const createDexieStorageClient = (): StorageClient => ({
   scenarioRepo: new DexieScenarioRepo(),
   personRepo: new DexiePersonRepo(),
@@ -318,6 +338,7 @@ export const createDexieStorageClient = (): StorageClient => ({
   personStrategyRepo: new DexiePersonStrategyRepo(),
   inflationDefaultRepo: new DexieInflationDefaultRepo(),
   ssaWageIndexRepo: new DexieSsaWageIndexRepo(),
+  ssaBendPointRepo: new DexieSsaBendPointRepo(),
   runRepo: new DexieRunRepo(),
   clearAll: async () => {
     await db.transaction('rw', db.tables, async () => {

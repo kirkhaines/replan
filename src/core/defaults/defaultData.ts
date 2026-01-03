@@ -1,4 +1,4 @@
-import type { InflationDefault, SsaWageIndex } from '../models'
+import type { InflationDefault, SsaBendPoint, SsaWageIndex } from '../models'
 
 export const inflationDefaultsSeed: Array<Pick<InflationDefault, 'type' | 'rate'>> = [
   { type: 'none', rate: 0 },
@@ -83,4 +83,8 @@ export const ssaWageIndexSeed: Array<Pick<SsaWageIndex, 'year' | 'index'>> = [
   { year: 2022, index: 63795.13 },
   { year: 2023, index: 66621.8 },
   { year: 2024, index: 69846.57 },
+]
+
+export const ssaBendPointSeed: Array<Pick<SsaBendPoint, 'year' | 'first' | 'second'>> = [
+  { year: 2026, first: 1286, second: 7749 },
 ]

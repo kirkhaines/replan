@@ -14,6 +14,7 @@ import type {
   PersonStrategy,
   InflationDefault,
   SsaWageIndex,
+  SsaBendPoint,
 } from '../models'
 
 export interface ScenarioRepo {
@@ -112,6 +113,13 @@ export interface SsaWageIndexRepo {
   remove: (id: string) => Promise<void>
 }
 
+export interface SsaBendPointRepo {
+  list: () => Promise<SsaBendPoint[]>
+  get: (id: string) => Promise<SsaBendPoint | undefined>
+  upsert: (record: SsaBendPoint) => Promise<void>
+  remove: (id: string) => Promise<void>
+}
+
 export interface RunRepo {
   listForScenario: (scenarioId: string) => Promise<SimulationRun[]>
   add: (run: SimulationRun) => Promise<void>
@@ -133,6 +141,7 @@ export interface StorageClient {
   personStrategyRepo: PersonStrategyRepo
   inflationDefaultRepo: InflationDefaultRepo
   ssaWageIndexRepo: SsaWageIndexRepo
+  ssaBendPointRepo: SsaBendPointRepo
   runRepo: RunRepo
   clearAll: () => Promise<void>
 }

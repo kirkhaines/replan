@@ -1,5 +1,5 @@
 import type { StorageClient } from '../storage/types'
-import { inflationDefaultsSeed, ssaWageIndexSeed } from './defaultData'
+import { inflationDefaultsSeed, ssaBendPointSeed, ssaWageIndexSeed } from './defaultData'
 import { now } from '../utils/time'
 import { createUuid } from '../utils/uuid'
 
@@ -33,6 +33,22 @@ export const seedDefaults = async (storage: StorageClient) => {
           id: createUuid(),
           year: seed.year,
           index: seed.index,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      ),
+    )
+  }
+
+  const existingBendPoints = await storage.ssaBendPointRepo.list()
+  if (existingBendPoints.length === 0) {
+    await Promise.all(
+      ssaBendPointSeed.map((seed) =>
+        storage.ssaBendPointRepo.upsert({
+          id: createUuid(),
+          year: seed.year,
+          first: seed.first,
+          second: seed.second,
           createdAt: timestamp,
           updatedAt: timestamp,
         }),

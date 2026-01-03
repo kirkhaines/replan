@@ -11,6 +11,7 @@ import type { Scenario } from '../../core/models'
 import { createUuid } from '../../core/utils/uuid'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
+import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 
 const formatDate = (value: number) =>
   new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -204,6 +205,9 @@ const ScenarioListPage = () => {
       investmentAccountIds: [investmentAccount.id],
       spendingStrategyId,
       fundingStrategyType: 'pro_rata',
+      inflationAssumptions: Object.fromEntries(
+        inflationDefaultsSeed.map((seed) => [seed.type, seed.rate]),
+      ),
     }
 
     await storage.scenarioRepo.upsert(scenario)

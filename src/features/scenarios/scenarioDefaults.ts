@@ -12,6 +12,7 @@ import type {
   PersonStrategy,
 } from '../../core/models'
 import { createUuid } from '../../core/utils/uuid'
+import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 
 export type ScenarioBundle = {
   scenario: Scenario
@@ -162,6 +163,9 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     investmentAccountIds: [investmentAccountId],
     spendingStrategyId,
     fundingStrategyType: 'pro_rata',
+    inflationAssumptions: Object.fromEntries(
+      inflationDefaultsSeed.map((seed) => [seed.type, seed.rate]),
+    ),
   }
 
   return {

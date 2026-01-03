@@ -182,6 +182,12 @@ const createStorageFixture = (seed: SeedData): StorageClient => {
       upsert: vi.fn(async () => undefined),
       remove: vi.fn(async () => undefined),
     },
+    ssaBendPointRepo: {
+      list: vi.fn(async () => []),
+      get: vi.fn(async () => undefined),
+      upsert: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    },
     runRepo: {
       listForScenario: vi.fn(async () => []),
       add: vi.fn(async () => undefined),
