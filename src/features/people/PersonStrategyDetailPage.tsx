@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import type {
+  Scenario,
+  SocialSecurityEarnings,
+  SpendingLineItem,
+  SsaBendPoint,
+  SsaWageIndex,
   FutureWorkPeriod,
   FutureWorkStrategy,
   Person,
@@ -10,16 +15,27 @@ import type {
 import { useAppStore } from '../../state/appStore'
 import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
+import { buildSsaEstimate } from '../../core/sim/ssa'
 
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
+const formatCurrency = (value: number) =>
+  value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+
 
 const PersonStrategyDetailPage = () => {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
-  const backTo = (location.state as { from?: string } | null)?.from ?? '/scenarios'
+  const locationState = location.state as { from?: string; scenarioId?: string } | null
+  const backTo = locationState?.from ?? '/scenarios'
+  const scenarioIdFromState = locationState?.scenarioId
   const storage = useAppStore((state) => state.storage)
   const [personStrategy, setPersonStrategy] = useState<PersonStrategy | null>(null)
+  const [scenario, setScenario] = useState<Scenario | null>(null)
   const [people, setPeople] = useState<Person[]>([])
+  const [ssaEarnings, setSsaEarnings] = useState<SocialSecurityEarnings[]>([])
+  const [spendingLineItems, setSpendingLineItems] = useState<SpendingLineItem[]>([])
+  const [ssaWageIndex, setSsaWageIndex] = useState<SsaWageIndex[]>([])
+  const [ssaBendPoints, setSsaBendPoints] = useState<SsaBendPoint[]>([])
   const [socialStrategies, setSocialStrategies] = useState<SocialSecurityStrategy[]>([])
   const [futureWorkStrategies, setFutureWorkStrategies] = useState<FutureWorkStrategy[]>([])
   const [futureWorkPeriods, setFutureWorkPeriods] = useState<FutureWorkPeriod[]>([])
@@ -73,15 +89,19 @@ const PersonStrategyDetailPage = () => {
 
     setIsLoading(true)
     setError(null)
-    const [strategy, peopleList, strategies, holdings] = await Promise.all([
+    const [strategy, peopleList, strategies, holdings, wageIndex, bendPoints] = await Promise.all([
       storage.personStrategyRepo.get(id),
       storage.personRepo.list(),
       refreshStrategies(),
       storage.investmentAccountHoldingRepo.list(),
+      storage.ssaWageIndexRepo.list(),
+      storage.ssaBendPointRepo.list(),
     ])
 
     setPeople(peopleList)
     setHoldingsAvailable(holdings.length > 0)
+    setSsaWageIndex(wageIndex)
+    setSsaBendPoints(bendPoints)
 
     if (!strategy) {
       setPersonStrategy(null)
@@ -89,20 +109,51 @@ const PersonStrategyDetailPage = () => {
       return
     }
 
-    setPersonStrategy(strategy)
-    setSelectedPersonId(strategy.personId)
-    setSelectedSocialId(strategy.socialSecurityStrategyId)
-    setSelectedFutureWorkId(strategy.futureWorkStrategyId)
+    let resolvedStrategy = strategy
+    if (!resolvedStrategy.scenarioId && scenarioIdFromState) {
+      const now = Date.now()
+      resolvedStrategy = { ...resolvedStrategy, scenarioId: scenarioIdFromState, updatedAt: now }
+      await storage.personStrategyRepo.upsert(resolvedStrategy)
+    }
+
+    setPersonStrategy(resolvedStrategy)
+    setSelectedPersonId(resolvedStrategy.personId)
+    setSelectedSocialId(resolvedStrategy.socialSecurityStrategyId)
+    setSelectedFutureWorkId(resolvedStrategy.futureWorkStrategyId)
 
     const social =
-      strategies.socialList.find((item) => item.id === strategy.socialSecurityStrategyId) ?? null
+      strategies.socialList.find((item) => item.id === resolvedStrategy.socialSecurityStrategyId) ??
+      null
     const future =
-      strategies.futureList.find((item) => item.id === strategy.futureWorkStrategyId) ?? null
+      strategies.futureList.find((item) => item.id === resolvedStrategy.futureWorkStrategyId) ??
+      null
     setSocialDraft(social)
     setFutureWorkDraft(future)
-    await loadPeriods(strategy.futureWorkStrategyId)
+    await loadPeriods(resolvedStrategy.futureWorkStrategyId)
+
+    const scenarioId = resolvedStrategy.scenarioId ?? scenarioIdFromState
+    if (!scenarioId) {
+      setScenario(null)
+      setSsaEarnings([])
+      setSpendingLineItems([])
+      setError('This person strategy is not linked to a scenario yet.')
+      setIsLoading(false)
+      return
+    }
+
+    const scenarioRecord = await storage.scenarioRepo.get(scenarioId)
+    setScenario(scenarioRecord ?? null)
+
+    const [earnings, lineItems] = await Promise.all([
+      storage.socialSecurityEarningsRepo.listForPerson(resolvedStrategy.personId),
+      scenarioRecord
+        ? storage.spendingLineItemRepo.listForStrategy(scenarioRecord.spendingStrategyId)
+        : Promise.resolve([]),
+    ])
+    setSsaEarnings(earnings)
+    setSpendingLineItems(lineItems)
     setIsLoading(false)
-  }, [id, loadPeriods, refreshStrategies, storage])
+  }, [id, loadPeriods, refreshStrategies, scenarioIdFromState, storage])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -116,6 +167,7 @@ const PersonStrategyDetailPage = () => {
     setSocialDraft(null)
     setFutureWorkDraft(null)
     setFutureWorkPeriods([])
+    setSsaEarnings([])
 
     const nextSocial = socialStrategies.find(
       (strategy) => strategy.personId === personId,
@@ -133,6 +185,11 @@ const PersonStrategyDetailPage = () => {
       setSelectedFutureWorkId(nextFuture.id)
       setFutureWorkDraft(nextFuture)
       await loadPeriods(nextFuture.id)
+    }
+
+    if (personId) {
+      const earnings = await storage.socialSecurityEarningsRepo.listForPerson(personId)
+      setSsaEarnings(earnings)
     }
 
     setPersonStrategy((current) =>
@@ -300,6 +357,36 @@ const PersonStrategyDetailPage = () => {
     setPersonStrategy(next)
   }
 
+  const socialSecurityEstimate = useMemo(() => {
+    if (!socialDraft || !scenario || !selectedPersonId) {
+      return null
+    }
+    const person = people.find((item) => item.id === selectedPersonId)
+    if (!person) {
+      return null
+    }
+    return buildSsaEstimate({
+      person,
+      socialStrategy: socialDraft,
+      scenario,
+      earnings: ssaEarnings,
+      futureWorkPeriods,
+      spendingLineItems,
+      wageIndex: ssaWageIndex,
+      bendPoints: ssaBendPoints,
+    })
+  }, [
+    socialDraft,
+    scenario,
+    selectedPersonId,
+    people,
+    ssaEarnings,
+    futureWorkPeriods,
+    spendingLineItems,
+    ssaWageIndex,
+    ssaBendPoints,
+  ])
+
   if (isLoading) {
     return <p className="muted">Loading person strategy...</p>
   }
@@ -374,16 +461,27 @@ const PersonStrategyDetailPage = () => {
           {socialDraft ? (
             <div className="stack">
               <div className="form-grid">
-              <label className="field">
-                <span>Start age</span>
-                <input
-                  type="number"
-                  value={socialDraft.startAge}
-                  onChange={(event) =>
-                    setSocialDraft({ ...socialDraft, startAge: Number(event.target.value) })
-                  }
-                />
-              </label>
+                <label className="field">
+                  <span>Start age</span>
+                  <input
+                    type="number"
+                    value={socialDraft.startAge}
+                    onChange={(event) =>
+                      setSocialDraft({ ...socialDraft, startAge: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Estimated monthly benefit</span>
+                  <input
+                    readOnly
+                    value={
+                      socialSecurityEstimate
+                        ? formatCurrency(socialSecurityEstimate.monthlyBenefit)
+                        : ''
+                    }
+                  />
+                </label>
               </div>
               <div className="button-row">
                 <button className="button" type="button" onClick={handleSaveSocial}>

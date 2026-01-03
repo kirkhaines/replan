@@ -188,6 +188,7 @@ const ScenarioListPage = () => {
 
     await storage.personStrategyRepo.upsert({
       id: personStrategyId,
+      scenarioId: scenario.id,
       personId: person.id,
       futureWorkStrategyId,
       socialSecurityStrategyId,

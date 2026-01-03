@@ -92,6 +92,24 @@ class ReplanDb extends Dexie {
       ssaWageIndex: 'id, year',
       ssaBendPoints: 'id, year',
     })
+    this.version(5).stores({
+      scenarios: 'id, updatedAt',
+      runs: 'id, scenarioId, finishedAt',
+      people: 'id, updatedAt',
+      socialSecurityEarnings: 'id, personId, year',
+      socialSecurityStrategies: 'id, personId',
+      nonInvestmentAccounts: 'id, updatedAt',
+      investmentAccounts: 'id, updatedAt',
+      investmentAccountHoldings: 'id, investmentAccountId, updatedAt',
+      futureWorkStrategies: 'id, personId',
+      futureWorkPeriods: 'id, futureWorkStrategyId, startDate',
+      spendingStrategies: 'id, updatedAt',
+      spendingLineItems: 'id, spendingStrategyId, startDate',
+      personStrategies: 'id, personId, scenarioId',
+      inflationDefaults: 'id, type',
+      ssaWageIndex: 'id, year',
+      ssaBendPoints: 'id, year',
+    })
   }
 }
 

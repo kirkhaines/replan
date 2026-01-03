@@ -38,6 +38,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
   const thirtyYears = new Date()
   thirtyYears.setFullYear(today.getFullYear() + 30)
 
+  const scenarioId = createUuid()
   const personId = createUuid()
   const socialSecurityStrategyId = createUuid()
   const futureWorkStrategyId = createUuid()
@@ -146,6 +147,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
 
   const personStrategy: PersonStrategy = {
     id: personStrategyId,
+    scenarioId,
     personId,
     futureWorkStrategyId,
     socialSecurityStrategyId,
@@ -154,7 +156,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
   }
 
   const scenario: Scenario = {
-    id: createUuid(),
+    id: scenarioId,
     name: 'New Scenario',
     createdAt: now,
     updatedAt: now,

@@ -755,6 +755,7 @@ const ScenarioDetailPage = () => {
     })
     await storage.personStrategyRepo.upsert({
       id: personStrategyId,
+      scenarioId: scenario.id,
       personId,
       futureWorkStrategyId,
       socialSecurityStrategyId,
@@ -776,7 +777,9 @@ const ScenarioDetailPage = () => {
     if (newStrategy) {
       await applyPersonStrategySelection(newStrategy)
     }
-    navigate(`/person-strategies/${personStrategyId}`, { state: { from: location.pathname } })
+    navigate(`/person-strategies/${personStrategyId}`, {
+      state: { from: location.pathname, scenarioId: scenario?.id ?? id },
+    })
   }
 
   const handleRemovePersonStrategy = async (strategyId: string) => {
@@ -1166,7 +1169,7 @@ const ScenarioDetailPage = () => {
                           <Link
                             className="link"
                             to={`/person-strategies/${strategy.id}`}
-                            state={{ from: location.pathname }}
+                            state={{ from: location.pathname, scenarioId: scenario?.id }}
                           >
                             {person.name}
                           </Link>

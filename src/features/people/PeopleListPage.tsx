@@ -41,7 +41,6 @@ const PeopleListPage = () => {
     const socialSecurityStrategyId = createUuid()
     const futureWorkStrategyId = createUuid()
     const futureWorkPeriodId = createUuid()
-    const personStrategyId = createUuid()
     const today = new Date()
     const tenYears = new Date()
     tenYears.setFullYear(today.getFullYear() + 10)
@@ -74,14 +73,6 @@ const PeopleListPage = () => {
       '401kMatchRatio': 1,
       '401kInvestmentAccountHoldingId': createUuid(),
       includesHealthInsurance: true,
-      createdAt: now,
-      updatedAt: now,
-    })
-    await storage.personStrategyRepo.upsert({
-      id: personStrategyId,
-      personId: person.id,
-      futureWorkStrategyId,
-      socialSecurityStrategyId,
       createdAt: now,
       updatedAt: now,
     })
