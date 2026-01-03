@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   investmentAccountHoldingSchema,
@@ -17,13 +17,13 @@ const HoldingDetailPage = () => {
   const [holding, setHolding] = useState<InvestmentAccountHolding | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const defaultValues = useMemo(
+  const defaultValues = useMemo<InvestmentAccountHolding>(
     () => ({
       id: '',
       name: '',
-      taxType: 'taxable',
+      taxType: 'taxable' as const,
       balance: 0,
-      holdingType: 'sp500',
+      holdingType: 'sp500' as const,
       return: 0,
       risk: 0,
       investmentAccountId: '',
@@ -63,7 +63,7 @@ const HoldingDetailPage = () => {
     void loadHolding()
   }, [loadHolding])
 
-  const onSubmit = async (values: InvestmentAccountHolding) => {
+  const onSubmit: SubmitHandler<InvestmentAccountHolding> = async (values) => {
     const now = Date.now()
     const next = { ...values, updatedAt: now }
     await storage.investmentAccountHoldingRepo.upsert(next)

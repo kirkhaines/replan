@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../../state/appStore'
-import type { InvestmentAccount, NonInvestmentAccount } from '../../core/models'
+import type {
+  InvestmentAccount,
+  InvestmentAccountHolding,
+  NonInvestmentAccount,
+} from '../../core/models'
 import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
 

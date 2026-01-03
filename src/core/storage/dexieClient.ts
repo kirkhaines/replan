@@ -270,38 +270,8 @@ export const createDexieStorageClient = (): StorageClient => ({
   personStrategyRepo: new DexiePersonStrategyRepo(),
   runRepo: new DexieRunRepo(),
   clearAll: async () => {
-    await db.transaction(
-      'rw',
-      db.scenarios,
-      db.runs,
-      db.people,
-      db.socialSecurityEarnings,
-      db.socialSecurityStrategies,
-      db.nonInvestmentAccounts,
-      db.investmentAccounts,
-      db.investmentAccountHoldings,
-      db.futureWorkStrategies,
-      db.futureWorkPeriods,
-      db.spendingStrategies,
-      db.spendingLineItems,
-      db.personStrategies,
-      async () => {
-        await Promise.all([
-          db.scenarios.clear(),
-          db.runs.clear(),
-          db.people.clear(),
-          db.socialSecurityEarnings.clear(),
-          db.socialSecurityStrategies.clear(),
-          db.nonInvestmentAccounts.clear(),
-          db.investmentAccounts.clear(),
-          db.investmentAccountHoldings.clear(),
-          db.futureWorkStrategies.clear(),
-          db.futureWorkPeriods.clear(),
-          db.spendingStrategies.clear(),
-          db.spendingLineItems.clear(),
-          db.personStrategies.clear(),
-        ])
-      },
-    )
+    await db.transaction('rw', db.tables, async () => {
+      await Promise.all(db.tables.map((table) => table.clear()))
+    })
   },
 })
