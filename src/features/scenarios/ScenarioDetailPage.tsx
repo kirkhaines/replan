@@ -1249,8 +1249,11 @@ const ScenarioDetailPage = () => {
 
         <div className="stack">
           <div className="row">
+            <h2>Spending strategy</h2>
+          </div>
+          <div className="row">
             <label className="field">
-              <span>Spending strategy</span>
+              <span>Strategy</span>
               <select
                 value={selectedSpendingStrategyId ?? ''}
                 onChange={(event) => void handleSpendingStrategySelect(event.target.value)}
