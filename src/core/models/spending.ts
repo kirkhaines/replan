@@ -1,0 +1,24 @@
+import { z } from 'zod'
+import { baseEntitySchema, isoDateStringSchema } from './common'
+
+export const spendingStrategySchema = baseEntitySchema.extend({
+  name: z.string().min(1),
+})
+
+export const spendingLineItemSchema = baseEntitySchema.extend({
+  name: z.string().min(1),
+  spendingStrategyId: z.string().uuid(),
+  category: z.string().min(1),
+  needAmount: z.number().min(0),
+  wantAmount: z.number().min(0),
+  startDate: isoDateStringSchema,
+  endDate: isoDateStringSchema,
+  futureWorkPeriodId: z.string().uuid().optional(),
+  isPreTax: z.boolean(),
+  isCharitable: z.boolean(),
+  isWork: z.boolean(),
+  targetInvestmentAccountHoldingId: z.string().uuid().optional(),
+})
+
+export type SpendingStrategy = z.infer<typeof spendingStrategySchema>
+export type SpendingLineItem = z.infer<typeof spendingLineItemSchema>
