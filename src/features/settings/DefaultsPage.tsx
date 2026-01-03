@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { inflationTypeSchema, type InflationDefault, type SsaBendPoint, type SsaWageIndex } from '../../core/models'
+import {
+  inflationTypeSchema,
+  type InflationDefault,
+  type SsaBendPoint,
+  type SsaRetirementAdjustment,
+  type SsaWageIndex,
+} from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import { createUuid } from '../../core/utils/uuid'
 import { now } from '../../core/utils/time'
@@ -18,6 +24,7 @@ const DefaultsPage = () => {
   const [inflationDefaults, setInflationDefaults] = useState<InflationDefault[]>([])
   const [wageIndex, setWageIndex] = useState<SsaWageIndex[]>([])
   const [bendPoints, setBendPoints] = useState<SsaBendPoint[]>([])
+  const [retirementAdjustments, setRetirementAdjustments] = useState<SsaRetirementAdjustment[]>([])
   const [importText, setImportText] = useState('')
   const [isLoading, setIsLoading] = useState(true)
 
@@ -31,12 +38,18 @@ const DefaultsPage = () => {
     [bendPoints],
   )
 
+  const sortedRetirementAdjustments = useMemo(
+    () => [...retirementAdjustments].sort((a, b) => a.birthYearStart - b.birthYearStart),
+    [retirementAdjustments],
+  )
+
   const loadDefaults = useCallback(async () => {
     setIsLoading(true)
-    const [inflationData, wageData, bendPointData] = await Promise.all([
+    const [inflationData, wageData, bendPointData, adjustmentData] = await Promise.all([
       storage.inflationDefaultRepo.list(),
       storage.ssaWageIndexRepo.list(),
       storage.ssaBendPointRepo.list(),
+      storage.ssaRetirementAdjustmentRepo.list(),
     ])
     const inflationByType = new Map(inflationData.map((item) => [item.type, item]))
     const filled = inflationTypeSchema.options.map((type) => {
@@ -56,6 +69,7 @@ const DefaultsPage = () => {
     setInflationDefaults(filled)
     setWageIndex(wageData)
     setBendPoints(bendPointData)
+    setRetirementAdjustments(adjustmentData)
     setIsLoading(false)
   }, [storage])
 
@@ -129,6 +143,46 @@ const DefaultsPage = () => {
     await Promise.all(
       bendPoints.map((entry) =>
         storage.ssaBendPointRepo.upsert({
+          ...entry,
+          createdAt: entry.createdAt || timestamp,
+          updatedAt: timestamp,
+        }),
+      ),
+    )
+    await loadDefaults()
+  }
+
+  const handleAddRetirementAdjustment = () => {
+    const timestamp = now()
+    setRetirementAdjustments((current) => [
+      {
+        id: createUuid(),
+        birthYearStart: 1943,
+        birthYearEnd: 1943,
+        normalRetirementAgeMonths: 66 * 12,
+        delayedRetirementCreditPerYear: 0.08,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      ...current,
+    ])
+  }
+
+  const handleRemoveRetirementAdjustment = (id: string) => {
+    setRetirementAdjustments((current) => current.filter((entry) => entry.id !== id))
+  }
+
+  const handleSaveRetirementAdjustments = async () => {
+    const timestamp = now()
+    const existing = await storage.ssaRetirementAdjustmentRepo.list()
+    const existingIds = new Set(existing.map((entry) => entry.id))
+    const nextIds = new Set(retirementAdjustments.map((entry) => entry.id))
+    const removedIds = Array.from(existingIds).filter((entryId) => !nextIds.has(entryId))
+
+    await Promise.all(removedIds.map((entryId) => storage.ssaRetirementAdjustmentRepo.remove(entryId)))
+    await Promise.all(
+      retirementAdjustments.map((entry) =>
+        storage.ssaRetirementAdjustmentRepo.upsert({
           ...entry,
           createdAt: entry.createdAt || timestamp,
           updatedAt: timestamp,
@@ -337,6 +391,164 @@ const DefaultsPage = () => {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="stack">
+          <div className="row">
+            <div>
+              <h2>SSA retirement adjustments</h2>
+              <p className="muted">
+                Source:{' '}
+                <a
+                  className="link"
+                  href="https://www.ssa.gov/oact/ProgData/ar_drc.html"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Delayed retirement credits table
+                </a>
+              </p>
+            </div>
+            <div className="button-row">
+              <button
+                className="button secondary"
+                type="button"
+                onClick={handleAddRetirementAdjustment}
+              >
+                Add row
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={handleSaveRetirementAdjustments}
+              >
+                Save adjustments
+              </button>
+            </div>
+          </div>
+          {sortedRetirementAdjustments.length === 0 ? (
+            <p className="muted">No retirement adjustment data yet.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Birth year start</th>
+                  <th>Birth year end</th>
+                  <th>NRA years</th>
+                  <th>NRA months</th>
+                  <th>Delayed credit % / year</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRetirementAdjustments.map((entry) => {
+                  const years = Math.floor(entry.normalRetirementAgeMonths / 12)
+                  const months = entry.normalRetirementAgeMonths % 12
+                  return (
+                    <tr key={entry.id}>
+                      <td>
+                        <input
+                          type="number"
+                          value={entry.birthYearStart}
+                          onChange={(event) =>
+                            setRetirementAdjustments((current) =>
+                              current.map((item) =>
+                                item.id === entry.id
+                                  ? { ...item, birthYearStart: Number(event.target.value) }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={entry.birthYearEnd}
+                          onChange={(event) =>
+                            setRetirementAdjustments((current) =>
+                              current.map((item) =>
+                                item.id === entry.id
+                                  ? { ...item, birthYearEnd: Number(event.target.value) }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={years}
+                          onChange={(event) => {
+                            const nextYears = Number(event.target.value)
+                            setRetirementAdjustments((current) =>
+                              current.map((item) =>
+                                item.id === entry.id
+                                  ? {
+                                      ...item,
+                                      normalRetirementAgeMonths: nextYears * 12 + months,
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          value={months}
+                          onChange={(event) => {
+                            const nextMonths = Number(event.target.value)
+                            setRetirementAdjustments((current) =>
+                              current.map((item) =>
+                                item.id === entry.id
+                                  ? {
+                                      ...item,
+                                      normalRetirementAgeMonths: years * 12 + nextMonths,
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={entry.delayedRetirementCreditPerYear * 100}
+                          onChange={(event) =>
+                            setRetirementAdjustments((current) =>
+                              current.map((item) =>
+                                item.id === entry.id
+                                  ? {
+                                      ...item,
+                                      delayedRetirementCreditPerYear:
+                                        Number(event.target.value) / 100,
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => handleRemoveRetirementAdjustment(entry.id)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

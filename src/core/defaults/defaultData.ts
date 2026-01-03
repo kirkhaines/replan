@@ -1,4 +1,9 @@
-import type { InflationDefault, SsaBendPoint, SsaWageIndex } from '../models'
+import type {
+  InflationDefault,
+  SsaBendPoint,
+  SsaRetirementAdjustment,
+  SsaWageIndex,
+} from '../models'
 
 export const inflationDefaultsSeed: Array<Pick<InflationDefault, 'type' | 'rate'>> = [
   { type: 'none', rate: 0 },
@@ -87,4 +92,38 @@ export const ssaWageIndexSeed: Array<Pick<SsaWageIndex, 'year' | 'index'>> = [
 
 export const ssaBendPointSeed: Array<Pick<SsaBendPoint, 'year' | 'first' | 'second'>> = [
   { year: 2026, first: 1286, second: 7749 },
+]
+
+export const ssaRetirementAdjustmentSeed: Array<
+  Pick<
+    SsaRetirementAdjustment,
+    | 'birthYearStart'
+    | 'birthYearEnd'
+    | 'normalRetirementAgeMonths'
+    | 'delayedRetirementCreditPerYear'
+  >
+> = [
+  { birthYearStart: 1917, birthYearEnd: 1918, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.015 },
+  { birthYearStart: 1919, birthYearEnd: 1920, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.02 },
+  { birthYearStart: 1921, birthYearEnd: 1922, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.025 },
+  { birthYearStart: 1923, birthYearEnd: 1924, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.03 },
+  { birthYearStart: 1925, birthYearEnd: 1926, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.035 },
+  { birthYearStart: 1927, birthYearEnd: 1928, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.04 },
+  { birthYearStart: 1929, birthYearEnd: 1930, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.045 },
+  { birthYearStart: 1931, birthYearEnd: 1932, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.05 },
+  { birthYearStart: 1933, birthYearEnd: 1934, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.055 },
+  { birthYearStart: 1935, birthYearEnd: 1936, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.06 },
+  { birthYearStart: 1937, birthYearEnd: 1937, normalRetirementAgeMonths: 65 * 12, delayedRetirementCreditPerYear: 0.065 },
+  { birthYearStart: 1938, birthYearEnd: 1938, normalRetirementAgeMonths: 65 * 12 + 2, delayedRetirementCreditPerYear: 0.065 },
+  { birthYearStart: 1939, birthYearEnd: 1939, normalRetirementAgeMonths: 65 * 12 + 4, delayedRetirementCreditPerYear: 0.07 },
+  { birthYearStart: 1940, birthYearEnd: 1940, normalRetirementAgeMonths: 65 * 12 + 6, delayedRetirementCreditPerYear: 0.07 },
+  { birthYearStart: 1941, birthYearEnd: 1941, normalRetirementAgeMonths: 65 * 12 + 8, delayedRetirementCreditPerYear: 0.075 },
+  { birthYearStart: 1942, birthYearEnd: 1942, normalRetirementAgeMonths: 65 * 12 + 10, delayedRetirementCreditPerYear: 0.075 },
+  { birthYearStart: 1943, birthYearEnd: 1954, normalRetirementAgeMonths: 66 * 12, delayedRetirementCreditPerYear: 0.08 },
+  { birthYearStart: 1955, birthYearEnd: 1955, normalRetirementAgeMonths: 66 * 12 + 2, delayedRetirementCreditPerYear: 0.08 },
+  { birthYearStart: 1956, birthYearEnd: 1956, normalRetirementAgeMonths: 66 * 12 + 4, delayedRetirementCreditPerYear: 0.08 },
+  { birthYearStart: 1957, birthYearEnd: 1957, normalRetirementAgeMonths: 66 * 12 + 6, delayedRetirementCreditPerYear: 0.08 },
+  { birthYearStart: 1958, birthYearEnd: 1958, normalRetirementAgeMonths: 66 * 12 + 8, delayedRetirementCreditPerYear: 0.08 },
+  { birthYearStart: 1959, birthYearEnd: 1959, normalRetirementAgeMonths: 66 * 12 + 10, delayedRetirementCreditPerYear: 0.08 },
+  { birthYearStart: 1960, birthYearEnd: 9999, normalRetirementAgeMonths: 67 * 12, delayedRetirementCreditPerYear: 0.08 },
 ]

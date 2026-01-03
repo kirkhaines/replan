@@ -1,5 +1,10 @@
 import type { StorageClient } from '../storage/types'
-import { inflationDefaultsSeed, ssaBendPointSeed, ssaWageIndexSeed } from './defaultData'
+import {
+  inflationDefaultsSeed,
+  ssaBendPointSeed,
+  ssaRetirementAdjustmentSeed,
+  ssaWageIndexSeed,
+} from './defaultData'
 import { now } from '../utils/time'
 import { createUuid } from '../utils/uuid'
 
@@ -49,6 +54,23 @@ export const seedDefaults = async (storage: StorageClient) => {
           year: seed.year,
           first: seed.first,
           second: seed.second,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      ),
+    )
+  }
+
+  const existingRetirementAdjustments = await storage.ssaRetirementAdjustmentRepo.list()
+  if (existingRetirementAdjustments.length === 0) {
+    await Promise.all(
+      ssaRetirementAdjustmentSeed.map((seed) =>
+        storage.ssaRetirementAdjustmentRepo.upsert({
+          id: createUuid(),
+          birthYearStart: seed.birthYearStart,
+          birthYearEnd: seed.birthYearEnd,
+          normalRetirementAgeMonths: seed.normalRetirementAgeMonths,
+          delayedRetirementCreditPerYear: seed.delayedRetirementCreditPerYear,
           createdAt: timestamp,
           updatedAt: timestamp,
         }),

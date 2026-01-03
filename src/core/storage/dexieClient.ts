@@ -16,6 +16,7 @@ import type {
   InflationDefault,
   SsaWageIndex,
   SsaBendPoint,
+  SsaRetirementAdjustment,
 } from '../models'
 import type {
   RunRepo,
@@ -35,6 +36,7 @@ import type {
   InflationDefaultRepo,
   SsaWageIndexRepo,
   SsaBendPointRepo,
+  SsaRetirementAdjustmentRepo,
 } from './types'
 
 class DexieScenarioRepo implements ScenarioRepo {
@@ -323,6 +325,24 @@ class DexieSsaBendPointRepo implements SsaBendPointRepo {
   }
 }
 
+class DexieSsaRetirementAdjustmentRepo implements SsaRetirementAdjustmentRepo {
+  async list() {
+    return db.ssaRetirementAdjustments.orderBy('birthYearStart').toArray()
+  }
+
+  async get(id: string) {
+    return db.ssaRetirementAdjustments.get(id)
+  }
+
+  async upsert(record: SsaRetirementAdjustment) {
+    await db.ssaRetirementAdjustments.put(record)
+  }
+
+  async remove(id: string) {
+    await db.ssaRetirementAdjustments.delete(id)
+  }
+}
+
 export const createDexieStorageClient = (): StorageClient => ({
   scenarioRepo: new DexieScenarioRepo(),
   personRepo: new DexiePersonRepo(),
@@ -339,6 +359,7 @@ export const createDexieStorageClient = (): StorageClient => ({
   inflationDefaultRepo: new DexieInflationDefaultRepo(),
   ssaWageIndexRepo: new DexieSsaWageIndexRepo(),
   ssaBendPointRepo: new DexieSsaBendPointRepo(),
+  ssaRetirementAdjustmentRepo: new DexieSsaRetirementAdjustmentRepo(),
   runRepo: new DexieRunRepo(),
   clearAll: async () => {
     await db.transaction('rw', db.tables, async () => {

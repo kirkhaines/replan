@@ -18,6 +18,14 @@ export const ssaBendPointSchema = baseEntitySchema.extend({
   second: z.number().min(0),
 })
 
+export const ssaRetirementAdjustmentSchema = baseEntitySchema.extend({
+  birthYearStart: z.number().int(),
+  birthYearEnd: z.number().int(),
+  normalRetirementAgeMonths: z.number().int().min(0),
+  delayedRetirementCreditPerYear: z.number().min(0),
+})
+
 export type InflationDefault = z.infer<typeof inflationDefaultSchema>
 export type SsaWageIndex = z.infer<typeof ssaWageIndexSchema>
 export type SsaBendPoint = z.infer<typeof ssaBendPointSchema>
+export type SsaRetirementAdjustment = z.infer<typeof ssaRetirementAdjustmentSchema>

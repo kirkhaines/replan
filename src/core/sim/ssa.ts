@@ -3,6 +3,7 @@ import type {
   SocialSecurityEarnings,
   SpendingLineItem,
   SsaBendPoint,
+  SsaRetirementAdjustment,
   SsaWageIndex,
   FutureWorkPeriod,
   Person,
@@ -91,6 +92,7 @@ export const buildSsaEstimate = ({
   spendingLineItems,
   wageIndex,
   bendPoints,
+  retirementAdjustments,
 }: {
   person: Person
   socialStrategy: SocialSecurityStrategy
@@ -100,6 +102,7 @@ export const buildSsaEstimate = ({
   spendingLineItems: SpendingLineItem[]
   wageIndex: SsaWageIndex[]
   bendPoints: SsaBendPoint[]
+  retirementAdjustments: SsaRetirementAdjustment[]
 }) => {
   const birthYear = getYearFromIsoDate(person.dateOfBirth)
   if (birthYear === null) {
@@ -187,8 +190,29 @@ export const buildSsaEstimate = ({
   const thirdPiece = Math.max(aime - bend.second, 0)
   const pia = firstPiece * 0.9 + secondPiece * 0.32 + thirdPiece * 0.15
 
+  const adjustment = retirementAdjustments.find(
+    (entry) => birthYear >= entry.birthYearStart && birthYear <= entry.birthYearEnd,
+  )
+
+  const nraMonths = adjustment?.normalRetirementAgeMonths ?? 67 * 12
+  const claimAgeMonths = Math.min(Math.round(socialStrategy.startAge * 12), 70 * 12)
+
+  let adjustedBenefit = pia
+  if (claimAgeMonths < nraMonths) {
+    const monthsEarly = nraMonths - claimAgeMonths
+    const firstSegment = Math.min(monthsEarly, 36)
+    const remaining = Math.max(0, monthsEarly - 36)
+    const reduction =
+      firstSegment * (5 / 9 / 100) + remaining * (5 / 12 / 100)
+    adjustedBenefit = pia * (1 - reduction)
+  } else if (claimAgeMonths > nraMonths && adjustment) {
+    const monthsDelayed = claimAgeMonths - nraMonths
+    const creditPerMonth = adjustment.delayedRetirementCreditPerYear / 12
+    adjustedBenefit = pia * (1 + monthsDelayed * creditPerMonth)
+  }
+
   return {
     claimYear,
-    monthlyBenefit: pia,
+    monthlyBenefit: adjustedBenefit,
   }
 }

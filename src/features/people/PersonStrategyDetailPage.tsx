@@ -5,6 +5,7 @@ import type {
   SocialSecurityEarnings,
   SpendingLineItem,
   SsaBendPoint,
+  SsaRetirementAdjustment,
   SsaWageIndex,
   FutureWorkPeriod,
   FutureWorkStrategy,
@@ -36,6 +37,7 @@ const PersonStrategyDetailPage = () => {
   const [spendingLineItems, setSpendingLineItems] = useState<SpendingLineItem[]>([])
   const [ssaWageIndex, setSsaWageIndex] = useState<SsaWageIndex[]>([])
   const [ssaBendPoints, setSsaBendPoints] = useState<SsaBendPoint[]>([])
+  const [retirementAdjustments, setRetirementAdjustments] = useState<SsaRetirementAdjustment[]>([])
   const [socialStrategies, setSocialStrategies] = useState<SocialSecurityStrategy[]>([])
   const [futureWorkStrategies, setFutureWorkStrategies] = useState<FutureWorkStrategy[]>([])
   const [futureWorkPeriods, setFutureWorkPeriods] = useState<FutureWorkPeriod[]>([])
@@ -89,19 +91,29 @@ const PersonStrategyDetailPage = () => {
 
     setIsLoading(true)
     setError(null)
-    const [strategy, peopleList, strategies, holdings, wageIndex, bendPoints] = await Promise.all([
+    const [
+      strategy,
+      peopleList,
+      strategies,
+      holdings,
+      wageIndex,
+      bendPoints,
+      adjustmentList,
+    ] = await Promise.all([
       storage.personStrategyRepo.get(id),
       storage.personRepo.list(),
       refreshStrategies(),
       storage.investmentAccountHoldingRepo.list(),
       storage.ssaWageIndexRepo.list(),
       storage.ssaBendPointRepo.list(),
+      storage.ssaRetirementAdjustmentRepo.list(),
     ])
 
     setPeople(peopleList)
     setHoldingsAvailable(holdings.length > 0)
     setSsaWageIndex(wageIndex)
     setSsaBendPoints(bendPoints)
+    setRetirementAdjustments(adjustmentList)
 
     if (!strategy) {
       setPersonStrategy(null)
@@ -374,6 +386,7 @@ const PersonStrategyDetailPage = () => {
       spendingLineItems,
       wageIndex: ssaWageIndex,
       bendPoints: ssaBendPoints,
+      retirementAdjustments,
     })
   }, [
     socialDraft,
@@ -385,6 +398,7 @@ const PersonStrategyDetailPage = () => {
     spendingLineItems,
     ssaWageIndex,
     ssaBendPoints,
+    retirementAdjustments,
   ])
 
   if (isLoading) {

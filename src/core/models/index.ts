@@ -30,8 +30,18 @@ export type { SpendingStrategy, SpendingLineItem } from './spending'
 export { spendingStrategySchema, spendingLineItemSchema } from './spending'
 export type { PersonStrategy } from './strategies'
 export { personStrategySchema } from './strategies'
-export type { InflationDefault, SsaWageIndex, SsaBendPoint } from './defaults'
-export { inflationDefaultSchema, ssaWageIndexSchema, ssaBendPointSchema } from './defaults'
+export type {
+  InflationDefault,
+  SsaWageIndex,
+  SsaBendPoint,
+  SsaRetirementAdjustment,
+} from './defaults'
+export {
+  inflationDefaultSchema,
+  ssaWageIndexSchema,
+  ssaBendPointSchema,
+  ssaRetirementAdjustmentSchema,
+} from './defaults'
 export {
   simulationRunSchema,
   simulationResultSchema,
