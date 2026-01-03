@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { personSchema, type Person } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
+import { now } from '../../core/utils/time'
 
 const PeopleDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -19,8 +20,8 @@ const PeopleDetailPage = () => {
       name: '',
       dateOfBirth: '1985-01-01',
       lifeExpectancy: 90,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: 0,
+      updatedAt: 0,
     }),
     [],
   )
@@ -54,12 +55,17 @@ const PeopleDetailPage = () => {
   }, [id, reset, storage])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadPerson()
   }, [loadPerson])
 
   const onSubmit = async (values: Person) => {
-    const now = Date.now()
-    const next = { ...values, updatedAt: now }
+    const timestamp = now()
+    const next = {
+      ...values,
+      createdAt: values.createdAt || timestamp,
+      updatedAt: timestamp,
+    }
     await storage.personRepo.upsert(next)
     setPerson(next)
     reset(next)

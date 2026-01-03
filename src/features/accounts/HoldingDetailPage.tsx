@@ -10,6 +10,7 @@ import {
 } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
+import { now } from '../../core/utils/time'
 
 const HoldingDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -27,8 +28,8 @@ const HoldingDetailPage = () => {
       return: 0,
       risk: 0,
       investmentAccountId: '',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: 0,
+      updatedAt: 0,
     }),
     [],
   )
@@ -60,12 +61,17 @@ const HoldingDetailPage = () => {
   }, [id, reset, storage])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadHolding()
   }, [loadHolding])
 
   const onSubmit: SubmitHandler<InvestmentAccountHolding> = async (values) => {
-    const now = Date.now()
-    const next = { ...values, updatedAt: now }
+    const timestamp = now()
+    const next = {
+      ...values,
+      createdAt: values.createdAt || timestamp,
+      updatedAt: timestamp,
+    }
     await storage.investmentAccountHoldingRepo.upsert(next)
     setHolding(next)
     reset(next)

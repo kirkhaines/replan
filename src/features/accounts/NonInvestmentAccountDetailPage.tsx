@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { nonInvestmentAccountSchema, type NonInvestmentAccount } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
+import { now } from '../../core/utils/time'
 
 const NonInvestmentAccountDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -18,8 +19,8 @@ const NonInvestmentAccountDetailPage = () => {
       name: '',
       balance: 0,
       interestRate: 0,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: 0,
+      updatedAt: 0,
     }),
     [],
   )
@@ -51,12 +52,17 @@ const NonInvestmentAccountDetailPage = () => {
   }, [id, reset, storage])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAccount()
   }, [loadAccount])
 
   const onSubmit = async (values: NonInvestmentAccount) => {
-    const now = Date.now()
-    const next = { ...values, updatedAt: now }
+    const timestamp = now()
+    const next = {
+      ...values,
+      createdAt: values.createdAt || timestamp,
+      updatedAt: timestamp,
+    }
     await storage.nonInvestmentAccountRepo.upsert(next)
     setAccount(next)
     reset(next)

@@ -10,6 +10,7 @@ import {
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { createUuid } from '../../core/utils/uuid'
+import { now } from '../../core/utils/time'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -41,8 +42,8 @@ const InvestmentAccountDetailPage = () => {
     () => ({
       id: '',
       name: '',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: 0,
+      updatedAt: 0,
     }),
     [],
   )
@@ -77,6 +78,7 @@ const InvestmentAccountDetailPage = () => {
   }, [id, reset, storage])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAccount()
   }, [loadAccount])
 
@@ -90,8 +92,12 @@ const InvestmentAccountDetailPage = () => {
   }
 
   const onSubmit = async (values: InvestmentAccount) => {
-    const now = Date.now()
-    const next = { ...values, updatedAt: now }
+    const timestamp = now()
+    const next = {
+      ...values,
+      createdAt: values.createdAt || timestamp,
+      updatedAt: timestamp,
+    }
     await storage.investmentAccountRepo.upsert(next)
     setAccount(next)
     reset(next)

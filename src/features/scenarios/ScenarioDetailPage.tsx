@@ -259,9 +259,6 @@ const ScenarioDetailPage = () => {
     defaultValues,
   })
 
-  const selectedPersonStrategyId = watch('personStrategy.id')
-  const selectedCashAccountId = watch('nonInvestmentAccount.id')
-  const selectedInvestmentAccountId = watch('investmentAccount.id')
   const selectedSpendingStrategyId = watch('spendingStrategy.id')
   const personStrategyIds = watch('scenario.personStrategyIds')
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
@@ -541,46 +538,21 @@ const ScenarioDetailPage = () => {
   )
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     void loadReferenceData()
   }, [loadReferenceData])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     void loadScenario()
   }, [loadScenario])
 
   useEffect(() => {
     if (scenario?.id) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       void loadRuns(scenario.id)
     }
   }, [loadRuns, scenario?.id])
-
-  const handlePersonStrategySelect = async (personStrategyId: string) => {
-    const personStrategy = personStrategies.find((item) => item.id === personStrategyId)
-    if (!personStrategy) {
-      return
-    }
-    setSelectionError(null)
-    await applyPersonStrategySelection(personStrategy)
-  }
-
-  const handleCashAccountSelect = (accountId: string) => {
-    const account = cashAccounts.find((item) => item.id === accountId)
-    if (!account) {
-      return
-    }
-    applyCashAccountSelection(account)
-  }
-
-  const handleInvestmentAccountSelect = async (accountId: string) => {
-    const account = investmentAccounts.find((item) => item.id === accountId)
-    if (!account) {
-      return
-    }
-    await applyInvestmentAccountSelection(account)
-  }
 
   const handleSpendingStrategySelect = async (strategyId: string) => {
     const strategy = spendingStrategies.find((item) => item.id === strategyId)
@@ -1035,7 +1007,7 @@ const ScenarioDetailPage = () => {
           {scenarioPersonStrategies.length === 0 ? (
             <p className="muted">No person strategies yet. Create one from People.</p>
           ) : (
-            <table className="table selectable">
+            <table className="table">
               <thead>
                 <tr>
                   <th>Person</th>
@@ -1052,11 +1024,7 @@ const ScenarioDetailPage = () => {
                   const socialSecurity = socialSecurityById.get(strategy.socialSecurityStrategyId)
                   const futureWork = futureWorkById.get(strategy.futureWorkStrategyId)
                   return (
-                    <tr
-                      key={strategy.id}
-                      className={strategy.id === selectedPersonStrategyId ? 'is-selected' : undefined}
-                      onClick={() => void handlePersonStrategySelect(strategy.id)}
-                    >
+                    <tr key={strategy.id}>
                       <td>
                         {person ? (
                           <Link className="link" to={`/people/${person.id}`}>
@@ -1071,17 +1039,14 @@ const ScenarioDetailPage = () => {
                       <td>{socialSecurity?.startAge ?? '-'}</td>
                       <td>{futureWork?.name ?? '-'}</td>
                       <td>
-                        <button
-                          className="link-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            void handleRemovePersonStrategy(strategy.id)
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </td>
+                          <button
+                            className="link-button"
+                            type="button"
+                            onClick={() => void handleRemovePersonStrategy(strategy.id)}
+                          >
+                            Remove
+                          </button>
+                        </td>
                     </tr>
                   )
                 })}
@@ -1100,7 +1065,7 @@ const ScenarioDetailPage = () => {
           {scenarioCashAccounts.length === 0 ? (
             <p className="muted">No cash accounts available.</p>
           ) : (
-            <table className="table selectable">
+            <table className="table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -1111,11 +1076,7 @@ const ScenarioDetailPage = () => {
               </thead>
               <tbody>
                 {scenarioCashAccounts.map((account) => (
-                  <tr
-                    key={account.id}
-                    className={account.id === selectedCashAccountId ? 'is-selected' : undefined}
-                    onClick={() => handleCashAccountSelect(account.id)}
-                  >
+                  <tr key={account.id}>
                     <td>
                       <Link className="link" to={`/accounts/cash/${account.id}`}>
                         {account.name}
@@ -1127,10 +1088,7 @@ const ScenarioDetailPage = () => {
                       <button
                         className="link-button"
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void handleRemoveCashAccount(account.id)
-                        }}
+                        onClick={() => void handleRemoveCashAccount(account.id)}
                       >
                         Remove
                       </button>
@@ -1152,7 +1110,7 @@ const ScenarioDetailPage = () => {
           {scenarioInvestmentAccounts.length === 0 ? (
             <p className="muted">No investment accounts available.</p>
           ) : (
-            <table className="table selectable">
+            <table className="table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -1162,11 +1120,7 @@ const ScenarioDetailPage = () => {
               </thead>
               <tbody>
                 {scenarioInvestmentAccounts.map((account) => (
-                  <tr
-                    key={account.id}
-                    className={account.id === selectedInvestmentAccountId ? 'is-selected' : undefined}
-                    onClick={() => void handleInvestmentAccountSelect(account.id)}
-                  >
+                  <tr key={account.id}>
                     <td>
                       <Link className="link" to={`/accounts/investment/${account.id}`}>
                         {account.name}
@@ -1177,10 +1131,7 @@ const ScenarioDetailPage = () => {
                       <button
                         className="link-button"
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void handleRemoveInvestmentAccount(account.id)
-                        }}
+                        onClick={() => void handleRemoveInvestmentAccount(account.id)}
                       >
                         Remove
                       </button>

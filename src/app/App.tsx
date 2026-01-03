@@ -1,4 +1,5 @@
 import { HashRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import ScenarioListPage from '../features/scenarios/ScenarioListPage'
 import ScenarioDetailPage from '../features/scenarios/ScenarioDetailPage'
 import RunResultsPage from '../features/runs/RunResultsPage'
@@ -8,6 +9,8 @@ import AccountsPage from '../features/accounts/AccountsPage'
 import NonInvestmentAccountDetailPage from '../features/accounts/NonInvestmentAccountDetailPage'
 import InvestmentAccountDetailPage from '../features/accounts/InvestmentAccountDetailPage'
 import HoldingDetailPage from '../features/accounts/HoldingDetailPage'
+import AboutPage from '../features/about/AboutPage'
+import LicensePage from '../features/about/LicensePage'
 import { useAppStore } from '../state/appStore'
 
 const NotFound = () => (
@@ -22,6 +25,7 @@ const NotFound = () => (
 const AppShell = () => {
   const navigate = useNavigate()
   const storage = useAppStore((state) => state.storage)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const handleClearData = async () => {
     const confirmed = window.confirm('Clear all local data? This cannot be undone.')
@@ -29,6 +33,7 @@ const AppShell = () => {
       return
     }
     await storage.clearAll()
+    setMenuOpen(false)
     navigate('/scenarios')
   }
 
@@ -42,9 +47,30 @@ const AppShell = () => {
           <Link to="/scenarios">Scenarios</Link>
           <Link to="/people">People</Link>
           <Link to="/accounts">Accounts</Link>
-          <button className="link-button" onClick={handleClearData} type="button">
-            Clear data
-          </button>
+          <div className="menu">
+            <button
+              className="link-button"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              Menu
+            </button>
+            {menuOpen ? (
+              <div className="menu-panel" role="menu">
+                <Link to="/about" role="menuitem" onClick={() => setMenuOpen(false)}>
+                  About
+                </Link>
+                <Link to="/license" role="menuitem" onClick={() => setMenuOpen(false)}>
+                  Licensing
+                </Link>
+                <button className="menu-item" type="button" role="menuitem" onClick={handleClearData}>
+                  Clear data
+                </button>
+              </div>
+            ) : null}
+          </div>
         </nav>
       </header>
       <main className="container">
@@ -59,6 +85,8 @@ const AppShell = () => {
           <Route path="/accounts/cash/:id" element={<NonInvestmentAccountDetailPage />} />
           <Route path="/accounts/investment/:id" element={<InvestmentAccountDetailPage />} />
           <Route path="/accounts/holding/:id" element={<HoldingDetailPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/license" element={<LicensePage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
