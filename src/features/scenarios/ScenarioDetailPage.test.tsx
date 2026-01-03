@@ -20,6 +20,14 @@ import type {
 } from '../../core/models'
 
 let uuidCounter = 0
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+  }
+})
+
 vi.mock('../../core/utils/uuid', () => ({
   createUuid: () => {
     uuidCounter += 1
@@ -138,6 +146,7 @@ const createStorageFixture = (seed: SeedData): StorageClient => {
       ),
       get: vi.fn(async (id) => data.futureWorkPeriods.find((period) => period.id === id)),
       upsert: vi.fn(async (period) => upsert(data.futureWorkPeriods, period)),
+      remove: vi.fn(async (id) => remove(data.futureWorkPeriods, id)),
     },
     spendingStrategyRepo: {
       list: vi.fn(async () => [...data.spendingStrategies]),
@@ -502,7 +511,7 @@ test('saving persists added person strategy, cash account, and investment accoun
 
   await screen.findByText('Edit scenario')
 
-  fireEvent.click(screen.getByRole('button', { name: /add person strategy/i }))
+  fireEvent.click(screen.getByRole('button', { name: /add person/i }))
   await waitFor(() => {
     expect(storage.personStrategyRepo.upsert).toHaveBeenCalled()
   })

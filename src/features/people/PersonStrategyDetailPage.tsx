@@ -1,0 +1,506 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import type {
+  FutureWorkPeriod,
+  FutureWorkStrategy,
+  Person,
+  PersonStrategy,
+  SocialSecurityStrategy,
+} from '../../core/models'
+import { useAppStore } from '../../state/appStore'
+import { createUuid } from '../../core/utils/uuid'
+import PageHeader from '../../components/PageHeader'
+
+const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
+
+const PersonStrategyDetailPage = () => {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const storage = useAppStore((state) => state.storage)
+  const [personStrategy, setPersonStrategy] = useState<PersonStrategy | null>(null)
+  const [people, setPeople] = useState<Person[]>([])
+  const [socialStrategies, setSocialStrategies] = useState<SocialSecurityStrategy[]>([])
+  const [futureWorkStrategies, setFutureWorkStrategies] = useState<FutureWorkStrategy[]>([])
+  const [futureWorkPeriods, setFutureWorkPeriods] = useState<FutureWorkPeriod[]>([])
+  const [holdingsAvailable, setHoldingsAvailable] = useState(false)
+  const [selectedPersonId, setSelectedPersonId] = useState('')
+  const [selectedSocialId, setSelectedSocialId] = useState('')
+  const [selectedFutureWorkId, setSelectedFutureWorkId] = useState('')
+  const [socialDraft, setSocialDraft] = useState<SocialSecurityStrategy | null>(null)
+  const [futureWorkDraft, setFutureWorkDraft] = useState<FutureWorkStrategy | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const filteredSocialStrategies = useMemo(
+    () => socialStrategies.filter((strategy) => strategy.personId === selectedPersonId),
+    [socialStrategies, selectedPersonId],
+  )
+
+  const filteredFutureWorkStrategies = useMemo(
+    () => futureWorkStrategies.filter((strategy) => strategy.personId === selectedPersonId),
+    [futureWorkStrategies, selectedPersonId],
+  )
+
+  const loadPeriods = useCallback(
+    async (strategyId: string) => {
+      if (!strategyId) {
+        setFutureWorkPeriods([])
+        return
+      }
+      const periods = await storage.futureWorkPeriodRepo.listForStrategy(strategyId)
+      setFutureWorkPeriods(periods)
+    },
+    [storage],
+  )
+
+  const refreshStrategies = useCallback(async () => {
+    const [socialList, futureList] = await Promise.all([
+      storage.socialSecurityStrategyRepo.list(),
+      storage.futureWorkStrategyRepo.list(),
+    ])
+    setSocialStrategies(socialList)
+    setFutureWorkStrategies(futureList)
+    return { socialList, futureList }
+  }, [storage])
+
+  const loadData = useCallback(async () => {
+    if (!id) {
+      setPersonStrategy(null)
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+    const [strategy, peopleList, strategies, holdings] = await Promise.all([
+      storage.personStrategyRepo.get(id),
+      storage.personRepo.list(),
+      refreshStrategies(),
+      storage.investmentAccountHoldingRepo.list(),
+    ])
+
+    setPeople(peopleList)
+    setHoldingsAvailable(holdings.length > 0)
+
+    if (!strategy) {
+      setPersonStrategy(null)
+      setIsLoading(false)
+      return
+    }
+
+    setPersonStrategy(strategy)
+    setSelectedPersonId(strategy.personId)
+    setSelectedSocialId(strategy.socialSecurityStrategyId)
+    setSelectedFutureWorkId(strategy.futureWorkStrategyId)
+
+    const social =
+      strategies.socialList.find((item) => item.id === strategy.socialSecurityStrategyId) ?? null
+    const future =
+      strategies.futureList.find((item) => item.id === strategy.futureWorkStrategyId) ?? null
+    setSocialDraft(social)
+    setFutureWorkDraft(future)
+    await loadPeriods(strategy.futureWorkStrategyId)
+    setIsLoading(false)
+  }, [id, loadPeriods, refreshStrategies, storage])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadData()
+  }, [loadData])
+
+  const handlePersonChange = async (personId: string) => {
+    setSelectedPersonId(personId)
+    setSelectedSocialId('')
+    setSelectedFutureWorkId('')
+    setSocialDraft(null)
+    setFutureWorkDraft(null)
+    setFutureWorkPeriods([])
+
+    const nextSocial = socialStrategies.find(
+      (strategy) => strategy.personId === personId,
+    )
+    const nextFuture = futureWorkStrategies.find(
+      (strategy) => strategy.personId === personId,
+    )
+
+    if (nextSocial) {
+      setSelectedSocialId(nextSocial.id)
+      setSocialDraft(nextSocial)
+    }
+
+    if (nextFuture) {
+      setSelectedFutureWorkId(nextFuture.id)
+      setFutureWorkDraft(nextFuture)
+      await loadPeriods(nextFuture.id)
+    }
+
+    setPersonStrategy((current) =>
+      current
+        ? {
+            ...current,
+            personId,
+            socialSecurityStrategyId: nextSocial?.id ?? current.socialSecurityStrategyId,
+            futureWorkStrategyId: nextFuture?.id ?? current.futureWorkStrategyId,
+          }
+        : current,
+    )
+  }
+
+  const handleSocialSelect = (strategyId: string) => {
+    setSelectedSocialId(strategyId)
+    const strategy = socialStrategies.find((item) => item.id === strategyId) ?? null
+    setSocialDraft(strategy)
+    setPersonStrategy((current) =>
+      current ? { ...current, socialSecurityStrategyId: strategyId } : current,
+    )
+  }
+
+  const handleFutureWorkSelect = async (strategyId: string) => {
+    setSelectedFutureWorkId(strategyId)
+    const strategy = futureWorkStrategies.find((item) => item.id === strategyId) ?? null
+    setFutureWorkDraft(strategy)
+    await loadPeriods(strategyId)
+    setPersonStrategy((current) =>
+      current ? { ...current, futureWorkStrategyId: strategyId } : current,
+    )
+  }
+
+  const handleAddSocialStrategy = async () => {
+    if (!selectedPersonId) {
+      setError('Select a person before adding a Social Security strategy.')
+      return
+    }
+    const now = Date.now()
+    const strategy: SocialSecurityStrategy = {
+      id: createUuid(),
+      personId: selectedPersonId,
+      startAge: 67,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await storage.socialSecurityStrategyRepo.upsert(strategy)
+    await refreshStrategies()
+    setSelectedSocialId(strategy.id)
+    setSocialDraft(strategy)
+    setPersonStrategy((current) =>
+      current ? { ...current, socialSecurityStrategyId: strategy.id } : current,
+    )
+  }
+
+  const handleAddFutureWorkStrategy = async () => {
+    if (!selectedPersonId) {
+      setError('Select a person before adding a future work strategy.')
+      return
+    }
+    const now = Date.now()
+    const strategy: FutureWorkStrategy = {
+      id: createUuid(),
+      personId: selectedPersonId,
+      name: 'Work plan',
+      createdAt: now,
+      updatedAt: now,
+    }
+    await storage.futureWorkStrategyRepo.upsert(strategy)
+    await refreshStrategies()
+    setSelectedFutureWorkId(strategy.id)
+    setFutureWorkDraft(strategy)
+    await loadPeriods(strategy.id)
+    setPersonStrategy((current) =>
+      current ? { ...current, futureWorkStrategyId: strategy.id } : current,
+    )
+  }
+
+  const handleSaveSocial = async () => {
+    if (!socialDraft) {
+      return
+    }
+    const now = Date.now()
+    const next = { ...socialDraft, updatedAt: now }
+    await storage.socialSecurityStrategyRepo.upsert(next)
+    setSocialDraft(next)
+    await refreshStrategies()
+  }
+
+  const handleSaveFutureWork = async () => {
+    if (!futureWorkDraft) {
+      return
+    }
+    const now = Date.now()
+    const next = { ...futureWorkDraft, updatedAt: now }
+    await storage.futureWorkStrategyRepo.upsert(next)
+    setFutureWorkDraft(next)
+    await refreshStrategies()
+  }
+
+  const handleAddPeriod = async () => {
+    if (!selectedFutureWorkId) {
+      setError('Select a future work strategy before adding a period.')
+      return
+    }
+    if (!holdingsAvailable) {
+      setError('Create an investment account holding before adding a work period.')
+      return
+    }
+    const holdings = await storage.investmentAccountHoldingRepo.list()
+    const holdingId = holdings[0]?.id
+    if (!holdingId) {
+      setError('Create an investment account holding before adding a work period.')
+      return
+    }
+    const now = Date.now()
+    const start = new Date()
+    const end = new Date()
+    end.setFullYear(start.getFullYear() + 1)
+    const period: FutureWorkPeriod = {
+      id: createUuid(),
+      name: 'Work period',
+      futureWorkStrategyId: selectedFutureWorkId,
+      salary: 80000,
+      bonus: 0,
+      startDate: toIsoDate(start),
+      endDate: toIsoDate(end),
+      '401kMatchPctCap': 0.05,
+      '401kMatchRatio': 1,
+      '401kInvestmentAccountHoldingId': holdingId,
+      includesHealthInsurance: true,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await storage.futureWorkPeriodRepo.upsert(period)
+    await loadPeriods(selectedFutureWorkId)
+  }
+
+  const handleRemovePeriod = async (periodId: string) => {
+    const confirmed = window.confirm('Remove this work period?')
+    if (!confirmed) {
+      return
+    }
+    await storage.futureWorkPeriodRepo.remove(periodId)
+    await loadPeriods(selectedFutureWorkId)
+  }
+
+  const handleSavePersonStrategy = async () => {
+    if (!personStrategy) {
+      return
+    }
+    if (!selectedPersonId || !selectedSocialId || !selectedFutureWorkId) {
+      setError('Select a person, Social Security strategy, and future work strategy.')
+      return
+    }
+    const now = Date.now()
+    const next: PersonStrategy = {
+      ...personStrategy,
+      personId: selectedPersonId,
+      socialSecurityStrategyId: selectedSocialId,
+      futureWorkStrategyId: selectedFutureWorkId,
+      updatedAt: now,
+    }
+    await storage.personStrategyRepo.upsert(next)
+    setPersonStrategy(next)
+    navigate('/scenarios')
+  }
+
+  if (isLoading) {
+    return <p className="muted">Loading person strategy...</p>
+  }
+
+  if (!personStrategy) {
+    return (
+      <section className="stack">
+        <h1>Person strategy not found</h1>
+        <Link className="link" to="/scenarios">
+          Back to scenarios
+        </Link>
+      </section>
+    )
+  }
+
+  return (
+    <section className="stack">
+      <PageHeader
+        title="Person strategy"
+        subtitle="Choose a person and link work and Social Security strategies."
+        actions={
+          <Link className="link" to="/scenarios">
+            Back
+          </Link>
+        }
+      />
+
+      {error ? (
+        <div className="card">
+          <p className="error">{error}</p>
+        </div>
+      ) : null}
+
+      <div className="card stack">
+        <h2>Person</h2>
+        <label className="field">
+          <span>Person</span>
+          <select value={selectedPersonId} onChange={(event) => void handlePersonChange(event.target.value)}>
+            {people.length === 0 ? <option value="">No people available</option> : null}
+            {people.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="stack">
+          <h2>Social Security strategy</h2>
+          <div className="row">
+            <label className="field">
+              <span>Social Security strategy</span>
+              <select
+                value={selectedSocialId}
+                onChange={(event) => handleSocialSelect(event.target.value)}
+              >
+                {filteredSocialStrategies.length === 0 ? (
+                  <option value="">No Social Security strategies</option>
+                ) : null}
+                {filteredSocialStrategies.map((strategy) => (
+                  <option key={strategy.id} value={strategy.id}>
+                    Start age {strategy.startAge}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="button secondary" type="button" onClick={handleAddSocialStrategy}>
+              Add Social Security strategy
+            </button>
+          </div>
+
+          {socialDraft ? (
+            <div className="stack">
+              <div className="form-grid">
+              <label className="field">
+                <span>Start age</span>
+                <input
+                  type="number"
+                  value={socialDraft.startAge}
+                  onChange={(event) =>
+                    setSocialDraft({ ...socialDraft, startAge: Number(event.target.value) })
+                  }
+                />
+              </label>
+              </div>
+              <div className="button-row">
+                <button className="button" type="button" onClick={handleSaveSocial}>
+                  Save Social Security
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="muted">Select a Social Security strategy to edit.</p>
+          )}
+        </div>
+
+        <div className="stack">
+          <h2>Future work strategy</h2>
+          <div className="row">
+            <label className="field">
+              <span>Future work strategy</span>
+              <select
+                value={selectedFutureWorkId}
+                onChange={(event) => void handleFutureWorkSelect(event.target.value)}
+              >
+                {filteredFutureWorkStrategies.length === 0 ? (
+                  <option value="">No future work strategies</option>
+                ) : null}
+                {filteredFutureWorkStrategies.map((strategy) => (
+                  <option key={strategy.id} value={strategy.id}>
+                    {strategy.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="button secondary" type="button" onClick={handleAddFutureWorkStrategy}>
+              Add future work strategy
+            </button>
+          </div>
+
+          {futureWorkDraft ? (
+            <div className="stack">
+              <div className="form-grid">
+                <label className="field">
+                  <span>Name</span>
+                  <input
+                    value={futureWorkDraft.name}
+                    onChange={(event) =>
+                      setFutureWorkDraft({ ...futureWorkDraft, name: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="stack">
+                <div className="row">
+                  <h3 className="muted">Future work periods</h3>
+                  <button className="button secondary" type="button" onClick={handleAddPeriod}>
+                    Add period
+                  </button>
+                </div>
+                {futureWorkPeriods.length === 0 ? (
+                  <p className="muted">No work periods yet.</p>
+                ) : (
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Salary</th>
+                        <th>Bonus</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {futureWorkPeriods.map((period) => (
+                        <tr key={period.id}>
+                          <td>
+                            <Link className="link" to={`/future-work-periods/${period.id}`}>
+                              {period.name}
+                            </Link>
+                          </td>
+                          <td>{period.salary}</td>
+                          <td>{period.bonus}</td>
+                          <td>{period.startDate}</td>
+                          <td>{period.endDate}</td>
+                          <td>
+                            <button
+                              className="link-button"
+                              type="button"
+                              onClick={() => void handleRemovePeriod(period.id)}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div className="button-row">
+                <button className="button" type="button" onClick={handleSaveFutureWork}>
+                  Save work strategy
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="muted">Select a future work strategy to edit.</p>
+          )}
+        </div>
+
+        <div className="button-row">
+          <button className="button" type="button" onClick={handleSavePersonStrategy}>
+            Save person strategy
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export default PersonStrategyDetailPage

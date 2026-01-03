@@ -72,6 +72,7 @@ export interface FutureWorkPeriodRepo {
   listForStrategy: (strategyId: string) => Promise<FutureWorkPeriod[]>
   get: (id: string) => Promise<FutureWorkPeriod | undefined>
   upsert: (period: FutureWorkPeriod) => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export interface SpendingStrategyRepo {

@@ -80,6 +80,10 @@ h2 {
   font-weight: 500;
 }
 
+.menu-item.danger {
+  color: #b32020;
+}
+
 .menu-item {
   background: none;
   border: none;
@@ -89,6 +93,21 @@ h2 {
   font-size: 0.95rem;
 }
 
+.menu-icon {
+  display: block;
+  color: var(--accent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
 .link-button {
   background: none;
   border: none;

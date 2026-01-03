@@ -643,6 +643,7 @@ const ScenarioDetailPage = () => {
     if (newStrategy) {
       await applyPersonStrategySelection(newStrategy)
     }
+    navigate(`/person-strategies/${personStrategyId}`)
   }
 
   const handleRemovePersonStrategy = async (strategyId: string) => {
@@ -993,9 +994,9 @@ const ScenarioDetailPage = () => {
 
         <div className="stack">
           <div className="row">
-            <h2>Person strategies</h2>
+            <h2>People</h2>
             <button className="button secondary" type="button" onClick={handleAddPersonStrategy}>
-              Add person strategy
+              Add person
             </button>
           </div>
           {scenarioPersonStrategies.length === 0 ? (
@@ -1021,7 +1022,7 @@ const ScenarioDetailPage = () => {
                     <tr key={strategy.id}>
                       <td>
                         {person ? (
-                          <Link className="link" to={`/people/${person.id}`}>
+                          <Link className="link" to={`/person-strategies/${strategy.id}`}>
                             {person.name}
                           </Link>
                         ) : (

@@ -203,6 +203,10 @@ class DexieFutureWorkPeriodRepo implements FutureWorkPeriodRepo {
   async upsert(period: FutureWorkPeriod) {
     await db.futureWorkPeriods.put(period)
   }
+
+  async remove(id: string) {
+    await db.futureWorkPeriods.delete(id)
+  }
 }
 
 class DexieSpendingStrategyRepo implements SpendingStrategyRepo {

@@ -5,6 +5,8 @@ import ScenarioDetailPage from '../features/scenarios/ScenarioDetailPage'
 import RunResultsPage from '../features/runs/RunResultsPage'
 import PeopleListPage from '../features/people/PeopleListPage'
 import PeopleDetailPage from '../features/people/PeopleDetailPage'
+import PersonStrategyDetailPage from '../features/people/PersonStrategyDetailPage'
+import FutureWorkPeriodDetailPage from '../features/people/FutureWorkPeriodDetailPage'
 import AccountsPage from '../features/accounts/AccountsPage'
 import NonInvestmentAccountDetailPage from '../features/accounts/NonInvestmentAccountDetailPage'
 import InvestmentAccountDetailPage from '../features/accounts/InvestmentAccountDetailPage'
@@ -55,7 +57,23 @@ const AppShell = () => {
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              Menu
+              <svg
+                className="menu-icon"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 3.5l1.2 2.4a6.9 6.9 0 0 1 2 0.8l2.5-0.6 1.3 2.2-1.9 1.6a7 7 0 0 1 0 2.3l1.9 1.6-1.3 2.2-2.5-0.6a6.9 6.9 0 0 1-2 0.8L12 20.5l-1.2-2.4a6.9 6.9 0 0 1-2-0.8l-2.5 0.6-1.3-2.2 1.9-1.6a7 7 0 0 1 0-2.3L4.9 8.5l1.3-2.2 2.5 0.6a6.9 6.9 0 0 1 2-0.8L12 3.5z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+                <circle cx="12" cy="12" r="3.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+              <span className="sr-only">Menu</span>
             </button>
             {menuOpen ? (
               <div className="menu-panel" role="menu">
@@ -65,7 +83,12 @@ const AppShell = () => {
                 <Link to="/license" role="menuitem" onClick={() => setMenuOpen(false)}>
                   Licensing
                 </Link>
-                <button className="menu-item" type="button" role="menuitem" onClick={handleClearData}>
+                <button
+                  className="menu-item danger"
+                  type="button"
+                  role="menuitem"
+                  onClick={handleClearData}
+                >
                   Clear data
                 </button>
               </div>
@@ -81,6 +104,8 @@ const AppShell = () => {
           <Route path="/runs/:id" element={<RunResultsPage />} />
           <Route path="/people" element={<PeopleListPage />} />
           <Route path="/people/:id" element={<PeopleDetailPage />} />
+          <Route path="/person-strategies/:id" element={<PersonStrategyDetailPage />} />
+          <Route path="/future-work-periods/:id" element={<FutureWorkPeriodDetailPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/accounts/cash/:id" element={<NonInvestmentAccountDetailPage />} />
           <Route path="/accounts/investment/:id" element={<InvestmentAccountDetailPage />} />
