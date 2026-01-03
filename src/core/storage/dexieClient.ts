@@ -189,6 +189,10 @@ class DexieFutureWorkStrategyRepo implements FutureWorkStrategyRepo {
 }
 
 class DexieFutureWorkPeriodRepo implements FutureWorkPeriodRepo {
+  async list() {
+    return db.futureWorkPeriods.toArray()
+  }
+
   async listForStrategy(strategyId: string) {
     return db.futureWorkPeriods
       .where('futureWorkStrategyId')
@@ -234,6 +238,10 @@ class DexieSpendingLineItemRepo implements SpendingLineItemRepo {
 
   async upsert(item: SpendingLineItem) {
     await db.spendingLineItems.put(item)
+  }
+
+  async remove(id: string) {
+    await db.spendingLineItems.delete(id)
   }
 }
 

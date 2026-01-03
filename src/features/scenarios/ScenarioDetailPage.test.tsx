@@ -141,6 +141,7 @@ const createStorageFixture = (seed: SeedData): StorageClient => {
       upsert: vi.fn(async (strategy) => upsert(data.futureWorkStrategies, strategy)),
     },
     futureWorkPeriodRepo: {
+      list: vi.fn(async () => [...data.futureWorkPeriods]),
       listForStrategy: vi.fn(async (strategyId) =>
         data.futureWorkPeriods.filter((period) => period.futureWorkStrategyId === strategyId),
       ),

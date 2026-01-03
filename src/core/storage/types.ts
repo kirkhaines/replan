@@ -69,6 +69,7 @@ export interface FutureWorkStrategyRepo {
 }
 
 export interface FutureWorkPeriodRepo {
+  list: () => Promise<FutureWorkPeriod[]>
   listForStrategy: (strategyId: string) => Promise<FutureWorkPeriod[]>
   get: (id: string) => Promise<FutureWorkPeriod | undefined>
   upsert: (period: FutureWorkPeriod) => Promise<void>
@@ -85,6 +86,7 @@ export interface SpendingLineItemRepo {
   listForStrategy: (strategyId: string) => Promise<SpendingLineItem[]>
   get: (id: string) => Promise<SpendingLineItem | undefined>
   upsert: (item: SpendingLineItem) => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export interface PersonStrategyRepo {

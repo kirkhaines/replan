@@ -263,6 +263,88 @@ const ScenarioDetailPage = () => {
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
   const investmentAccountIds = watch('scenario.investmentAccountIds')
 
+  const spendingSummaryRows = useMemo(() => {
+    if (spendingLineItems.length === 0) {
+      return []
+    }
+
+    const dayMs = 24 * 60 * 60 * 1000
+    const parseDate = (value?: string | null) => {
+      if (!value) {
+        return null
+      }
+      const date = new Date(value)
+      return Number.isNaN(date.getTime()) ? null : date.getTime()
+    }
+
+    const boundaries = new Set<number>()
+    spendingLineItems.forEach((item) => {
+      const start = parseDate(item.startDate)
+      const end = parseDate(item.endDate)
+      if (start !== null) {
+        boundaries.add(start)
+      }
+      if (end !== null) {
+        boundaries.add(end + dayMs)
+      }
+    })
+
+    const sorted = Array.from(boundaries).sort((a, b) => a - b)
+    const intervals: Array<{ start: number | null; end: number | null }> = []
+    let cursor: number | null = null
+    sorted.forEach((point) => {
+      intervals.push({ start: cursor, end: point })
+      cursor = point
+    })
+    intervals.push({ start: cursor, end: null })
+
+    return intervals
+      .map((interval) => {
+        const sample =
+          interval.start !== null
+            ? interval.start
+            : interval.end !== null
+              ? interval.end - dayMs
+              : null
+        const effectiveItems =
+          sample === null
+            ? spendingLineItems
+            : spendingLineItems.filter((item) => {
+                const start = parseDate(item.startDate)
+                const end = parseDate(item.endDate)
+                const startsBefore = start === null || sample >= start
+                const endsAfter = end === null || sample <= end + dayMs - 1
+                return startsBefore && endsAfter
+              })
+
+        if (effectiveItems.length === 0) {
+          return null
+        }
+
+        const needTotal = effectiveItems.reduce((sum, item) => sum + item.needAmount, 0)
+        const wantTotal = effectiveItems.reduce((sum, item) => sum + item.wantAmount, 0)
+
+        const formatDate = (value: number | null, offsetDays = 0) => {
+          if (value === null) {
+            return 'Open'
+          }
+          const date = new Date(value + offsetDays * dayMs)
+          return date.toISOString().slice(0, 10)
+        }
+
+        const startLabel = interval.start !== null ? formatDate(interval.start) : 'Open'
+        const endLabel = interval.end !== null ? formatDate(interval.end, -1) : 'Open'
+
+        return {
+          startLabel,
+          endLabel,
+          needTotal,
+          wantTotal,
+        }
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+  }, [spendingLineItems])
+
   const peopleById = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
     [people],
@@ -565,6 +647,19 @@ const ScenarioDetailPage = () => {
     } else {
       setSelectionError('Selected spending strategy has no line items.')
     }
+  }
+
+  const handleAddSpendingStrategy = async () => {
+    const now = Date.now()
+    const strategy: SpendingStrategy = {
+      id: createUuid(),
+      name: 'New spending strategy',
+      createdAt: now,
+      updatedAt: now,
+    }
+    await storage.spendingStrategyRepo.upsert(strategy)
+    await loadReferenceData()
+    navigate(`/spending-strategies/${strategy.id}`, { state: { from: location.pathname } })
   }
 
   const handleAddPersonStrategy = async () => {
@@ -1153,46 +1248,61 @@ const ScenarioDetailPage = () => {
         </div>
 
         <div className="stack">
-          <label className="field">
-            <span>Spending strategy</span>
-            <select
-              value={selectedSpendingStrategyId ?? ''}
-              onChange={(event) => void handleSpendingStrategySelect(event.target.value)}
+          <div className="row">
+            <label className="field">
+              <span>Spending strategy</span>
+              <select
+                value={selectedSpendingStrategyId ?? ''}
+                onChange={(event) => void handleSpendingStrategySelect(event.target.value)}
+              >
+                {spendingStrategies.length === 0 ? (
+                  <option value="">No spending strategies available</option>
+                ) : null}
+                {spendingStrategies.map((strategy) => (
+                  <option key={strategy.id} value={strategy.id}>
+                    {strategy.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="button secondary"
+              type="button"
+              disabled={!selectedSpendingStrategyId}
+              onClick={() =>
+                selectedSpendingStrategyId
+                  ? navigate(`/spending-strategies/${selectedSpendingStrategyId}`, {
+                      state: { from: location.pathname },
+                    })
+                  : null
+              }
             >
-              {spendingStrategies.length === 0 ? (
-                <option value="">No spending strategies available</option>
-              ) : null}
-              {spendingStrategies.map((strategy) => (
-                <option key={strategy.id} value={strategy.id}>
-                  {strategy.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              Edit spending strategy
+            </button>
+            <button className="button secondary" type="button" onClick={handleAddSpendingStrategy}>
+              Add spending strategy
+            </button>
+          </div>
 
-          {spendingLineItems.length === 0 ? (
+          {spendingSummaryRows.length === 0 ? (
             <p className="muted">No spending line items for this strategy.</p>
           ) : (
             <table className="table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Category</th>
-                  <th>Need (monthly)</th>
-                  <th>Want (monthly)</th>
                   <th>Start</th>
                   <th>End</th>
+                  <th>Need total (monthly)</th>
+                  <th>Want total (monthly)</th>
                 </tr>
               </thead>
               <tbody>
-                {spendingLineItems.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.name}</td>
-                    <td>{item.category}</td>
-                    <td>{formatCurrency(item.needAmount)}</td>
-                    <td>{formatCurrency(item.wantAmount)}</td>
-                    <td>{item.startDate}</td>
-                    <td>{item.endDate}</td>
+                {spendingSummaryRows.map((row) => (
+                  <tr key={`${row.startLabel}-${row.endLabel}`}>
+                    <td>{row.startLabel}</td>
+                    <td>{row.endLabel}</td>
+                    <td>{formatCurrency(row.needTotal)}</td>
+                    <td>{formatCurrency(row.wantTotal)}</td>
                   </tr>
                 ))}
               </tbody>

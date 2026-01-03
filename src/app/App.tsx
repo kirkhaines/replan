@@ -7,6 +7,8 @@ import PeopleListPage from '../features/people/PeopleListPage'
 import PeopleDetailPage from '../features/people/PeopleDetailPage'
 import PersonStrategyDetailPage from '../features/people/PersonStrategyDetailPage'
 import FutureWorkPeriodDetailPage from '../features/people/FutureWorkPeriodDetailPage'
+import SpendingStrategyDetailPage from '../features/spending/SpendingStrategyDetailPage'
+import SpendingLineItemDetailPage from '../features/spending/SpendingLineItemDetailPage'
 import AccountsPage from '../features/accounts/AccountsPage'
 import NonInvestmentAccountDetailPage from '../features/accounts/NonInvestmentAccountDetailPage'
 import InvestmentAccountDetailPage from '../features/accounts/InvestmentAccountDetailPage'
@@ -106,6 +108,8 @@ const AppShell = () => {
           <Route path="/people/:id" element={<PeopleDetailPage />} />
           <Route path="/person-strategies/:id" element={<PersonStrategyDetailPage />} />
           <Route path="/future-work-periods/:id" element={<FutureWorkPeriodDetailPage />} />
+          <Route path="/spending-strategies/:id" element={<SpendingStrategyDetailPage />} />
+          <Route path="/spending-line-items/:id" element={<SpendingLineItemDetailPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/accounts/cash/:id" element={<NonInvestmentAccountDetailPage />} />
           <Route path="/accounts/investment/:id" element={<InvestmentAccountDetailPage />} />
