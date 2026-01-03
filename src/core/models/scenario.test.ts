@@ -3,12 +3,9 @@ import { scenarioSchema } from './scenario'
 import { buildScenario } from '../../test/scenarioFactory'
 
 describe('scenarioSchema', () => {
-  it('rejects retirement age that is not greater than current age', () => {
+  it('requires at least one person strategy id', () => {
     const scenario = buildScenario({
-      person: {
-        currentAge: 60,
-        retirementAge: 55,
-      },
+      personStrategyIds: [],
     })
 
     const result = scenarioSchema.safeParse(scenario)

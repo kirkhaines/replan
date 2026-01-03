@@ -19,6 +19,7 @@ export const investmentAccountHoldingSchema = baseEntitySchema.extend({
   holdingType: holdingTypeSchema,
   return: z.number(),
   risk: z.number(),
+  investmentAccountId: z.string().uuid(),
 })
 
 export type NonInvestmentAccount = z.infer<typeof nonInvestmentAccountSchema>

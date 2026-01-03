@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useAppStore } from '../../state/appStore'
 import type { Scenario } from '../../core/models'
-import { createDefaultScenario } from './scenarioDefaults'
+import { createDefaultScenarioBundle } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
 
 const formatDate = (value: number) =>
@@ -59,10 +59,20 @@ const ScenarioListPage = () => {
   })
 
   const handleCreate = async () => {
-    const scenario = createDefaultScenario()
-    await storage.scenarioRepo.upsert(scenario)
+    const bundle = createDefaultScenarioBundle()
+    await storage.personRepo.upsert(bundle.person)
+    await storage.socialSecurityStrategyRepo.upsert(bundle.socialSecurityStrategy)
+    await storage.futureWorkStrategyRepo.upsert(bundle.futureWorkStrategy)
+    await storage.futureWorkPeriodRepo.upsert(bundle.futureWorkPeriod)
+    await storage.spendingStrategyRepo.upsert(bundle.spendingStrategy)
+    await storage.spendingLineItemRepo.upsert(bundle.spendingLineItem)
+    await storage.nonInvestmentAccountRepo.upsert(bundle.nonInvestmentAccount)
+    await storage.investmentAccountRepo.upsert(bundle.investmentAccount)
+    await storage.investmentAccountHoldingRepo.upsert(bundle.investmentAccountHolding)
+    await storage.personStrategyRepo.upsert(bundle.personStrategy)
+    await storage.scenarioRepo.upsert(bundle.scenario)
     await loadScenarios()
-    navigate(`/scenarios/${scenario.id}`)
+    navigate(`/scenarios/${bundle.scenario.id}`)
   }
 
   return (

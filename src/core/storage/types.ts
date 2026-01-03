@@ -1,10 +1,85 @@
-import type { Scenario, SimulationRun } from '../models'
+import type {
+  Scenario,
+  SimulationRun,
+  Person,
+  SocialSecurityEarnings,
+  SocialSecurityStrategy,
+  NonInvestmentAccount,
+  InvestmentAccount,
+  InvestmentAccountHolding,
+  FutureWorkStrategy,
+  FutureWorkPeriod,
+  SpendingStrategy,
+  SpendingLineItem,
+  PersonStrategy,
+} from '../models'
 
 export interface ScenarioRepo {
   list: () => Promise<Scenario[]>
   get: (id: string) => Promise<Scenario | undefined>
   upsert: (scenario: Scenario) => Promise<void>
   remove: (id: string) => Promise<void>
+}
+
+export interface PersonRepo {
+  list: () => Promise<Person[]>
+  get: (id: string) => Promise<Person | undefined>
+  upsert: (person: Person) => Promise<void>
+  remove: (id: string) => Promise<void>
+}
+
+export interface SocialSecurityEarningsRepo {
+  listForPerson: (personId: string) => Promise<SocialSecurityEarnings[]>
+  upsert: (record: SocialSecurityEarnings) => Promise<void>
+  remove: (id: string) => Promise<void>
+}
+
+export interface SocialSecurityStrategyRepo {
+  get: (id: string) => Promise<SocialSecurityStrategy | undefined>
+  upsert: (strategy: SocialSecurityStrategy) => Promise<void>
+}
+
+export interface NonInvestmentAccountRepo {
+  get: (id: string) => Promise<NonInvestmentAccount | undefined>
+  upsert: (account: NonInvestmentAccount) => Promise<void>
+}
+
+export interface InvestmentAccountRepo {
+  get: (id: string) => Promise<InvestmentAccount | undefined>
+  upsert: (account: InvestmentAccount) => Promise<void>
+}
+
+export interface InvestmentAccountHoldingRepo {
+  listForAccount: (accountId: string) => Promise<InvestmentAccountHolding[]>
+  get: (id: string) => Promise<InvestmentAccountHolding | undefined>
+  upsert: (holding: InvestmentAccountHolding) => Promise<void>
+}
+
+export interface FutureWorkStrategyRepo {
+  get: (id: string) => Promise<FutureWorkStrategy | undefined>
+  upsert: (strategy: FutureWorkStrategy) => Promise<void>
+}
+
+export interface FutureWorkPeriodRepo {
+  listForStrategy: (strategyId: string) => Promise<FutureWorkPeriod[]>
+  get: (id: string) => Promise<FutureWorkPeriod | undefined>
+  upsert: (period: FutureWorkPeriod) => Promise<void>
+}
+
+export interface SpendingStrategyRepo {
+  get: (id: string) => Promise<SpendingStrategy | undefined>
+  upsert: (strategy: SpendingStrategy) => Promise<void>
+}
+
+export interface SpendingLineItemRepo {
+  listForStrategy: (strategyId: string) => Promise<SpendingLineItem[]>
+  get: (id: string) => Promise<SpendingLineItem | undefined>
+  upsert: (item: SpendingLineItem) => Promise<void>
+}
+
+export interface PersonStrategyRepo {
+  get: (id: string) => Promise<PersonStrategy | undefined>
+  upsert: (strategy: PersonStrategy) => Promise<void>
 }
 
 export interface RunRepo {
@@ -15,5 +90,17 @@ export interface RunRepo {
 
 export interface StorageClient {
   scenarioRepo: ScenarioRepo
+  personRepo: PersonRepo
+  socialSecurityEarningsRepo: SocialSecurityEarningsRepo
+  socialSecurityStrategyRepo: SocialSecurityStrategyRepo
+  nonInvestmentAccountRepo: NonInvestmentAccountRepo
+  investmentAccountRepo: InvestmentAccountRepo
+  investmentAccountHoldingRepo: InvestmentAccountHoldingRepo
+  futureWorkStrategyRepo: FutureWorkStrategyRepo
+  futureWorkPeriodRepo: FutureWorkPeriodRepo
+  spendingStrategyRepo: SpendingStrategyRepo
+  spendingLineItemRepo: SpendingLineItemRepo
+  personStrategyRepo: PersonStrategyRepo
   runRepo: RunRepo
+  clearAll: () => Promise<void>
 }

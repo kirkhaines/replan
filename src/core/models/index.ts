@@ -1,9 +1,4 @@
-export {
-  scenarioSchema,
-  legacyPersonSchema,
-  legacyFinancesSchema,
-  legacyAssumptionsSchema,
-} from './scenario'
+export { scenarioSchema } from './scenario'
 export type { Scenario } from './scenario'
 export { baseEntitySchema, isoDateStringSchema } from './common'
 export {

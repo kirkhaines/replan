@@ -1,26 +1,23 @@
-import type { Scenario } from '../models'
 import type { SimulationResult } from '../models'
+import type { SimulationInput } from './input'
 
-export const runSimulation = (scenario: Scenario): SimulationResult => {
-  const { assumptions, finances, person } = scenario
+export const runSimulation = (input: SimulationInput): SimulationResult => {
   const timeline = []
-  let balance = finances.startingBalance
-  let spending = finances.annualSpending
+  let balance = input.startingBalance
+  let spending = input.annualSpending
   let minBalance = balance
   let maxBalance = balance
 
-  for (let yearIndex = 0; yearIndex < assumptions.years; yearIndex += 1) {
+  for (let yearIndex = 0; yearIndex < input.years; yearIndex += 1) {
     balance =
-      balance * (1 + assumptions.annualReturn) -
-      spending +
-      finances.annualContribution
+      balance * (1 + input.annualReturn) - spending + input.annualContribution
 
-    const age = person.currentAge + yearIndex
+    const age = input.currentAge + yearIndex
     timeline.push({
       yearIndex,
       age,
       balance,
-      contribution: finances.annualContribution,
+      contribution: input.annualContribution,
       spending,
     })
 
@@ -32,7 +29,7 @@ export const runSimulation = (scenario: Scenario): SimulationResult => {
       maxBalance = balance
     }
 
-    spending = spending * (1 + assumptions.annualInflation)
+    spending = spending * (1 + input.annualInflation)
   }
 
   return {

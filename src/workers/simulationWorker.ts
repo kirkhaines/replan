@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
-import { scenarioSchema } from '../core/models'
 import { runSimulation } from '../core/sim/engine'
+import { simulationInputSchema } from '../core/sim/input'
 import type { RunScenarioRequest, RunScenarioResponse } from '../core/simClient/types'
 import { createUuid } from '../core/utils/uuid'
 
@@ -12,10 +12,10 @@ const emptyResult = {
 const formatZodError = (message: string) => `Invalid scenario: ${message}`
 
 self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
-  const { scenario, requestId } = event.data
+  const { input, requestId } = event.data
   const startedAt = Date.now()
 
-  const parsed = scenarioSchema.safeParse(scenario)
+  const parsed = simulationInputSchema.safeParse(input)
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
     const response: RunScenarioResponse = {
@@ -23,7 +23,7 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
       requestId,
       run: {
         id: createUuid(),
-        scenarioId: scenario.id ?? createUuid(),
+        scenarioId: input?.scenarioId ?? createUuid(),
         startedAt,
         finishedAt: Date.now(),
         status: 'error',
@@ -41,7 +41,7 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
     requestId,
     run: {
       id: createUuid(),
-      scenarioId: parsed.data.id,
+      scenarioId: parsed.data.scenarioId,
       startedAt,
       finishedAt: Date.now(),
       status: 'success',
