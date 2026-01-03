@@ -208,6 +208,15 @@ h2 {
   background: white;
 }
 
+.field textarea {
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
 .error {
   color: #b32020;
   font-size: 0.85rem;
