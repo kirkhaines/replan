@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useAppStore } from '../../state/appStore'
 import type { Scenario } from '../../core/models'
+import { createUuid } from '../../core/utils/uuid'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
 
@@ -59,20 +60,149 @@ const ScenarioListPage = () => {
   })
 
   const handleCreate = async () => {
-    const bundle = createDefaultScenarioBundle()
-    await storage.personRepo.upsert(bundle.person)
-    await storage.socialSecurityStrategyRepo.upsert(bundle.socialSecurityStrategy)
-    await storage.futureWorkStrategyRepo.upsert(bundle.futureWorkStrategy)
-    await storage.futureWorkPeriodRepo.upsert(bundle.futureWorkPeriod)
-    await storage.spendingStrategyRepo.upsert(bundle.spendingStrategy)
-    await storage.spendingLineItemRepo.upsert(bundle.spendingLineItem)
-    await storage.nonInvestmentAccountRepo.upsert(bundle.nonInvestmentAccount)
-    await storage.investmentAccountRepo.upsert(bundle.investmentAccount)
-    await storage.investmentAccountHoldingRepo.upsert(bundle.investmentAccountHolding)
-    await storage.personStrategyRepo.upsert(bundle.personStrategy)
-    await storage.scenarioRepo.upsert(bundle.scenario)
+    const [people, cashAccounts, investmentAccounts] = await Promise.all([
+      storage.personRepo.list(),
+      storage.nonInvestmentAccountRepo.list(),
+      storage.investmentAccountRepo.list(),
+    ])
+
+    if (people.length === 0 || cashAccounts.length === 0 || investmentAccounts.length === 0) {
+      const bundle = createDefaultScenarioBundle()
+      await storage.personRepo.upsert(bundle.person)
+      await storage.socialSecurityStrategyRepo.upsert(bundle.socialSecurityStrategy)
+      await storage.futureWorkStrategyRepo.upsert(bundle.futureWorkStrategy)
+      await storage.futureWorkPeriodRepo.upsert(bundle.futureWorkPeriod)
+      await storage.spendingStrategyRepo.upsert(bundle.spendingStrategy)
+      await storage.spendingLineItemRepo.upsert(bundle.spendingLineItem)
+      await storage.nonInvestmentAccountRepo.upsert(bundle.nonInvestmentAccount)
+      await storage.investmentAccountRepo.upsert(bundle.investmentAccount)
+      await storage.investmentAccountHoldingRepo.upsert(bundle.investmentAccountHolding)
+      await storage.personStrategyRepo.upsert(bundle.personStrategy)
+      await storage.scenarioRepo.upsert(bundle.scenario)
+      await loadScenarios()
+      navigate(`/scenarios/${bundle.scenario.id}`)
+      return
+    }
+
+    const now = Date.now()
+    const person = people[0]
+    const nonInvestmentAccount = cashAccounts[0]
+    const investmentAccount = investmentAccounts[0]
+    let holdings = await storage.investmentAccountHoldingRepo.listForAccount(investmentAccount.id)
+
+    if (holdings.length === 0) {
+      const holdingId = createUuid()
+      const holding = {
+        id: holdingId,
+        name: 'S&P 500',
+        taxType: 'taxable' as const,
+        balance: 150000,
+        holdingType: 'sp500' as const,
+        return: 0.05,
+        risk: 0.15,
+        investmentAccountId: investmentAccount.id,
+        createdAt: now,
+        updatedAt: now,
+      }
+      await storage.investmentAccountHoldingRepo.upsert(holding)
+      holdings = [holding]
+    }
+
+    const holding = holdings[0]
+    const socialSecurityStrategyId = createUuid()
+    const futureWorkStrategyId = createUuid()
+    const futureWorkPeriodId = createUuid()
+    const spendingStrategyId = createUuid()
+    const spendingLineItemId = createUuid()
+    const personStrategyId = createUuid()
+
+    const today = new Date()
+    const tenYears = new Date()
+    tenYears.setFullYear(today.getFullYear() + 10)
+    const thirtyYears = new Date()
+    thirtyYears.setFullYear(today.getFullYear() + 30)
+    const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
+
+    await storage.socialSecurityStrategyRepo.upsert({
+      id: socialSecurityStrategyId,
+      personId: person.id,
+      startAge: 67,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await storage.futureWorkStrategyRepo.upsert({
+      id: futureWorkStrategyId,
+      name: 'Work plan',
+      personId: person.id,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await storage.futureWorkPeriodRepo.upsert({
+      id: futureWorkPeriodId,
+      name: 'Primary job',
+      futureWorkStrategyId,
+      salary: 90000,
+      bonus: 5000,
+      startDate: toIsoDate(today),
+      endDate: toIsoDate(tenYears),
+      '401kMatchPctCap': 0.05,
+      '401kMatchRatio': 1,
+      '401kInvestmentAccountHoldingId': holding.id,
+      includesHealthInsurance: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await storage.spendingStrategyRepo.upsert({
+      id: spendingStrategyId,
+      name: 'Base spending',
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await storage.spendingLineItemRepo.upsert({
+      id: spendingLineItemId,
+      name: 'Living',
+      spendingStrategyId,
+      category: 'Living',
+      needAmount: 3000,
+      wantAmount: 1000,
+      startDate: toIsoDate(today),
+      endDate: toIsoDate(thirtyYears),
+      isPreTax: false,
+      isCharitable: false,
+      isWork: false,
+      targetInvestmentAccountHoldingId: holding.id,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await storage.personStrategyRepo.upsert({
+      id: personStrategyId,
+      personId: person.id,
+      futureWorkStrategyId,
+      socialSecurityStrategyId,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const scenario: Scenario = {
+      id: createUuid(),
+      name: 'New Scenario',
+      createdAt: now,
+      updatedAt: now,
+      personStrategyIds: [personStrategyId],
+      nonInvestmentAccountIds: [nonInvestmentAccount.id],
+      investmentAccountIds: [investmentAccount.id],
+      spendingStrategyId,
+      fundingStrategyType: 'pro_rata',
+    }
+
+    await storage.scenarioRepo.upsert(scenario)
     await loadScenarios()
-    navigate(`/scenarios/${bundle.scenario.id}`)
+    navigate(`/scenarios/${scenario.id}`)
   }
 
   return (

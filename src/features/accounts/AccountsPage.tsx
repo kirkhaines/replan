@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAppStore } from '../../state/appStore'
-import type {
-  InvestmentAccount,
-  InvestmentAccountHolding,
-  NonInvestmentAccount,
-} from '../../core/models'
+import type { InvestmentAccount, NonInvestmentAccount } from '../../core/models'
 import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
+
+const formatCurrency = (value: number) =>
+  value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 
 const createNonInvestmentAccount = (): NonInvestmentAccount => {
   const now = Date.now()
@@ -50,7 +50,7 @@ const AccountsPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
-  const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
+  const [investmentBalances, setInvestmentBalances] = useState<Record<string, number>>({})
   const [isLoading, setIsLoading] = useState(true)
 
   const loadAccounts = useCallback(async () => {
@@ -62,7 +62,12 @@ const AccountsPage = () => {
     ])
     setCashAccounts(cash)
     setInvestmentAccounts(investments)
-    setHoldings(holdingList)
+    const balanceMap = holdingList.reduce<Record<string, number>>((acc, holding) => {
+      acc[holding.investmentAccountId] =
+        (acc[holding.investmentAccountId] ?? 0) + holding.balance
+      return acc
+    }, {})
+    setInvestmentBalances(balanceMap)
     setIsLoading(false)
   }, [storage])
 
@@ -119,8 +124,12 @@ const AccountsPage = () => {
             <tbody>
               {cashAccounts.map((account) => (
                 <tr key={account.id}>
-                  <td>{account.name}</td>
-                  <td>{account.balance.toLocaleString()}</td>
+                  <td>
+                    <Link className="link" to={`/accounts/cash/${account.id}`}>
+                      {account.name}
+                    </Link>
+                  </td>
+                  <td>{formatCurrency(account.balance)}</td>
                   <td>{account.interestRate}</td>
                 </tr>
               ))}
@@ -140,44 +149,18 @@ const AccountsPage = () => {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Balance</th>
               </tr>
             </thead>
             <tbody>
               {investmentAccounts.map((account) => (
                 <tr key={account.id}>
-                  <td>{account.name}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="card stack">
-        <h2>Holdings</h2>
-        {isLoading ? (
-          <p className="muted">Loading holdings...</p>
-        ) : holdings.length === 0 ? (
-          <p className="muted">No holdings loaded yet.</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Tax type</th>
-                <th>Balance</th>
-                <th>Return</th>
-                <th>Risk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {holdings.map((holding) => (
-                <tr key={holding.id}>
-                  <td>{holding.name}</td>
-                  <td>{holding.taxType}</td>
-                  <td>{holding.balance.toLocaleString()}</td>
-                  <td>{holding.return}</td>
-                  <td>{holding.risk}</td>
+                  <td>
+                    <Link className="link" to={`/accounts/investment/${account.id}`}>
+                      {account.name}
+                    </Link>
+                  </td>
+                  <td>{formatCurrency(investmentBalances[account.id] ?? 0)}</td>
                 </tr>
               ))}
             </tbody>

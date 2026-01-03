@@ -81,6 +81,7 @@ export interface SpendingLineItemRepo {
 }
 
 export interface PersonStrategyRepo {
+  listForPerson: (personId: string) => Promise<PersonStrategy[]>
   get: (id: string) => Promise<PersonStrategy | undefined>
   upsert: (strategy: PersonStrategy) => Promise<void>
 }

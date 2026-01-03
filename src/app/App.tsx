@@ -3,7 +3,11 @@ import ScenarioListPage from '../features/scenarios/ScenarioListPage'
 import ScenarioDetailPage from '../features/scenarios/ScenarioDetailPage'
 import RunResultsPage from '../features/runs/RunResultsPage'
 import PeopleListPage from '../features/people/PeopleListPage'
+import PeopleDetailPage from '../features/people/PeopleDetailPage'
 import AccountsPage from '../features/accounts/AccountsPage'
+import NonInvestmentAccountDetailPage from '../features/accounts/NonInvestmentAccountDetailPage'
+import InvestmentAccountDetailPage from '../features/accounts/InvestmentAccountDetailPage'
+import HoldingDetailPage from '../features/accounts/HoldingDetailPage'
 import { useAppStore } from '../state/appStore'
 
 const NotFound = () => (
@@ -50,7 +54,11 @@ const AppShell = () => {
           <Route path="/scenarios/:id" element={<ScenarioDetailPage />} />
           <Route path="/runs/:id" element={<RunResultsPage />} />
           <Route path="/people" element={<PeopleListPage />} />
+          <Route path="/people/:id" element={<PeopleDetailPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
+          <Route path="/accounts/cash/:id" element={<NonInvestmentAccountDetailPage />} />
+          <Route path="/accounts/investment/:id" element={<InvestmentAccountDetailPage />} />
+          <Route path="/accounts/holding/:id" element={<HoldingDetailPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

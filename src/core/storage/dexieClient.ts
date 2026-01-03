@@ -210,6 +210,10 @@ class DexieSpendingLineItemRepo implements SpendingLineItemRepo {
 }
 
 class DexiePersonStrategyRepo implements PersonStrategyRepo {
+  async listForPerson(personId: string) {
+    return db.personStrategies.where('personId').equals(personId).toArray()
+  }
+
   async get(id: string) {
     return db.personStrategies.get(id)
   }

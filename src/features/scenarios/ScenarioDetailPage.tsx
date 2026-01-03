@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -16,8 +16,6 @@ import {
   investmentAccountHoldingSchema,
   personStrategySchema,
   fundingStrategyTypeSchema,
-  holdingTypeSchema,
-  taxTypeSchema,
   type Scenario,
   type SimulationRun,
   type Person,
@@ -36,6 +34,9 @@ import { useAppStore } from '../../state/appStore'
 import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
+
+const formatCurrency = (value: number) =>
+  value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 
 type ScenarioEditorValues = {
   scenario: Scenario
@@ -189,6 +190,11 @@ const ScenarioDetailPage = () => {
   const [runs, setRuns] = useState<SimulationRun[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [selectionError, setSelectionError] = useState<string | null>(null)
+  const [people, setPeople] = useState<Person[]>([])
+  const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
+  const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
+  const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
 
   const defaultValues = useMemo(() => {
     const bundle = createDefaultScenarioBundle()
@@ -199,11 +205,112 @@ const ScenarioDetailPage = () => {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<ScenarioEditorValues>({
     resolver: zodResolver(editorSchema),
     defaultValues,
   })
+
+  const selectedPersonId = watch('person.id')
+  const selectedCashAccountId = watch('nonInvestmentAccount.id')
+  const selectedInvestmentAccountId = watch('investmentAccount.id')
+  const selectedHoldingId = watch('investmentAccountHolding.id')
+  const selectedPersonDob = watch('person.dateOfBirth')
+  const selectedPersonLifeExpectancy = watch('person.lifeExpectancy')
+  const selectedCashBalance = watch('nonInvestmentAccount.balance')
+  const selectedCashRate = watch('nonInvestmentAccount.interestRate')
+  const selectedHoldingBalance = watch('investmentAccountHolding.balance')
+  const selectedHoldingReturn = watch('investmentAccountHolding.return')
+  const selectedHoldingRisk = watch('investmentAccountHolding.risk')
+
+  const loadReferenceData = useCallback(async () => {
+    const [peopleData, cashData, investmentData] = await Promise.all([
+      storage.personRepo.list(),
+      storage.nonInvestmentAccountRepo.list(),
+      storage.investmentAccountRepo.list(),
+    ])
+    setPeople(peopleData)
+    setCashAccounts(cashData)
+    setInvestmentAccounts(investmentData)
+  }, [storage])
+
+  const loadHoldingsForAccount = useCallback(
+    async (accountId: string) => {
+      const list = await storage.investmentAccountHoldingRepo.listForAccount(accountId)
+      setHoldings(list)
+      return list
+    },
+    [storage],
+  )
+
+  const applyHoldingSelection = useCallback(
+    (holding: InvestmentAccountHolding) => {
+      setValue('investmentAccountHolding', holding, { shouldDirty: true })
+      setValue('futureWorkPeriod.401kInvestmentAccountHoldingId', holding.id, {
+        shouldDirty: true,
+      })
+      setValue('spendingLineItem.targetInvestmentAccountHoldingId', holding.id, {
+        shouldDirty: true,
+      })
+    },
+    [setValue],
+  )
+
+  const applyInvestmentAccountSelection = useCallback(
+    async (account: InvestmentAccount) => {
+      setValue('investmentAccount', account, { shouldDirty: true })
+      setValue('scenario.investmentAccountIds', [account.id], { shouldDirty: true })
+      const list = await loadHoldingsForAccount(account.id)
+      if (list.length > 0) {
+        applyHoldingSelection(list[0])
+        setSelectionError(null)
+      } else {
+        setSelectionError('Selected investment account has no holdings.')
+      }
+    },
+    [applyHoldingSelection, loadHoldingsForAccount, setSelectionError, setValue],
+  )
+
+  const applyCashAccountSelection = useCallback(
+    (account: NonInvestmentAccount) => {
+      setValue('nonInvestmentAccount', account, { shouldDirty: true })
+      setValue('scenario.nonInvestmentAccountIds', [account.id], { shouldDirty: true })
+    },
+    [setValue],
+  )
+
+  const applyPersonSelection = useCallback(
+    async (person: Person) => {
+      const strategies = await storage.personStrategyRepo.listForPerson(person.id)
+      const personStrategy = strategies[0]
+      if (!personStrategy) {
+        setSelectionError('Selected person has no strategy. Create one in Scenarios.')
+        return
+      }
+      const [socialSecurityStrategy, futureWorkStrategy, futureWorkPeriods] =
+        await Promise.all([
+          storage.socialSecurityStrategyRepo.get(personStrategy.socialSecurityStrategyId),
+          storage.futureWorkStrategyRepo.get(personStrategy.futureWorkStrategyId),
+          storage.futureWorkPeriodRepo.listForStrategy(personStrategy.futureWorkStrategyId),
+        ])
+
+      if (!socialSecurityStrategy || !futureWorkStrategy || futureWorkPeriods.length === 0) {
+        setSelectionError('Selected person is missing linked strategies.')
+        return
+      }
+
+      setValue('person', person, { shouldDirty: true })
+      setValue('personStrategy', personStrategy, { shouldDirty: true })
+      setValue('scenario.personStrategyIds', [personStrategy.id], { shouldDirty: true })
+      setValue('socialSecurityStrategy', socialSecurityStrategy, { shouldDirty: true })
+      setValue('futureWorkStrategy', futureWorkStrategy, { shouldDirty: true })
+      setValue('futureWorkPeriod', futureWorkPeriods[0], { shouldDirty: true })
+      setSelectionError(null)
+    },
+    [setSelectionError, setValue, storage],
+  )
 
   const loadScenario = useCallback(async () => {
     if (!id) {
@@ -284,6 +391,8 @@ const ScenarioDetailPage = () => {
 
     setScenario(data)
     reset(bundle)
+    setHoldings(investmentAccountHoldings)
+    setSelectionError(null)
     setIsLoading(false)
   }, [id, reset, storage])
 
@@ -297,6 +406,11 @@ const ScenarioDetailPage = () => {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadReferenceData()
+  }, [loadReferenceData])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadScenario()
   }, [loadScenario])
 
@@ -306,6 +420,43 @@ const ScenarioDetailPage = () => {
       void loadRuns(scenario.id)
     }
   }, [loadRuns, scenario?.id])
+
+  const handlePersonChange = async (event: ChangeEvent<HTMLSelectElement>) => {
+    const personId = event.target.value
+    const person = people.find((item) => item.id === personId)
+    if (!person) {
+      return
+    }
+    setSelectionError(null)
+    await applyPersonSelection(person)
+  }
+
+  const handleCashAccountChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const accountId = event.target.value
+    const account = cashAccounts.find((item) => item.id === accountId)
+    if (!account) {
+      return
+    }
+    applyCashAccountSelection(account)
+  }
+
+  const handleInvestmentAccountChange = async (event: ChangeEvent<HTMLSelectElement>) => {
+    const accountId = event.target.value
+    const account = investmentAccounts.find((item) => item.id === accountId)
+    if (!account) {
+      return
+    }
+    await applyInvestmentAccountSelection(account)
+  }
+
+  const handleHoldingChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const holdingId = event.target.value
+    const holding = holdings.find((item) => item.id === holdingId)
+    if (!holding) {
+      return
+    }
+    applyHoldingSelection(holding)
+  }
 
   const onSubmit = async (values: ScenarioEditorValues) => {
     await persistBundle(values, storage, setScenario, reset)
@@ -359,6 +510,12 @@ const ScenarioDetailPage = () => {
         }
       />
 
+      {selectionError ? (
+        <div className="card">
+          <p className="error">{selectionError}</p>
+        </div>
+      ) : null}
+
       <form className="card stack" onSubmit={handleSubmit(onSubmit)}>
         <input type="hidden" {...register('scenario.id')} />
         <input type="hidden" {...register('scenario.createdAt', { valueAsNumber: true })} />
@@ -370,6 +527,9 @@ const ScenarioDetailPage = () => {
         <input type="hidden" {...register('person.id')} />
         <input type="hidden" {...register('person.createdAt', { valueAsNumber: true })} />
         <input type="hidden" {...register('person.updatedAt', { valueAsNumber: true })} />
+        <input type="hidden" {...register('person.name')} />
+        <input type="hidden" {...register('person.dateOfBirth')} />
+        <input type="hidden" {...register('person.lifeExpectancy', { valueAsNumber: true })} />
         <input type="hidden" {...register('socialSecurityStrategy.id')} />
         <input type="hidden" {...register('socialSecurityStrategy.personId')} />
         <input
@@ -430,6 +590,15 @@ const ScenarioDetailPage = () => {
           type="hidden"
           {...register('nonInvestmentAccount.updatedAt', { valueAsNumber: true })}
         />
+        <input type="hidden" {...register('nonInvestmentAccount.name')} />
+        <input
+          type="hidden"
+          {...register('nonInvestmentAccount.balance', { valueAsNumber: true })}
+        />
+        <input
+          type="hidden"
+          {...register('nonInvestmentAccount.interestRate', { valueAsNumber: true })}
+        />
         <input type="hidden" {...register('investmentAccount.id')} />
         <input
           type="hidden"
@@ -439,6 +608,7 @@ const ScenarioDetailPage = () => {
           type="hidden"
           {...register('investmentAccount.updatedAt', { valueAsNumber: true })}
         />
+        <input type="hidden" {...register('investmentAccount.name')} />
         <input type="hidden" {...register('investmentAccountHolding.id')} />
         <input type="hidden" {...register('investmentAccountHolding.investmentAccountId')} />
         <input
@@ -448,6 +618,21 @@ const ScenarioDetailPage = () => {
         <input
           type="hidden"
           {...register('investmentAccountHolding.updatedAt', { valueAsNumber: true })}
+        />
+        <input type="hidden" {...register('investmentAccountHolding.name')} />
+        <input type="hidden" {...register('investmentAccountHolding.taxType')} />
+        <input
+          type="hidden"
+          {...register('investmentAccountHolding.balance', { valueAsNumber: true })}
+        />
+        <input type="hidden" {...register('investmentAccountHolding.holdingType')} />
+        <input
+          type="hidden"
+          {...register('investmentAccountHolding.return', { valueAsNumber: true })}
+        />
+        <input
+          type="hidden"
+          {...register('investmentAccountHolding.risk', { valueAsNumber: true })}
         />
         <input type="hidden" {...register('personStrategy.id')} />
         <input type="hidden" {...register('personStrategy.personId')} />
@@ -483,27 +668,25 @@ const ScenarioDetailPage = () => {
           </label>
 
           <label className="field">
-            <span>Person name</span>
-            <input {...register('person.name')} />
-            {errors.person?.name ? (
-              <span className="error">{errors.person.name.message}</span>
-            ) : null}
+            <span>Person</span>
+            <select value={selectedPersonId ?? ''} onChange={handlePersonChange}>
+              {people.length === 0 ? <option value="">No people available</option> : null}
+              {people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="field">
             <span>Date of birth</span>
-            <input type="date" {...register('person.dateOfBirth')} />
-            {errors.person?.dateOfBirth ? (
-              <span className="error">{errors.person.dateOfBirth.message}</span>
-            ) : null}
+            <input value={selectedPersonDob ?? ''} readOnly />
           </label>
 
           <label className="field">
             <span>Life expectancy (years)</span>
-            <input type="number" {...register('person.lifeExpectancy', { valueAsNumber: true })} />
-            {errors.person?.lifeExpectancy ? (
-              <span className="error">{errors.person.lifeExpectancy.message}</span>
-            ) : null}
+            <input value={selectedPersonLifeExpectancy ?? ''} readOnly />
           </label>
 
           <label className="field">
@@ -518,54 +701,48 @@ const ScenarioDetailPage = () => {
           </label>
 
           <label className="field">
-            <span>Cash account name</span>
-            <input {...register('nonInvestmentAccount.name')} />
-          </label>
-
-          <label className="field">
-            <span>Cash balance</span>
-            <input
-              type="number"
-              {...register('nonInvestmentAccount.balance', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>Cash interest rate</span>
-            <input
-              type="number"
-              step="0.001"
-              {...register('nonInvestmentAccount.interestRate', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>Investment account name</span>
-            <input {...register('investmentAccount.name')} />
-          </label>
-
-          <label className="field">
-            <span>Holding name</span>
-            <input {...register('investmentAccountHolding.name')} />
-          </label>
-
-          <label className="field">
-            <span>Holding type</span>
-            <select {...register('investmentAccountHolding.holdingType')}>
-              {holdingTypeSchema.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+            <span>Cash account</span>
+            <select value={selectedCashAccountId ?? ''} onChange={handleCashAccountChange}>
+              {cashAccounts.length === 0 ? <option value="">No accounts available</option> : null}
+              {cashAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
                 </option>
               ))}
             </select>
           </label>
 
           <label className="field">
-            <span>Tax type</span>
-            <select {...register('investmentAccountHolding.taxType')}>
-              {taxTypeSchema.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+            <span>Cash balance</span>
+            <input value={formatCurrency(Number(selectedCashBalance ?? 0))} readOnly />
+          </label>
+
+          <label className="field">
+            <span>Cash interest rate</span>
+            <input value={selectedCashRate ?? ''} readOnly />
+          </label>
+
+          <label className="field">
+            <span>Investment account</span>
+            <select value={selectedInvestmentAccountId ?? ''} onChange={handleInvestmentAccountChange}>
+              {investmentAccounts.length === 0 ? (
+                <option value="">No accounts available</option>
+              ) : null}
+              {investmentAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Holding</span>
+            <select value={selectedHoldingId ?? ''} onChange={handleHoldingChange}>
+              {holdings.length === 0 ? <option value="">No holdings available</option> : null}
+              {holdings.map((holding) => (
+                <option key={holding.id} value={holding.id}>
+                  {holding.name}
                 </option>
               ))}
             </select>
@@ -573,28 +750,17 @@ const ScenarioDetailPage = () => {
 
           <label className="field">
             <span>Holding balance</span>
-            <input
-              type="number"
-              {...register('investmentAccountHolding.balance', { valueAsNumber: true })}
-            />
+            <input value={formatCurrency(Number(selectedHoldingBalance ?? 0))} readOnly />
           </label>
 
           <label className="field">
             <span>Expected return</span>
-            <input
-              type="number"
-              step="0.001"
-              {...register('investmentAccountHolding.return', { valueAsNumber: true })}
-            />
+            <input value={selectedHoldingReturn ?? ''} readOnly />
           </label>
 
           <label className="field">
             <span>Risk (decimal)</span>
-            <input
-              type="number"
-              step="0.001"
-              {...register('investmentAccountHolding.risk', { valueAsNumber: true })}
-            />
+            <input value={selectedHoldingRisk ?? ''} readOnly />
           </label>
 
           <label className="field">
