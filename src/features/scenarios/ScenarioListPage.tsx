@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   getCoreRowModel,
   useReactTable,
@@ -18,6 +18,7 @@ const formatDate = (value: number) =>
 const ScenarioListPage = () => {
   const storage = useAppStore((state) => state.storage)
   const navigate = useNavigate()
+  const location = useLocation()
   const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -43,7 +44,11 @@ const ScenarioListPage = () => {
       {
         header: 'Actions',
         cell: ({ row }) => (
-          <Link className="link" to={`/scenarios/${row.original.id}`}>
+          <Link
+            className="link"
+            to={`/scenarios/${row.original.id}`}
+            state={{ from: location.pathname }}
+          >
             Open
           </Link>
         ),
@@ -80,7 +85,7 @@ const ScenarioListPage = () => {
       await storage.personStrategyRepo.upsert(bundle.personStrategy)
       await storage.scenarioRepo.upsert(bundle.scenario)
       await loadScenarios()
-      navigate(`/scenarios/${bundle.scenario.id}`)
+      navigate(`/scenarios/${bundle.scenario.id}`, { state: { from: location.pathname } })
       return
     }
 
@@ -202,7 +207,7 @@ const ScenarioListPage = () => {
 
     await storage.scenarioRepo.upsert(scenario)
     await loadScenarios()
-    navigate(`/scenarios/${scenario.id}`)
+    navigate(`/scenarios/${scenario.id}`, { state: { from: location.pathname } })
   }
 
   return (

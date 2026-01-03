@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -219,9 +219,11 @@ const persistBundle = async (
 
 const ScenarioDetailPage = () => {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
   const navigate = useNavigate()
   const storage = useAppStore((state) => state.storage)
   const simClient = useAppStore((state) => state.simClient)
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/scenarios'
   const [scenario, setScenario] = useState<Scenario | null>(null)
   const [runs, setRuns] = useState<SimulationRun[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -643,7 +645,7 @@ const ScenarioDetailPage = () => {
     if (newStrategy) {
       await applyPersonStrategySelection(newStrategy)
     }
-    navigate(`/person-strategies/${personStrategyId}`)
+    navigate(`/person-strategies/${personStrategyId}`, { state: { from: location.pathname } })
   }
 
   const handleRemovePersonStrategy = async (strategyId: string) => {
@@ -790,7 +792,7 @@ const ScenarioDetailPage = () => {
       <section className="stack">
         <h1>Scenario data missing</h1>
         <p className="muted">{loadError}</p>
-        <Link className="link" to="/scenarios">
+        <Link className="link" to={backTo}>
           Back to scenarios
         </Link>
       </section>
@@ -801,7 +803,7 @@ const ScenarioDetailPage = () => {
     return (
       <section className="stack">
         <h1>Scenario not found</h1>
-        <Link className="link" to="/scenarios">
+        <Link className="link" to={backTo}>
           Back to scenarios
         </Link>
       </section>
@@ -814,7 +816,7 @@ const ScenarioDetailPage = () => {
         title="Edit scenario"
         subtitle="Update people, accounts, and spending before running simulations."
         actions={
-          <Link className="link" to="/scenarios">
+          <Link className="link" to={backTo}>
             Back
           </Link>
         }
@@ -1022,7 +1024,11 @@ const ScenarioDetailPage = () => {
                     <tr key={strategy.id}>
                       <td>
                         {person ? (
-                          <Link className="link" to={`/person-strategies/${strategy.id}`}>
+                          <Link
+                            className="link"
+                            to={`/person-strategies/${strategy.id}`}
+                            state={{ from: location.pathname }}
+                          >
                             {person.name}
                           </Link>
                         ) : (
@@ -1073,7 +1079,11 @@ const ScenarioDetailPage = () => {
                 {scenarioCashAccounts.map((account) => (
                   <tr key={account.id}>
                     <td>
-                      <Link className="link" to={`/accounts/cash/${account.id}`}>
+                      <Link
+                        className="link"
+                        to={`/accounts/cash/${account.id}`}
+                        state={{ from: location.pathname }}
+                      >
                         {account.name}
                       </Link>
                     </td>
@@ -1117,7 +1127,11 @@ const ScenarioDetailPage = () => {
                 {scenarioInvestmentAccounts.map((account) => (
                   <tr key={account.id}>
                     <td>
-                      <Link className="link" to={`/accounts/investment/${account.id}`}>
+                      <Link
+                        className="link"
+                        to={`/accounts/investment/${account.id}`}
+                        state={{ from: location.pathname }}
+                      >
                         {account.name}
                       </Link>
                     </td>
@@ -1211,7 +1225,12 @@ const ScenarioDetailPage = () => {
         ) : (
           <div className="runs">
             {runs.map((run) => (
-              <Link className="run-item" key={run.id} to={`/runs/${run.id}`}>
+              <Link
+                className="run-item"
+                key={run.id}
+                to={`/runs/${run.id}`}
+                state={{ from: location.pathname }}
+              >
                 <div>
                   <strong>{new Date(run.finishedAt).toLocaleString()}</strong>
                   <span className="muted">{run.status}</span>

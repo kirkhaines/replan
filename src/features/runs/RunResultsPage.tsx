@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   LineChart,
   Line,
@@ -18,6 +18,7 @@ const formatCurrency = (value: number) =>
 
 const RunResultsPage = () => {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
   const storage = useAppStore((state) => state.storage)
   const [run, setRun] = useState<SimulationRun | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -58,7 +59,11 @@ const RunResultsPage = () => {
         title="Run results"
         subtitle={new Date(run.finishedAt).toLocaleString()}
         actions={
-          <Link className="link" to={`/scenarios/${run.scenarioId}`}>
+          <Link
+            className="link"
+            to={`/scenarios/${run.scenarioId}`}
+            state={{ from: location.pathname }}
+          >
             Back to scenario
           </Link>
         }

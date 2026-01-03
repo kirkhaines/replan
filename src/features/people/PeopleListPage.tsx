@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAppStore } from '../../state/appStore'
 import type { Person } from '../../core/models'
 import { createUuid } from '../../core/utils/uuid'
@@ -19,6 +19,7 @@ const createPerson = (): Person => {
 
 const PeopleListPage = () => {
   const storage = useAppStore((state) => state.storage)
+  const location = useLocation()
   const [people, setPeople] = useState<Person[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -118,7 +119,11 @@ const PeopleListPage = () => {
               {people.map((person) => (
                 <tr key={person.id}>
                   <td>
-                    <Link className="link" to={`/people/${person.id}`}>
+                    <Link
+                      className="link"
+                      to={`/people/${person.id}`}
+                      state={{ from: location.pathname }}
+                    >
                       {person.name}
                     </Link>
                   </td>

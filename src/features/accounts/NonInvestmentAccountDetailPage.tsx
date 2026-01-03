@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { nonInvestmentAccountSchema, type NonInvestmentAccount } from '../../core/models'
@@ -9,6 +9,8 @@ import { now } from '../../core/utils/time'
 
 const NonInvestmentAccountDetailPage = () => {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/accounts'
   const storage = useAppStore((state) => state.storage)
   const [account, setAccount] = useState<NonInvestmentAccount | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -76,7 +78,7 @@ const NonInvestmentAccountDetailPage = () => {
     return (
       <section className="stack">
         <h1>Account not found</h1>
-        <Link className="link" to="/accounts">
+        <Link className="link" to={backTo}>
           Back to accounts
         </Link>
       </section>
@@ -89,7 +91,7 @@ const NonInvestmentAccountDetailPage = () => {
         title={account.name}
         subtitle="Cash account"
         actions={
-          <Link className="link" to="/accounts">
+          <Link className="link" to={backTo}>
             Back
           </Link>
         }

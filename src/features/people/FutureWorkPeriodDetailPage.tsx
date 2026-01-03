@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import type { FutureWorkPeriod, InvestmentAccountHolding } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 
 const FutureWorkPeriodDetailPage = () => {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/scenarios'
   const storage = useAppStore((state) => state.storage)
   const [period, setPeriod] = useState<FutureWorkPeriod | null>(null)
   const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
@@ -54,7 +56,7 @@ const FutureWorkPeriodDetailPage = () => {
     return (
       <section className="stack">
         <h1>Future work period not found</h1>
-        <Link className="link" to="/scenarios">
+        <Link className="link" to={backTo}>
           Back to scenarios
         </Link>
       </section>
@@ -67,7 +69,7 @@ const FutureWorkPeriodDetailPage = () => {
         title={period.name}
         subtitle="Future work period"
         actions={
-          <Link className="link" to="/scenarios">
+          <Link className="link" to={backTo}>
             Back
           </Link>
         }

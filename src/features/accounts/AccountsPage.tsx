@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAppStore } from '../../state/appStore'
 import type {
   InvestmentAccount,
@@ -52,6 +52,7 @@ const createHolding = (investmentAccountId: string): InvestmentAccountHolding =>
 
 const AccountsPage = () => {
   const storage = useAppStore((state) => state.storage)
+  const location = useLocation()
   const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
   const [investmentBalances, setInvestmentBalances] = useState<Record<string, number>>({})
@@ -130,7 +131,11 @@ const AccountsPage = () => {
               {cashAccounts.map((account) => (
                 <tr key={account.id}>
                   <td>
-                    <Link className="link" to={`/accounts/cash/${account.id}`}>
+                    <Link
+                      className="link"
+                      to={`/accounts/cash/${account.id}`}
+                      state={{ from: location.pathname }}
+                    >
                       {account.name}
                     </Link>
                   </td>
@@ -161,7 +166,11 @@ const AccountsPage = () => {
               {investmentAccounts.map((account) => (
                 <tr key={account.id}>
                   <td>
-                    <Link className="link" to={`/accounts/investment/${account.id}`}>
+                    <Link
+                      className="link"
+                      to={`/accounts/investment/${account.id}`}
+                      state={{ from: location.pathname }}
+                    >
                       {account.name}
                     </Link>
                   </td>

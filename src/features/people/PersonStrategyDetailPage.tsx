@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import type {
   FutureWorkPeriod,
   FutureWorkStrategy,
@@ -15,7 +15,8 @@ const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
 
 const PersonStrategyDetailPage = () => {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
+  const location = useLocation()
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/scenarios'
   const storage = useAppStore((state) => state.storage)
   const [personStrategy, setPersonStrategy] = useState<PersonStrategy | null>(null)
   const [people, setPeople] = useState<Person[]>([])
@@ -297,7 +298,6 @@ const PersonStrategyDetailPage = () => {
     }
     await storage.personStrategyRepo.upsert(next)
     setPersonStrategy(next)
-    navigate('/scenarios')
   }
 
   if (isLoading) {
@@ -308,7 +308,7 @@ const PersonStrategyDetailPage = () => {
     return (
       <section className="stack">
         <h1>Person strategy not found</h1>
-        <Link className="link" to="/scenarios">
+        <Link className="link" to={backTo}>
           Back to scenarios
         </Link>
       </section>
@@ -321,7 +321,7 @@ const PersonStrategyDetailPage = () => {
         title="Person strategy"
         subtitle="Choose a person and link work and Social Security strategies."
         actions={
-          <Link className="link" to="/scenarios">
+          <Link className="link" to={backTo}>
             Back
           </Link>
         }
@@ -459,7 +459,11 @@ const PersonStrategyDetailPage = () => {
                       {futureWorkPeriods.map((period) => (
                         <tr key={period.id}>
                           <td>
-                            <Link className="link" to={`/future-work-periods/${period.id}`}>
+                            <Link
+                              className="link"
+                              to={`/future-work-periods/${period.id}`}
+                              state={{ from: location.pathname }}
+                            >
                               {period.name}
                             </Link>
                           </td>

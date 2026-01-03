@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -14,6 +14,9 @@ import { now } from '../../core/utils/time'
 
 const HoldingDetailPage = () => {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/accounts'
+  const parentFrom = (location.state as { parentFrom?: string } | null)?.parentFrom
   const storage = useAppStore((state) => state.storage)
   const [holding, setHolding] = useState<InvestmentAccountHolding | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -85,7 +88,7 @@ const HoldingDetailPage = () => {
     return (
       <section className="stack">
         <h1>Holding not found</h1>
-        <Link className="link" to="/accounts">
+        <Link className="link" to={backTo} state={{ from: parentFrom ?? '/accounts' }}>
           Back to accounts
         </Link>
       </section>
@@ -98,7 +101,7 @@ const HoldingDetailPage = () => {
         title={holding.name}
         subtitle="Investment holding"
         actions={
-          <Link className="link" to="/accounts">
+          <Link className="link" to={backTo} state={{ from: parentFrom ?? '/accounts' }}>
             Back
           </Link>
         }

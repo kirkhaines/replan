@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { personSchema, type Person } from '../../core/models'
@@ -9,6 +9,8 @@ import { now } from '../../core/utils/time'
 
 const PeopleDetailPage = () => {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/people'
   const storage = useAppStore((state) => state.storage)
   const [person, setPerson] = useState<Person | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -79,7 +81,7 @@ const PeopleDetailPage = () => {
     return (
       <section className="stack">
         <h1>Person not found</h1>
-        <Link className="link" to="/people">
+        <Link className="link" to={backTo}>
           Back to people
         </Link>
       </section>
@@ -92,7 +94,7 @@ const PeopleDetailPage = () => {
         title={person.name}
         subtitle={`${strategyCount} linked strategies`}
         actions={
-          <Link className="link" to="/people">
+          <Link className="link" to={backTo}>
             Back
           </Link>
         }

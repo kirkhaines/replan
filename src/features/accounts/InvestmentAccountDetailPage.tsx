@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -33,6 +33,8 @@ const createHolding = (investmentAccountId: string): InvestmentAccountHolding =>
 
 const InvestmentAccountDetailPage = () => {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const backTo = (location.state as { from?: string } | null)?.from ?? '/accounts'
   const storage = useAppStore((state) => state.storage)
   const [account, setAccount] = useState<InvestmentAccount | null>(null)
   const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
@@ -111,7 +113,7 @@ const InvestmentAccountDetailPage = () => {
     return (
       <section className="stack">
         <h1>Account not found</h1>
-        <Link className="link" to="/accounts">
+        <Link className="link" to={backTo}>
           Back to accounts
         </Link>
       </section>
@@ -124,7 +126,7 @@ const InvestmentAccountDetailPage = () => {
         title={account.name}
         subtitle="Investment account"
         actions={
-          <Link className="link" to="/accounts">
+          <Link className="link" to={backTo}>
             Back
           </Link>
         }
@@ -174,7 +176,11 @@ const InvestmentAccountDetailPage = () => {
               {holdings.map((holding) => (
                 <tr key={holding.id}>
                   <td>
-                    <Link className="link" to={`/accounts/holding/${holding.id}`}>
+                    <Link
+                      className="link"
+                      to={`/accounts/holding/${holding.id}`}
+                      state={{ from: location.pathname, parentFrom: backTo }}
+                    >
                       {holding.name}
                     </Link>
                   </td>
