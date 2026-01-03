@@ -179,6 +179,18 @@ h2 {
   border-bottom: 1px solid var(--border);
 }
 
+.table.selectable tbody tr {
+  cursor: pointer;
+}
+
+.table.selectable tbody tr:hover {
+  background: #f1f4f7;
+}
+
+.table.selectable tbody tr.is-selected {
+  background: var(--surface-muted);
+}
+
 .row {
   display: flex;
   justify-content: space-between;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -29,14 +29,61 @@ import {
   type InvestmentAccountHolding,
   type PersonStrategy,
 } from '../../core/models'
-import type { SimulationInput } from '../../core/sim/input'
 import { useAppStore } from '../../state/appStore'
+import type { SimulationInput } from '../../core/sim/input'
 import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
+import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+
+const ageFromDob = (dateOfBirth: string) => {
+  const dob = new Date(dateOfBirth)
+  const now = new Date()
+  const diff = now.getTime() - dob.getTime()
+  const years = diff / (365.25 * 24 * 60 * 60 * 1000)
+  return Math.max(0, Math.floor(years))
+}
+
+const createCashAccount = (): NonInvestmentAccount => {
+  const now = Date.now()
+  return {
+    id: createUuid(),
+    name: 'Cash',
+    balance: 10000,
+    interestRate: 0.01,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+const createInvestmentAccount = (): InvestmentAccount => {
+  const now = Date.now()
+  return {
+    id: createUuid(),
+    name: 'Brokerage',
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+const createHolding = (investmentAccountId: string): InvestmentAccountHolding => {
+  const now = Date.now()
+  return {
+    id: createUuid(),
+    name: 'S&P 500',
+    taxType: 'taxable',
+    balance: 50000,
+    holdingType: 'sp500',
+    return: 0.05,
+    risk: 0.15,
+    investmentAccountId,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
 
 type ScenarioEditorValues = {
   scenario: Scenario
@@ -67,14 +114,6 @@ const editorSchema = z.object({
 })
 
 const toEditorValues = (bundle: ScenarioEditorValues): ScenarioEditorValues => bundle
-
-const ageFromDob = (dateOfBirth: string) => {
-  const dob = new Date(dateOfBirth)
-  const now = new Date()
-  const diff = now.getTime() - dob.getTime()
-  const years = diff / (365.25 * 24 * 60 * 60 * 1000)
-  return Math.max(0, Math.floor(years))
-}
 
 const buildSimulationInput = (values: ScenarioEditorValues): SimulationInput => {
   const currentAge = ageFromDob(values.person.dateOfBirth)
@@ -192,9 +231,16 @@ const ScenarioDetailPage = () => {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [people, setPeople] = useState<Person[]>([])
+  const [personStrategies, setPersonStrategies] = useState<PersonStrategy[]>([])
+  const [socialSecurityStrategies, setSocialSecurityStrategies] = useState<SocialSecurityStrategy[]>(
+    [],
+  )
+  const [futureWorkStrategies, setFutureWorkStrategies] = useState<FutureWorkStrategy[]>([])
+  const [spendingStrategies, setSpendingStrategies] = useState<SpendingStrategy[]>([])
+  const [spendingLineItems, setSpendingLineItems] = useState<SpendingLineItem[]>([])
   const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
-  const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
+  const [investmentBalances, setInvestmentBalances] = useState<Record<string, number>>({})
 
   const defaultValues = useMemo(() => {
     const bundle = createDefaultScenarioBundle()
@@ -213,36 +259,116 @@ const ScenarioDetailPage = () => {
     defaultValues,
   })
 
-  const selectedPersonId = watch('person.id')
+  const selectedPersonStrategyId = watch('personStrategy.id')
   const selectedCashAccountId = watch('nonInvestmentAccount.id')
   const selectedInvestmentAccountId = watch('investmentAccount.id')
-  const selectedHoldingId = watch('investmentAccountHolding.id')
-  const selectedPersonDob = watch('person.dateOfBirth')
-  const selectedPersonLifeExpectancy = watch('person.lifeExpectancy')
-  const selectedCashBalance = watch('nonInvestmentAccount.balance')
-  const selectedCashRate = watch('nonInvestmentAccount.interestRate')
-  const selectedHoldingBalance = watch('investmentAccountHolding.balance')
-  const selectedHoldingReturn = watch('investmentAccountHolding.return')
-  const selectedHoldingRisk = watch('investmentAccountHolding.risk')
+  const selectedSpendingStrategyId = watch('spendingStrategy.id')
+  const personStrategyIds = watch('scenario.personStrategyIds')
+  const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
+  const investmentAccountIds = watch('scenario.investmentAccountIds')
+
+  const peopleById = useMemo(
+    () => new Map(people.map((person) => [person.id, person])),
+    [people],
+  )
+  const socialSecurityById = useMemo(
+    () => new Map(socialSecurityStrategies.map((strategy) => [strategy.id, strategy])),
+    [socialSecurityStrategies],
+  )
+  const futureWorkById = useMemo(
+    () => new Map(futureWorkStrategies.map((strategy) => [strategy.id, strategy])),
+    [futureWorkStrategies],
+  )
+
+  const scenarioPersonStrategies = useMemo(() => {
+    const ids = new Set(scenario?.personStrategyIds ?? [])
+    return personStrategies.filter((strategy) => ids.has(strategy.id))
+  }, [personStrategies, scenario?.personStrategyIds])
+
+  const scenarioCashAccounts = useMemo(() => {
+    const ids = new Set(scenario?.nonInvestmentAccountIds ?? [])
+    return cashAccounts.filter((account) => ids.has(account.id))
+  }, [cashAccounts, scenario?.nonInvestmentAccountIds])
+
+  const scenarioInvestmentAccounts = useMemo(() => {
+    const ids = new Set(scenario?.investmentAccountIds ?? [])
+    return investmentAccounts.filter((account) => ids.has(account.id))
+  }, [investmentAccounts, scenario?.investmentAccountIds])
 
   const loadReferenceData = useCallback(async () => {
-    const [peopleData, cashData, investmentData] = await Promise.all([
+    const [
+      peopleData,
+      personStrategyData,
+      socialSecurityData,
+      futureWorkData,
+      spendingStrategyData,
+      cashData,
+      investmentData,
+      holdingData,
+    ] = await Promise.all([
       storage.personRepo.list(),
+      storage.personStrategyRepo.list(),
+      storage.socialSecurityStrategyRepo.list(),
+      storage.futureWorkStrategyRepo.list(),
+      storage.spendingStrategyRepo.list(),
       storage.nonInvestmentAccountRepo.list(),
       storage.investmentAccountRepo.list(),
+      storage.investmentAccountHoldingRepo.list(),
     ])
     setPeople(peopleData)
+    setPersonStrategies(personStrategyData)
+    setSocialSecurityStrategies(socialSecurityData)
+    setFutureWorkStrategies(futureWorkData)
+    setSpendingStrategies(spendingStrategyData)
     setCashAccounts(cashData)
     setInvestmentAccounts(investmentData)
+    const balanceMap = holdingData.reduce<Record<string, number>>((acc, holding) => {
+      acc[holding.investmentAccountId] =
+        (acc[holding.investmentAccountId] ?? 0) + holding.balance
+      return acc
+    }, {})
+    setInvestmentBalances(balanceMap)
+    return {
+      peopleData,
+      personStrategyData,
+      spendingStrategyData,
+      cashData,
+      investmentData,
+      holdingData,
+    }
   }, [storage])
 
   const loadHoldingsForAccount = useCallback(
-    async (accountId: string) => {
-      const list = await storage.investmentAccountHoldingRepo.listForAccount(accountId)
-      setHoldings(list)
-      return list
-    },
+    async (accountId: string) => storage.investmentAccountHoldingRepo.listForAccount(accountId),
     [storage],
+  )
+
+  const loadSpendingLineItemsForStrategy = useCallback(
+    async (strategyId: string) => storage.spendingLineItemRepo.listForStrategy(strategyId),
+    [storage],
+  )
+
+  const updateScenarioIds = useCallback(
+    async (
+      updater: (current: Scenario) => Scenario,
+      options: { persist: boolean },
+    ) => {
+      if (!scenario) {
+        return
+      }
+      const next = updater(scenario)
+      setScenario(next)
+      setValue('scenario.personStrategyIds', next.personStrategyIds, { shouldDirty: true })
+      setValue('scenario.nonInvestmentAccountIds', next.nonInvestmentAccountIds, {
+        shouldDirty: true,
+      })
+      setValue('scenario.investmentAccountIds', next.investmentAccountIds, { shouldDirty: true })
+      setValue('scenario.updatedAt', next.updatedAt, { shouldDirty: true })
+      if (options.persist) {
+        await storage.scenarioRepo.upsert(next)
+      }
+    },
+    [scenario, setScenario, setValue, storage],
   )
 
   const applyHoldingSelection = useCallback(
@@ -281,23 +407,26 @@ const ScenarioDetailPage = () => {
     [setValue],
   )
 
-  const applyPersonSelection = useCallback(
-    async (person: Person) => {
-      const strategies = await storage.personStrategyRepo.listForPerson(person.id)
-      const personStrategy = strategies[0]
-      if (!personStrategy) {
-        setSelectionError('Selected person has no strategy. Create one in Scenarios.')
-        return
-      }
-      const [socialSecurityStrategy, futureWorkStrategy, futureWorkPeriods] =
-        await Promise.all([
-          storage.socialSecurityStrategyRepo.get(personStrategy.socialSecurityStrategyId),
-          storage.futureWorkStrategyRepo.get(personStrategy.futureWorkStrategyId),
-          storage.futureWorkPeriodRepo.listForStrategy(personStrategy.futureWorkStrategyId),
-        ])
+  const applyPersonStrategySelection = useCallback(
+    async (personStrategy: PersonStrategy) => {
+      const person = people.find((item) => item.id === personStrategy.personId)
+      const socialSecurityStrategy = socialSecurityStrategies.find(
+        (item) => item.id === personStrategy.socialSecurityStrategyId,
+      )
+      const futureWorkStrategy = futureWorkStrategies.find(
+        (item) => item.id === personStrategy.futureWorkStrategyId,
+      )
+      const futureWorkPeriods = await storage.futureWorkPeriodRepo.listForStrategy(
+        personStrategy.futureWorkStrategyId,
+      )
 
-      if (!socialSecurityStrategy || !futureWorkStrategy || futureWorkPeriods.length === 0) {
-        setSelectionError('Selected person is missing linked strategies.')
+      if (
+        !person ||
+        !socialSecurityStrategy ||
+        !futureWorkStrategy ||
+        futureWorkPeriods.length === 0
+      ) {
+        setSelectionError('Selected person strategy is missing linked data.')
         return
       }
 
@@ -309,7 +438,14 @@ const ScenarioDetailPage = () => {
       setValue('futureWorkPeriod', futureWorkPeriods[0], { shouldDirty: true })
       setSelectionError(null)
     },
-    [setSelectionError, setValue, storage],
+    [
+      futureWorkStrategies,
+      people,
+      setSelectionError,
+      setValue,
+      socialSecurityStrategies,
+      storage,
+    ],
   )
 
   const loadScenario = useCallback(async () => {
@@ -391,7 +527,7 @@ const ScenarioDetailPage = () => {
 
     setScenario(data)
     reset(bundle)
-    setHoldings(investmentAccountHoldings)
+    setSpendingLineItems(spendingLineItems)
     setSelectionError(null)
     setIsLoading(false)
   }, [id, reset, storage])
@@ -421,18 +557,16 @@ const ScenarioDetailPage = () => {
     }
   }, [loadRuns, scenario?.id])
 
-  const handlePersonChange = async (event: ChangeEvent<HTMLSelectElement>) => {
-    const personId = event.target.value
-    const person = people.find((item) => item.id === personId)
-    if (!person) {
+  const handlePersonStrategySelect = async (personStrategyId: string) => {
+    const personStrategy = personStrategies.find((item) => item.id === personStrategyId)
+    if (!personStrategy) {
       return
     }
     setSelectionError(null)
-    await applyPersonSelection(person)
+    await applyPersonStrategySelection(personStrategy)
   }
 
-  const handleCashAccountChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const accountId = event.target.value
+  const handleCashAccountSelect = (accountId: string) => {
     const account = cashAccounts.find((item) => item.id === accountId)
     if (!account) {
       return
@@ -440,8 +574,7 @@ const ScenarioDetailPage = () => {
     applyCashAccountSelection(account)
   }
 
-  const handleInvestmentAccountChange = async (event: ChangeEvent<HTMLSelectElement>) => {
-    const accountId = event.target.value
+  const handleInvestmentAccountSelect = async (accountId: string) => {
     const account = investmentAccounts.find((item) => item.id === accountId)
     if (!account) {
       return
@@ -449,14 +582,224 @@ const ScenarioDetailPage = () => {
     await applyInvestmentAccountSelection(account)
   }
 
-  const handleHoldingChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const holdingId = event.target.value
-    const holding = holdings.find((item) => item.id === holdingId)
-    if (!holding) {
+  const handleSpendingStrategySelect = async (strategyId: string) => {
+    const strategy = spendingStrategies.find((item) => item.id === strategyId)
+    if (!strategy) {
       return
     }
-    applyHoldingSelection(holding)
+    setValue('spendingStrategy', strategy, { shouldDirty: true })
+    setValue('scenario.spendingStrategyId', strategy.id, { shouldDirty: true })
+    const items = await loadSpendingLineItemsForStrategy(strategy.id)
+    setSpendingLineItems(items)
+    if (items.length > 0) {
+      setValue('spendingLineItem', items[0], { shouldDirty: true })
+      setSelectionError(null)
+    } else {
+      setSelectionError('Selected spending strategy has no line items.')
+    }
   }
+
+  const handleAddPersonStrategy = async () => {
+    const holdingList = await storage.investmentAccountHoldingRepo.list()
+    if (holdingList.length === 0) {
+      setSelectionError('Create an investment account holding before adding a person strategy.')
+      return
+    }
+
+    const now = Date.now()
+    const personId = createUuid()
+    const socialSecurityStrategyId = createUuid()
+    const futureWorkStrategyId = createUuid()
+    const futureWorkPeriodId = createUuid()
+    const personStrategyId = createUuid()
+    const today = new Date()
+    const tenYears = new Date()
+    tenYears.setFullYear(today.getFullYear() + 10)
+    const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
+
+    await storage.personRepo.upsert({
+      id: personId,
+      name: 'New Person',
+      dateOfBirth: '1985-01-01',
+      lifeExpectancy: 90,
+      createdAt: now,
+      updatedAt: now,
+    })
+    await storage.socialSecurityStrategyRepo.upsert({
+      id: socialSecurityStrategyId,
+      personId,
+      startAge: 67,
+      createdAt: now,
+      updatedAt: now,
+    })
+    await storage.futureWorkStrategyRepo.upsert({
+      id: futureWorkStrategyId,
+      name: 'Work plan',
+      personId,
+      createdAt: now,
+      updatedAt: now,
+    })
+    await storage.futureWorkPeriodRepo.upsert({
+      id: futureWorkPeriodId,
+      name: 'Primary job',
+      futureWorkStrategyId,
+      salary: 90000,
+      bonus: 5000,
+      startDate: toIsoDate(today),
+      endDate: toIsoDate(tenYears),
+      '401kMatchPctCap': 0.05,
+      '401kMatchRatio': 1,
+      '401kInvestmentAccountHoldingId': holdingList[0].id,
+      includesHealthInsurance: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    await storage.personStrategyRepo.upsert({
+      id: personStrategyId,
+      personId,
+      futureWorkStrategyId,
+      socialSecurityStrategyId,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const nowForScenario = Date.now()
+    await updateScenarioIds(
+      (current) => ({
+        ...current,
+        updatedAt: current.updatedAt ?? nowForScenario,
+        personStrategyIds: [...current.personStrategyIds, personStrategyId],
+      }),
+      { persist: false },
+    )
+    const data = await loadReferenceData()
+    const newStrategy = data?.personStrategyData.find((item) => item.id === personStrategyId)
+    if (newStrategy) {
+      await applyPersonStrategySelection(newStrategy)
+    }
+  }
+
+  const handleRemovePersonStrategy = async (strategyId: string) => {
+    if (scenarioPersonStrategies.length <= 1) {
+      setSelectionError('At least one person strategy is required.')
+      return
+    }
+    const confirmed = window.confirm('Remove this person strategy?')
+    if (!confirmed) {
+      return
+    }
+    await storage.personStrategyRepo.remove(strategyId)
+    await updateScenarioIds(
+      (current) => ({
+        ...current,
+        updatedAt: current.updatedAt,
+        personStrategyIds: current.personStrategyIds.filter((id) => id !== strategyId),
+      }),
+      { persist: false },
+    )
+    const data = await loadReferenceData()
+    const next = data?.personStrategyData[0]
+    if (next) {
+      await applyPersonStrategySelection(next)
+    }
+  }
+
+  const handleAddCashAccount = async () => {
+    const account = createCashAccount()
+    await storage.nonInvestmentAccountRepo.upsert(account)
+    const now = Date.now()
+    await updateScenarioIds(
+      (current) => ({
+        ...current,
+        updatedAt: now,
+        nonInvestmentAccountIds: [...current.nonInvestmentAccountIds, account.id],
+      }),
+      { persist: true },
+    )
+    const data = await loadReferenceData()
+    const next = data?.cashData.find((item) => item.id === account.id)
+    if (next) {
+      applyCashAccountSelection(next)
+    }
+  }
+
+  const handleRemoveCashAccount = async (accountId: string) => {
+    if (scenarioCashAccounts.length <= 1) {
+      setSelectionError('At least one cash account is required.')
+      return
+    }
+    const confirmed = window.confirm('Remove this cash account?')
+    if (!confirmed) {
+      return
+    }
+    await storage.nonInvestmentAccountRepo.remove(accountId)
+    const now = Date.now()
+    await updateScenarioIds(
+      (current) => ({
+        ...current,
+        updatedAt: now,
+        nonInvestmentAccountIds: current.nonInvestmentAccountIds.filter((id) => id !== accountId),
+      }),
+      { persist: true },
+    )
+    const data = await loadReferenceData()
+    const next = data?.cashData[0]
+    if (next) {
+      applyCashAccountSelection(next)
+    }
+  }
+
+  const handleAddInvestmentAccount = async () => {
+    const account = createInvestmentAccount()
+    await storage.investmentAccountRepo.upsert(account)
+    const holding = createHolding(account.id)
+    await storage.investmentAccountHoldingRepo.upsert(holding)
+    const now = Date.now()
+    await updateScenarioIds(
+      (current) => ({
+        ...current,
+        updatedAt: now,
+        investmentAccountIds: [...current.investmentAccountIds, account.id],
+      }),
+      { persist: true },
+    )
+    const data = await loadReferenceData()
+    const next = data?.investmentData.find((item) => item.id === account.id)
+    if (next) {
+      await applyInvestmentAccountSelection(next)
+    }
+  }
+
+  const handleRemoveInvestmentAccount = async (accountId: string) => {
+    if (scenarioInvestmentAccounts.length <= 1) {
+      setSelectionError('At least one investment account is required.')
+      return
+    }
+    const confirmed = window.confirm('Remove this investment account and its holdings?')
+    if (!confirmed) {
+      return
+    }
+    const accountHoldings = await storage.investmentAccountHoldingRepo.listForAccount(accountId)
+    await Promise.all(
+      accountHoldings.map((holding) => storage.investmentAccountHoldingRepo.remove(holding.id)),
+    )
+    await storage.investmentAccountRepo.remove(accountId)
+    const now = Date.now()
+    await updateScenarioIds(
+      (current) => ({
+        ...current,
+        updatedAt: now,
+        investmentAccountIds: current.investmentAccountIds.filter((id) => id !== accountId),
+      }),
+      { persist: true },
+    )
+    const data = await loadReferenceData()
+    const next = data?.investmentData[0]
+    if (next) {
+      await applyInvestmentAccountSelection(next)
+    }
+  }
+
 
   const onSubmit = async (values: ScenarioEditorValues) => {
     await persistBundle(values, storage, setScenario, reset)
@@ -520,9 +863,23 @@ const ScenarioDetailPage = () => {
         <input type="hidden" {...register('scenario.id')} />
         <input type="hidden" {...register('scenario.createdAt', { valueAsNumber: true })} />
         <input type="hidden" {...register('scenario.updatedAt', { valueAsNumber: true })} />
-        <input type="hidden" {...register('scenario.personStrategyIds.0')} />
-        <input type="hidden" {...register('scenario.nonInvestmentAccountIds.0')} />
-        <input type="hidden" {...register('scenario.investmentAccountIds.0')} />
+        {(personStrategyIds ?? scenario?.personStrategyIds ?? []).map((id, index) => (
+          <input key={id} type="hidden" {...register(`scenario.personStrategyIds.${index}`)} />
+        ))}
+        {(nonInvestmentAccountIds ?? scenario?.nonInvestmentAccountIds ?? []).map((id, index) => (
+          <input
+            key={id}
+            type="hidden"
+            {...register(`scenario.nonInvestmentAccountIds.${index}`)}
+          />
+        ))}
+        {(investmentAccountIds ?? scenario?.investmentAccountIds ?? []).map((id, index) => (
+          <input
+            key={id}
+            type="hidden"
+            {...register(`scenario.investmentAccountIds.${index}`)}
+          />
+        ))}
         <input type="hidden" {...register('scenario.spendingStrategyId')} />
         <input type="hidden" {...register('person.id')} />
         <input type="hidden" {...register('person.createdAt', { valueAsNumber: true })} />
@@ -666,217 +1023,221 @@ const ScenarioDetailPage = () => {
               ))}
             </select>
           </label>
+        </div>
 
-          <label className="field">
-            <span>Person</span>
-            <select value={selectedPersonId ?? ''} onChange={handlePersonChange}>
-              {people.length === 0 ? <option value="">No people available</option> : null}
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="stack">
+          <div className="row">
+            <h2>Person strategies</h2>
+            <button className="button secondary" type="button" onClick={handleAddPersonStrategy}>
+              Add person strategy
+            </button>
+          </div>
+          {scenarioPersonStrategies.length === 0 ? (
+            <p className="muted">No person strategies yet. Create one from People.</p>
+          ) : (
+            <table className="table selectable">
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Date of birth</th>
+                  <th>Life expectancy</th>
+                  <th>Social Security age</th>
+                  <th>Work strategy</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scenarioPersonStrategies.map((strategy) => {
+                  const person = peopleById.get(strategy.personId)
+                  const socialSecurity = socialSecurityById.get(strategy.socialSecurityStrategyId)
+                  const futureWork = futureWorkById.get(strategy.futureWorkStrategyId)
+                  return (
+                    <tr
+                      key={strategy.id}
+                      className={strategy.id === selectedPersonStrategyId ? 'is-selected' : undefined}
+                      onClick={() => void handlePersonStrategySelect(strategy.id)}
+                    >
+                      <td>
+                        {person ? (
+                          <Link className="link" to={`/people/${person.id}`}>
+                            {person.name}
+                          </Link>
+                        ) : (
+                          'Unknown'
+                        )}
+                      </td>
+                      <td>{person?.dateOfBirth ?? '-'}</td>
+                      <td>{person?.lifeExpectancy ?? '-'}</td>
+                      <td>{socialSecurity?.startAge ?? '-'}</td>
+                      <td>{futureWork?.name ?? '-'}</td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void handleRemovePersonStrategy(strategy.id)
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-          <label className="field">
-            <span>Date of birth</span>
-            <input value={selectedPersonDob ?? ''} readOnly />
-          </label>
+        <div className="stack">
+          <div className="row">
+            <h2>Cash accounts</h2>
+            <button className="button secondary" type="button" onClick={handleAddCashAccount}>
+              Add cash account
+            </button>
+          </div>
+          {scenarioCashAccounts.length === 0 ? (
+            <p className="muted">No cash accounts available.</p>
+          ) : (
+            <table className="table selectable">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Balance</th>
+                  <th>Interest rate</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scenarioCashAccounts.map((account) => (
+                  <tr
+                    key={account.id}
+                    className={account.id === selectedCashAccountId ? 'is-selected' : undefined}
+                    onClick={() => handleCashAccountSelect(account.id)}
+                  >
+                    <td>
+                      <Link className="link" to={`/accounts/cash/${account.id}`}>
+                        {account.name}
+                      </Link>
+                    </td>
+                    <td>{formatCurrency(account.balance)}</td>
+                    <td>{account.interestRate}</td>
+                    <td>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleRemoveCashAccount(account.id)
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-          <label className="field">
-            <span>Life expectancy (years)</span>
-            <input value={selectedPersonLifeExpectancy ?? ''} readOnly />
-          </label>
+        <div className="stack">
+          <div className="row">
+            <h2>Investment accounts</h2>
+            <button className="button secondary" type="button" onClick={handleAddInvestmentAccount}>
+              Add investment account
+            </button>
+          </div>
+          {scenarioInvestmentAccounts.length === 0 ? (
+            <p className="muted">No investment accounts available.</p>
+          ) : (
+            <table className="table selectable">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Balance</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scenarioInvestmentAccounts.map((account) => (
+                  <tr
+                    key={account.id}
+                    className={account.id === selectedInvestmentAccountId ? 'is-selected' : undefined}
+                    onClick={() => void handleInvestmentAccountSelect(account.id)}
+                  >
+                    <td>
+                      <Link className="link" to={`/accounts/investment/${account.id}`}>
+                        {account.name}
+                      </Link>
+                    </td>
+                    <td>{formatCurrency(investmentBalances[account.id] ?? 0)}</td>
+                    <td>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleRemoveInvestmentAccount(account.id)
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
+        <div className="stack">
           <label className="field">
-            <span>Social Security start age</span>
-            <input
-              type="number"
-              {...register('socialSecurityStrategy.startAge', { valueAsNumber: true })}
-            />
-            {errors.socialSecurityStrategy?.startAge ? (
-              <span className="error">{errors.socialSecurityStrategy.startAge.message}</span>
-            ) : null}
-          </label>
-
-          <label className="field">
-            <span>Cash account</span>
-            <select value={selectedCashAccountId ?? ''} onChange={handleCashAccountChange}>
-              {cashAccounts.length === 0 ? <option value="">No accounts available</option> : null}
-              {cashAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Cash balance</span>
-            <input value={formatCurrency(Number(selectedCashBalance ?? 0))} readOnly />
-          </label>
-
-          <label className="field">
-            <span>Cash interest rate</span>
-            <input value={selectedCashRate ?? ''} readOnly />
-          </label>
-
-          <label className="field">
-            <span>Investment account</span>
-            <select value={selectedInvestmentAccountId ?? ''} onChange={handleInvestmentAccountChange}>
-              {investmentAccounts.length === 0 ? (
-                <option value="">No accounts available</option>
+            <span>Spending strategy</span>
+            <select
+              value={selectedSpendingStrategyId ?? ''}
+              onChange={(event) => void handleSpendingStrategySelect(event.target.value)}
+            >
+              {spendingStrategies.length === 0 ? (
+                <option value="">No spending strategies available</option>
               ) : null}
-              {investmentAccounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
+              {spendingStrategies.map((strategy) => (
+                <option key={strategy.id} value={strategy.id}>
+                  {strategy.name}
                 </option>
               ))}
             </select>
           </label>
 
-          <label className="field">
-            <span>Holding</span>
-            <select value={selectedHoldingId ?? ''} onChange={handleHoldingChange}>
-              {holdings.length === 0 ? <option value="">No holdings available</option> : null}
-              {holdings.map((holding) => (
-                <option key={holding.id} value={holding.id}>
-                  {holding.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
-            <span>Holding balance</span>
-            <input value={formatCurrency(Number(selectedHoldingBalance ?? 0))} readOnly />
-          </label>
-
-          <label className="field">
-            <span>Expected return</span>
-            <input value={selectedHoldingReturn ?? ''} readOnly />
-          </label>
-
-          <label className="field">
-            <span>Risk (decimal)</span>
-            <input value={selectedHoldingRisk ?? ''} readOnly />
-          </label>
-
-          <label className="field">
-            <span>Work strategy name</span>
-            <input {...register('futureWorkStrategy.name')} />
-          </label>
-
-          <label className="field">
-            <span>Work period name</span>
-            <input {...register('futureWorkPeriod.name')} />
-          </label>
-
-          <label className="field">
-            <span>Salary</span>
-            <input
-              type="number"
-              {...register('futureWorkPeriod.salary', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>Bonus</span>
-            <input
-              type="number"
-              {...register('futureWorkPeriod.bonus', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>Work start date</span>
-            <input type="date" {...register('futureWorkPeriod.startDate')} />
-          </label>
-
-          <label className="field">
-            <span>Work end date</span>
-            <input type="date" {...register('futureWorkPeriod.endDate')} />
-          </label>
-
-          <label className="field">
-            <span>401k match cap</span>
-            <input
-              type="number"
-              step="0.001"
-              {...register('futureWorkPeriod.401kMatchPctCap', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>401k match ratio</span>
-            <input
-              type="number"
-              step="0.01"
-              {...register('futureWorkPeriod.401kMatchRatio', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>Includes health insurance</span>
-            <input type="checkbox" {...register('futureWorkPeriod.includesHealthInsurance')} />
-          </label>
-
-          <label className="field">
-            <span>Spending strategy name</span>
-            <input {...register('spendingStrategy.name')} />
-          </label>
-
-          <label className="field">
-            <span>Spending item name</span>
-            <input {...register('spendingLineItem.name')} />
-          </label>
-
-          <label className="field">
-            <span>Category</span>
-            <input {...register('spendingLineItem.category')} />
-          </label>
-
-          <label className="field">
-            <span>Need amount (monthly)</span>
-            <input
-              type="number"
-              {...register('spendingLineItem.needAmount', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>Want amount (monthly)</span>
-            <input
-              type="number"
-              {...register('spendingLineItem.wantAmount', { valueAsNumber: true })}
-            />
-          </label>
-
-          <label className="field">
-            <span>Spending start</span>
-            <input type="date" {...register('spendingLineItem.startDate')} />
-          </label>
-
-          <label className="field">
-            <span>Spending end</span>
-            <input type="date" {...register('spendingLineItem.endDate')} />
-          </label>
-
-          <label className="field">
-            <span>Pre-tax</span>
-            <input type="checkbox" {...register('spendingLineItem.isPreTax')} />
-          </label>
-
-          <label className="field">
-            <span>Charitable</span>
-            <input type="checkbox" {...register('spendingLineItem.isCharitable')} />
-          </label>
-
-          <label className="field">
-            <span>Work-related</span>
-            <input type="checkbox" {...register('spendingLineItem.isWork')} />
-          </label>
+          {spendingLineItems.length === 0 ? (
+            <p className="muted">No spending line items for this strategy.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Need (monthly)</th>
+                  <th>Want (monthly)</th>
+                  <th>Start</th>
+                  <th>End</th>
+                </tr>
+              </thead>
+              <tbody>
+                {spendingLineItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.name}</td>
+                    <td>{item.category}</td>
+                    <td>{formatCurrency(item.needAmount)}</td>
+                    <td>{formatCurrency(item.wantAmount)}</td>
+                    <td>{item.startDate}</td>
+                    <td>{item.endDate}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div className="button-row">

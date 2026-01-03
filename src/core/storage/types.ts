@@ -35,6 +35,7 @@ export interface SocialSecurityEarningsRepo {
 }
 
 export interface SocialSecurityStrategyRepo {
+  list: () => Promise<SocialSecurityStrategy[]>
   get: (id: string) => Promise<SocialSecurityStrategy | undefined>
   upsert: (strategy: SocialSecurityStrategy) => Promise<void>
 }
@@ -43,12 +44,14 @@ export interface NonInvestmentAccountRepo {
   list: () => Promise<NonInvestmentAccount[]>
   get: (id: string) => Promise<NonInvestmentAccount | undefined>
   upsert: (account: NonInvestmentAccount) => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export interface InvestmentAccountRepo {
   list: () => Promise<InvestmentAccount[]>
   get: (id: string) => Promise<InvestmentAccount | undefined>
   upsert: (account: InvestmentAccount) => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export interface InvestmentAccountHoldingRepo {
@@ -56,9 +59,11 @@ export interface InvestmentAccountHoldingRepo {
   list: () => Promise<InvestmentAccountHolding[]>
   get: (id: string) => Promise<InvestmentAccountHolding | undefined>
   upsert: (holding: InvestmentAccountHolding) => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export interface FutureWorkStrategyRepo {
+  list: () => Promise<FutureWorkStrategy[]>
   get: (id: string) => Promise<FutureWorkStrategy | undefined>
   upsert: (strategy: FutureWorkStrategy) => Promise<void>
 }
@@ -70,6 +75,7 @@ export interface FutureWorkPeriodRepo {
 }
 
 export interface SpendingStrategyRepo {
+  list: () => Promise<SpendingStrategy[]>
   get: (id: string) => Promise<SpendingStrategy | undefined>
   upsert: (strategy: SpendingStrategy) => Promise<void>
 }
@@ -81,9 +87,11 @@ export interface SpendingLineItemRepo {
 }
 
 export interface PersonStrategyRepo {
+  list: () => Promise<PersonStrategy[]>
   listForPerson: (personId: string) => Promise<PersonStrategy[]>
   get: (id: string) => Promise<PersonStrategy | undefined>
   upsert: (strategy: PersonStrategy) => Promise<void>
+  remove: (id: string) => Promise<void>
 }
 
 export interface RunRepo {

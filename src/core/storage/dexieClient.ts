@@ -100,6 +100,10 @@ class DexieSocialSecurityEarningsRepo implements SocialSecurityEarningsRepo {
 }
 
 class DexieSocialSecurityStrategyRepo implements SocialSecurityStrategyRepo {
+  async list() {
+    return db.socialSecurityStrategies.toArray()
+  }
+
   async get(id: string) {
     return db.socialSecurityStrategies.get(id)
   }
@@ -121,6 +125,10 @@ class DexieNonInvestmentAccountRepo implements NonInvestmentAccountRepo {
   async upsert(account: NonInvestmentAccount) {
     await db.nonInvestmentAccounts.put(account)
   }
+
+  async remove(id: string) {
+    await db.nonInvestmentAccounts.delete(id)
+  }
 }
 
 class DexieInvestmentAccountRepo implements InvestmentAccountRepo {
@@ -134,6 +142,10 @@ class DexieInvestmentAccountRepo implements InvestmentAccountRepo {
 
   async upsert(account: InvestmentAccount) {
     await db.investmentAccounts.put(account)
+  }
+
+  async remove(id: string) {
+    await db.investmentAccounts.delete(id)
   }
 }
 
@@ -156,9 +168,17 @@ class DexieInvestmentAccountHoldingRepo implements InvestmentAccountHoldingRepo 
   async upsert(holding: InvestmentAccountHolding) {
     await db.investmentAccountHoldings.put(holding)
   }
+
+  async remove(id: string) {
+    await db.investmentAccountHoldings.delete(id)
+  }
 }
 
 class DexieFutureWorkStrategyRepo implements FutureWorkStrategyRepo {
+  async list() {
+    return db.futureWorkStrategies.toArray()
+  }
+
   async get(id: string) {
     return db.futureWorkStrategies.get(id)
   }
@@ -186,6 +206,10 @@ class DexieFutureWorkPeriodRepo implements FutureWorkPeriodRepo {
 }
 
 class DexieSpendingStrategyRepo implements SpendingStrategyRepo {
+  async list() {
+    return db.spendingStrategies.orderBy('updatedAt').reverse().toArray()
+  }
+
   async get(id: string) {
     return db.spendingStrategies.get(id)
   }
@@ -210,6 +234,10 @@ class DexieSpendingLineItemRepo implements SpendingLineItemRepo {
 }
 
 class DexiePersonStrategyRepo implements PersonStrategyRepo {
+  async list() {
+    return db.personStrategies.toArray()
+  }
+
   async listForPerson(personId: string) {
     return db.personStrategies.where('personId').equals(personId).toArray()
   }
@@ -220,6 +248,10 @@ class DexiePersonStrategyRepo implements PersonStrategyRepo {
 
   async upsert(strategy: PersonStrategy) {
     await db.personStrategies.put(strategy)
+  }
+
+  async remove(id: string) {
+    await db.personStrategies.delete(id)
   }
 }
 
