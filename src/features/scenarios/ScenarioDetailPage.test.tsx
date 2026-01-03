@@ -160,6 +160,7 @@ const createStorageFixture = (seed: SeedData): StorageClient => {
       ),
       get: vi.fn(async (id) => data.spendingLineItems.find((item) => item.id === id)),
       upsert: vi.fn(async (item) => upsert(data.spendingLineItems, item)),
+      remove: vi.fn(async (id) => remove(data.spendingLineItems, id)),
     },
     personStrategyRepo: {
       list: vi.fn(async () => [...data.personStrategies]),
@@ -169,6 +170,17 @@ const createStorageFixture = (seed: SeedData): StorageClient => {
       get: vi.fn(async (id) => data.personStrategies.find((strategy) => strategy.id === id)),
       upsert: vi.fn(async (strategy) => upsert(data.personStrategies, strategy)),
       remove: vi.fn(async (id) => remove(data.personStrategies, id)),
+    },
+    inflationDefaultRepo: {
+      list: vi.fn(async () => []),
+      get: vi.fn(async () => undefined),
+      upsert: vi.fn(async () => undefined),
+    },
+    ssaWageIndexRepo: {
+      list: vi.fn(async () => []),
+      get: vi.fn(async () => undefined),
+      upsert: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
     },
     runRepo: {
       listForScenario: vi.fn(async () => []),
@@ -280,6 +292,7 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
     isCharitable: false,
     isWork: false,
     targetInvestmentAccountHoldingId: '00000000-0000-4000-8000-000000000110',
+    inflationType: 'cpi',
     createdAt: now,
     updatedAt: now,
   }
@@ -296,6 +309,7 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
     isCharitable: false,
     isWork: false,
     targetInvestmentAccountHoldingId: '00000000-0000-4000-8000-000000000110',
+    inflationType: 'cpi',
     createdAt: now,
     updatedAt: now,
   }

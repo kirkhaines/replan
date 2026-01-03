@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { baseEntitySchema, isoDateStringSchema } from './common'
+import { inflationTypeSchema } from './enums'
 
 export const spendingStrategySchema = baseEntitySchema.extend({
   name: z.string().min(1),
@@ -18,6 +19,7 @@ export const spendingLineItemSchema = baseEntitySchema.extend({
   isCharitable: z.boolean(),
   isWork: z.boolean(),
   targetInvestmentAccountHoldingId: z.string().uuid().optional(),
+  inflationType: inflationTypeSchema,
 })
 
 export type SpendingStrategy = z.infer<typeof spendingStrategySchema>

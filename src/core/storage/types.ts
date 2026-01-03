@@ -12,6 +12,8 @@ import type {
   SpendingStrategy,
   SpendingLineItem,
   PersonStrategy,
+  InflationDefault,
+  SsaWageIndex,
 } from '../models'
 
 export interface ScenarioRepo {
@@ -97,6 +99,19 @@ export interface PersonStrategyRepo {
   remove: (id: string) => Promise<void>
 }
 
+export interface InflationDefaultRepo {
+  list: () => Promise<InflationDefault[]>
+  get: (id: string) => Promise<InflationDefault | undefined>
+  upsert: (record: InflationDefault) => Promise<void>
+}
+
+export interface SsaWageIndexRepo {
+  list: () => Promise<SsaWageIndex[]>
+  get: (id: string) => Promise<SsaWageIndex | undefined>
+  upsert: (record: SsaWageIndex) => Promise<void>
+  remove: (id: string) => Promise<void>
+}
+
 export interface RunRepo {
   listForScenario: (scenarioId: string) => Promise<SimulationRun[]>
   add: (run: SimulationRun) => Promise<void>
@@ -116,6 +131,8 @@ export interface StorageClient {
   spendingStrategyRepo: SpendingStrategyRepo
   spendingLineItemRepo: SpendingLineItemRepo
   personStrategyRepo: PersonStrategyRepo
+  inflationDefaultRepo: InflationDefaultRepo
+  ssaWageIndexRepo: SsaWageIndexRepo
   runRepo: RunRepo
   clearAll: () => Promise<void>
 }

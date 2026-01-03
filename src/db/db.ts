@@ -13,6 +13,8 @@ import type {
   SpendingStrategy,
   SpendingLineItem,
   PersonStrategy,
+  InflationDefault,
+  SsaWageIndex,
 } from '../core/models'
 
 class ReplanDb extends Dexie {
@@ -29,6 +31,8 @@ class ReplanDb extends Dexie {
   spendingStrategies!: Table<SpendingStrategy, string>
   spendingLineItems!: Table<SpendingLineItem, string>
   personStrategies!: Table<PersonStrategy, string>
+  inflationDefaults!: Table<InflationDefault, string>
+  ssaWageIndex!: Table<SsaWageIndex, string>
 
   constructor() {
     super('replan')
@@ -50,6 +54,23 @@ class ReplanDb extends Dexie {
       spendingStrategies: 'id, updatedAt',
       spendingLineItems: 'id, spendingStrategyId, startDate',
       personStrategies: 'id, personId',
+    })
+    this.version(3).stores({
+      scenarios: 'id, updatedAt',
+      runs: 'id, scenarioId, finishedAt',
+      people: 'id, updatedAt',
+      socialSecurityEarnings: 'id, personId, year',
+      socialSecurityStrategies: 'id, personId',
+      nonInvestmentAccounts: 'id, updatedAt',
+      investmentAccounts: 'id, updatedAt',
+      investmentAccountHoldings: 'id, investmentAccountId, updatedAt',
+      futureWorkStrategies: 'id, personId',
+      futureWorkPeriods: 'id, futureWorkStrategyId, startDate',
+      spendingStrategies: 'id, updatedAt',
+      spendingLineItems: 'id, spendingStrategyId, startDate',
+      personStrategies: 'id, personId',
+      inflationDefaults: 'id, type',
+      ssaWageIndex: 'id, year',
     })
   }
 }

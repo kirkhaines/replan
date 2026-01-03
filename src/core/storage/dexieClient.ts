@@ -13,6 +13,8 @@ import type {
   SpendingStrategy,
   SpendingLineItem,
   PersonStrategy,
+  InflationDefault,
+  SsaWageIndex,
 } from '../models'
 import type {
   RunRepo,
@@ -29,6 +31,8 @@ import type {
   SpendingStrategyRepo,
   SpendingLineItemRepo,
   PersonStrategyRepo,
+  InflationDefaultRepo,
+  SsaWageIndexRepo,
 } from './types'
 
 class DexieScenarioRepo implements ScenarioRepo {
@@ -267,6 +271,38 @@ class DexiePersonStrategyRepo implements PersonStrategyRepo {
   }
 }
 
+class DexieInflationDefaultRepo implements InflationDefaultRepo {
+  async list() {
+    return db.inflationDefaults.toArray()
+  }
+
+  async get(id: string) {
+    return db.inflationDefaults.get(id)
+  }
+
+  async upsert(record: InflationDefault) {
+    await db.inflationDefaults.put(record)
+  }
+}
+
+class DexieSsaWageIndexRepo implements SsaWageIndexRepo {
+  async list() {
+    return db.ssaWageIndex.orderBy('year').reverse().toArray()
+  }
+
+  async get(id: string) {
+    return db.ssaWageIndex.get(id)
+  }
+
+  async upsert(record: SsaWageIndex) {
+    await db.ssaWageIndex.put(record)
+  }
+
+  async remove(id: string) {
+    await db.ssaWageIndex.delete(id)
+  }
+}
+
 export const createDexieStorageClient = (): StorageClient => ({
   scenarioRepo: new DexieScenarioRepo(),
   personRepo: new DexiePersonRepo(),
@@ -280,6 +316,8 @@ export const createDexieStorageClient = (): StorageClient => ({
   spendingStrategyRepo: new DexieSpendingStrategyRepo(),
   spendingLineItemRepo: new DexieSpendingLineItemRepo(),
   personStrategyRepo: new DexiePersonStrategyRepo(),
+  inflationDefaultRepo: new DexieInflationDefaultRepo(),
+  ssaWageIndexRepo: new DexieSsaWageIndexRepo(),
   runRepo: new DexieRunRepo(),
   clearAll: async () => {
     await db.transaction('rw', db.tables, async () => {

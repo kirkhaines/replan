@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import type { FutureWorkPeriod, InvestmentAccountHolding, SpendingLineItem } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
+import { inflationTypeSchema } from '../../core/models/enums'
 
 const SpendingLineItemDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -75,7 +76,12 @@ const SpendingLineItemDetailPage = () => {
       investmentAccountIds.has(holding.investmentAccountId),
     )
 
-    setItem(data)
+    const normalized = {
+      ...data,
+      inflationType:
+        data.inflationType && data.inflationType !== 'custom' ? data.inflationType : 'cpi',
+    }
+    setItem(normalized)
     setCategories(Array.from(new Set(allLineItems.map((item) => item.category))).filter(Boolean))
     setPeriods(filteredPeriods)
     setHoldings(filteredHoldings)
@@ -299,6 +305,22 @@ const SpendingLineItemDetailPage = () => {
                   {holdings.map((holding) => (
                     <option key={holding.id} value={holding.id}>
                       {holding.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="line-item-row">
+              <label className="field">
+                <span>Inflation type</span>
+                <select
+                  value={item.inflationType}
+                  onChange={(event) => handleChange('inflationType', event.target.value)}
+                >
+                  {inflationTypeSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
                     </option>
                   ))}
                 </select>

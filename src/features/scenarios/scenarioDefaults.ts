@@ -109,6 +109,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     isCharitable: false,
     isWork: false,
     targetInvestmentAccountHoldingId: investmentAccountHoldingId,
+    inflationType: 'cpi',
     createdAt: now,
     updatedAt: now,
   }

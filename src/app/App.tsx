@@ -1,5 +1,5 @@
 import { HashRouter, Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ScenarioListPage from '../features/scenarios/ScenarioListPage'
 import ScenarioDetailPage from '../features/scenarios/ScenarioDetailPage'
 import RunResultsPage from '../features/runs/RunResultsPage'
@@ -9,6 +9,8 @@ import PersonStrategyDetailPage from '../features/people/PersonStrategyDetailPag
 import FutureWorkPeriodDetailPage from '../features/people/FutureWorkPeriodDetailPage'
 import SpendingStrategyDetailPage from '../features/spending/SpendingStrategyDetailPage'
 import SpendingLineItemDetailPage from '../features/spending/SpendingLineItemDetailPage'
+import DefaultsPage from '../features/settings/DefaultsPage'
+import { seedDefaults } from '../core/defaults/seedDefaults'
 import AccountsPage from '../features/accounts/AccountsPage'
 import NonInvestmentAccountDetailPage from '../features/accounts/NonInvestmentAccountDetailPage'
 import InvestmentAccountDetailPage from '../features/accounts/InvestmentAccountDetailPage'
@@ -31,12 +33,17 @@ const AppShell = () => {
   const storage = useAppStore((state) => state.storage)
   const [menuOpen, setMenuOpen] = useState(false)
 
+  useEffect(() => {
+    void seedDefaults(storage)
+  }, [storage])
+
   const handleClearData = async () => {
     const confirmed = window.confirm('Clear all local data? This cannot be undone.')
     if (!confirmed) {
       return
     }
     await storage.clearAll()
+    await seedDefaults(storage)
     setMenuOpen(false)
     navigate('/scenarios')
   }
@@ -85,6 +92,9 @@ const AppShell = () => {
                 <Link to="/license" role="menuitem" onClick={() => setMenuOpen(false)}>
                   Licensing
                 </Link>
+                <Link to="/defaults" role="menuitem" onClick={() => setMenuOpen(false)}>
+                  Defaults/Reference
+                </Link>
                 <button
                   className="menu-item danger"
                   type="button"
@@ -110,6 +120,7 @@ const AppShell = () => {
           <Route path="/future-work-periods/:id" element={<FutureWorkPeriodDetailPage />} />
           <Route path="/spending-strategies/:id" element={<SpendingStrategyDetailPage />} />
           <Route path="/spending-line-items/:id" element={<SpendingLineItemDetailPage />} />
+          <Route path="/defaults" element={<DefaultsPage />} />
           <Route path="/accounts" element={<AccountsPage />} />
           <Route path="/accounts/cash/:id" element={<NonInvestmentAccountDetailPage />} />
           <Route path="/accounts/investment/:id" element={<InvestmentAccountDetailPage />} />

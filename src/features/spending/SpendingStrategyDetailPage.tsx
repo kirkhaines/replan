@@ -98,6 +98,7 @@ const SpendingStrategyDetailPage = () => {
       isCharitable: false,
       isWork: false,
       targetInvestmentAccountHoldingId: undefined,
+      inflationType: 'cpi',
       createdAt: now,
       updatedAt: now,
     }

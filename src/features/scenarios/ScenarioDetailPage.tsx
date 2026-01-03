@@ -141,7 +141,12 @@ const buildSimulationInput = (values: ScenarioEditorValues): SimulationInput => 
   }
 }
 
-  const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
+const normalizeSpendingLineItem = (item: SpendingLineItem): SpendingLineItem => ({
+  ...item,
+  inflationType: item.inflationType ?? 'cpi',
+})
+
+const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
     const scenario = {
       ...values.scenario,
       updatedAt: now,
@@ -577,35 +582,35 @@ const ScenarioDetailPage = () => {
       !socialSecurityStrategy ||
       !futureWorkStrategy ||
       futureWorkPeriods.length === 0 ||
-      spendingLineItems.length === 0 ||
-      investmentAccountHoldings.length === 0
-    ) {
+    spendingLineItems.length === 0 ||
+    investmentAccountHoldings.length === 0
+  ) {
       setLoadError('Scenario is missing linked data. Create a new scenario to continue.')
       setScenario(null)
-      setIsLoading(false)
-      return
-    }
-
-    const bundle: ScenarioEditorValues = {
-      scenario: data,
-      person,
-      socialSecurityStrategy,
-      futureWorkStrategy,
-      futureWorkPeriod: futureWorkPeriods[0],
-      spendingStrategy,
-      spendingLineItem: spendingLineItems[0],
-      nonInvestmentAccount,
-      investmentAccount,
-      investmentAccountHolding: investmentAccountHoldings[0],
-      personStrategy,
-    }
-
-    setScenario(data)
-    reset(bundle)
-    setSpendingLineItems(spendingLineItems)
-    setSelectionError(null)
     setIsLoading(false)
-  }, [id, reset, storage])
+    return
+  }
+
+  const bundle: ScenarioEditorValues = {
+    scenario: data,
+    person,
+    socialSecurityStrategy,
+    futureWorkStrategy,
+    futureWorkPeriod: futureWorkPeriods[0],
+    spendingStrategy,
+    spendingLineItem: normalizeSpendingLineItem(spendingLineItems[0]),
+    nonInvestmentAccount,
+    investmentAccount,
+    investmentAccountHolding: investmentAccountHoldings[0],
+    personStrategy,
+  }
+
+  setScenario(data)
+  reset(bundle)
+  setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
+  setSelectionError(null)
+  setIsLoading(false)
+}, [id, reset, storage])
 
   const loadRuns = useCallback(
     async (scenarioId: string) => {
@@ -640,9 +645,9 @@ const ScenarioDetailPage = () => {
     setValue('spendingStrategy', strategy, { shouldDirty: true })
     setValue('scenario.spendingStrategyId', strategy.id, { shouldDirty: true })
     const items = await loadSpendingLineItemsForStrategy(strategy.id)
-    setSpendingLineItems(items)
+    setSpendingLineItems(items.map(normalizeSpendingLineItem))
     if (items.length > 0) {
-      setValue('spendingLineItem', items[0], { shouldDirty: true })
+      setValue('spendingLineItem', normalizeSpendingLineItem(items[0]), { shouldDirty: true })
       setSelectionError(null)
     } else {
       setSelectionError('Selected spending strategy has no line items.')
@@ -994,6 +999,7 @@ const ScenarioDetailPage = () => {
         <input type="hidden" {...register('spendingLineItem.id')} />
         <input type="hidden" {...register('spendingLineItem.spendingStrategyId')} />
         <input type="hidden" {...register('spendingLineItem.targetInvestmentAccountHoldingId')} />
+        <input type="hidden" {...register('spendingLineItem.inflationType')} />
         <input
           type="hidden"
           {...register('spendingLineItem.createdAt', { valueAsNumber: true })}

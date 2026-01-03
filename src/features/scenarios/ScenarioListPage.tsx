@@ -180,6 +180,7 @@ const ScenarioListPage = () => {
       isCharitable: false,
       isWork: false,
       targetInvestmentAccountHoldingId: holding.id,
+      inflationType: 'cpi',
       createdAt: now,
       updatedAt: now,
     })
