@@ -186,16 +186,6 @@ const ScenarioListPage = () => {
       updatedAt: now,
     })
 
-    await storage.personStrategyRepo.upsert({
-      id: personStrategyId,
-      scenarioId: scenario.id,
-      personId: person.id,
-      futureWorkStrategyId,
-      socialSecurityStrategyId,
-      createdAt: now,
-      updatedAt: now,
-    })
-
     const scenario: Scenario = {
       id: createUuid(),
       name: 'New Scenario',
@@ -210,6 +200,16 @@ const ScenarioListPage = () => {
         inflationDefaultsSeed.map((seed) => [seed.type, seed.rate]),
       ),
     }
+
+    await storage.personStrategyRepo.upsert({
+      id: personStrategyId,
+      scenarioId: scenario.id,
+      personId: person.id,
+      futureWorkStrategyId,
+      socialSecurityStrategyId,
+      createdAt: now,
+      updatedAt: now,
+    })
 
     await storage.scenarioRepo.upsert(scenario)
     await loadScenarios()
