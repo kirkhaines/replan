@@ -104,6 +104,11 @@ const ScenarioListPage = () => {
     if (people.length === 0 || cashAccounts.length === 0 || investmentAccounts.length === 0) {
       const bundle = createDefaultScenarioBundle()
       await storage.personRepo.upsert(bundle.person)
+      await Promise.all(
+        bundle.socialSecurityEarnings.map((record) =>
+          storage.socialSecurityEarningsRepo.upsert(record),
+        ),
+      )
       await storage.socialSecurityStrategyRepo.upsert(bundle.socialSecurityStrategy)
       await storage.futureWorkStrategyRepo.upsert(bundle.futureWorkStrategy)
       await storage.futureWorkPeriodRepo.upsert(bundle.futureWorkPeriod)

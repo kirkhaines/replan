@@ -1,6 +1,7 @@
 import type {
   Scenario,
   Person,
+  SocialSecurityEarnings,
   SocialSecurityStrategy,
   FutureWorkStrategy,
   FutureWorkPeriod,
@@ -17,6 +18,7 @@ import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 export type ScenarioBundle = {
   scenario: Scenario
   person: Person
+  socialSecurityEarnings: SocialSecurityEarnings[]
   socialSecurityStrategy: SocialSecurityStrategy
   futureWorkStrategy: FutureWorkStrategy
   futureWorkPeriod: FutureWorkPeriod
@@ -63,6 +65,27 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     lifeExpectancy: 90,
     createdAt: now,
     updatedAt: now,
+  }
+
+  const birthYear = Number(person.dateOfBirth.slice(0, 4))
+  const currentYear = new Date().getFullYear()
+  const earningsStartYear = birthYear + 22
+  const earningsEndYear = Math.min(currentYear - 1, earningsStartYear + 35)
+  const baseEarnings = 60000
+  const annualGrowth = 0.04
+  const socialSecurityEarnings: SocialSecurityEarnings[] = []
+
+  for (let year = earningsStartYear; year <= earningsEndYear; year += 1) {
+    const amount = Math.round(baseEarnings * Math.pow(1 + annualGrowth, year - earningsStartYear))
+    socialSecurityEarnings.push({
+      id: createUuid(),
+      personId,
+      year,
+      amount,
+      months: 12,
+      createdAt: now,
+      updatedAt: now,
+    })
   }
 
   const socialSecurityStrategy: SocialSecurityStrategy = {
@@ -181,6 +204,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
   return {
     scenario,
     person,
+    socialSecurityEarnings,
     socialSecurityStrategy,
     futureWorkStrategy,
     futureWorkPeriod,
