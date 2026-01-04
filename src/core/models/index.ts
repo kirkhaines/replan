@@ -50,3 +50,5 @@ export {
   timelinePointSchema,
 } from './simulationRun'
 export type { SimulationRun, SimulationResult } from './simulationRun'
+export { simulationSnapshotSchema } from './simulationSnapshot'
+export type { SimulationSnapshot } from './simulationSnapshot'

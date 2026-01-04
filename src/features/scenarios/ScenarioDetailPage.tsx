@@ -20,6 +20,7 @@ import {
   type InflationDefault,
   type Scenario,
   type SimulationRun,
+  type SimulationSnapshot,
   type Person,
   type SocialSecurityStrategy,
   type FutureWorkStrategy,
@@ -32,7 +33,7 @@ import {
   type PersonStrategy,
 } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
-import type { SimulationInput } from '../../core/sim/input'
+import type { SimulationRequest } from '../../core/sim/input'
 import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import { createUuid } from '../../core/utils/uuid'
@@ -41,14 +42,6 @@ import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
-
-const ageFromDob = (dateOfBirth: string) => {
-  const dob = new Date(dateOfBirth)
-  const now = new Date()
-  const diff = now.getTime() - dob.getTime()
-  const years = diff / (365.25 * 24 * 60 * 60 * 1000)
-  return Math.max(0, Math.floor(years))
-}
 
 const addYearsToIsoDate = (isoDate: string, years: number) => {
   const date = new Date(isoDate)
@@ -152,29 +145,108 @@ const editorSchema = z.object({
 
 const toEditorValues = (bundle: ScenarioEditorValues): ScenarioEditorValues => bundle
 
-const buildSimulationInput = (values: ScenarioEditorValues): SimulationInput => {
-  const currentAge = ageFromDob(values.person.dateOfBirth)
-  const years = Math.max(1, Math.round(values.person.lifeExpectancy - currentAge))
-  const startingBalance =
-    values.nonInvestmentAccount.balance + values.investmentAccountHolding.balance
-  const annualReturn =
-    values.investmentAccountHolding.balance > 0 ? values.investmentAccountHolding.returnRate : 0
-  const annualSpending =
-    (values.spendingLineItem.needAmount + values.spendingLineItem.wantAmount) * 12
-  const annualContribution =
-    (values.futureWorkPeriod.salary + values.futureWorkPeriod.bonus) *
-    values.futureWorkPeriod['401kMatchPctCap'] *
-    values.futureWorkPeriod['401kMatchRatio']
+const isDefined = <T,>(value: T | undefined): value is T => Boolean(value)
+
+const buildSimulationSnapshot = async (
+  scenario: Scenario,
+  storage: StorageClient,
+  normalizeSocial: (strategy: SocialSecurityStrategy, person: Person) => SocialSecurityStrategy,
+): Promise<SimulationSnapshot> => {
+  const personStrategies = (
+    await Promise.all(
+      scenario.personStrategyIds.map((id) => storage.personStrategyRepo.get(id)),
+    )
+  ).filter(isDefined)
+
+  const people = (
+    await Promise.all(personStrategies.map((strategy) => storage.personRepo.get(strategy.personId)))
+  ).filter(isDefined)
+
+  const socialSecurityStrategies = (
+    await Promise.all(
+      personStrategies.map((strategy) =>
+        storage.socialSecurityStrategyRepo.get(strategy.socialSecurityStrategyId),
+      ),
+    )
+  )
+    .filter(isDefined)
+    .map((strategy) => {
+      const person = people.find((entry) => entry.id === strategy.personId)
+      return person ? normalizeSocial(strategy, person) : strategy
+    })
+
+  const futureWorkStrategies = (
+    await Promise.all(
+      personStrategies.map((strategy) =>
+        storage.futureWorkStrategyRepo.get(strategy.futureWorkStrategyId),
+      ),
+    )
+  ).filter(isDefined)
+
+  const futureWorkPeriods = (
+    await Promise.all(
+      futureWorkStrategies.map((strategy) =>
+        storage.futureWorkPeriodRepo.listForStrategy(strategy.id),
+      ),
+    )
+  ).flat()
+
+  const socialSecurityEarnings = (
+    await Promise.all(
+      people.map((person) => storage.socialSecurityEarningsRepo.listForPerson(person.id)),
+    )
+  ).flat()
+
+  const spendingStrategy = await storage.spendingStrategyRepo.get(
+    scenario.spendingStrategyId,
+  )
+  const spendingStrategies = spendingStrategy ? [spendingStrategy] : []
+  const spendingLineItems = spendingStrategy
+    ? await storage.spendingLineItemRepo.listForStrategy(spendingStrategy.id)
+    : []
+
+  const nonInvestmentAccounts = (
+    await Promise.all(
+      scenario.nonInvestmentAccountIds.map((id) => storage.nonInvestmentAccountRepo.get(id)),
+    )
+  ).filter(isDefined)
+
+  const investmentAccounts = (
+    await Promise.all(
+      scenario.investmentAccountIds.map((id) => storage.investmentAccountRepo.get(id)),
+    )
+  ).filter(isDefined)
+
+  const investmentAccountHoldings = (
+    await Promise.all(
+      investmentAccounts.map((account) =>
+        storage.investmentAccountHoldingRepo.listForAccount(account.id),
+      ),
+    )
+  ).flat()
+
+  const [ssaWageIndex, ssaBendPoints, ssaRetirementAdjustments] = await Promise.all([
+    storage.ssaWageIndexRepo.list(),
+    storage.ssaBendPointRepo.list(),
+    storage.ssaRetirementAdjustmentRepo.list(),
+  ])
 
   return {
-    scenarioId: values.scenario.id,
-    currentAge,
-    years,
-    startingBalance,
-    annualContribution,
-    annualSpending,
-    annualReturn,
-    annualInflation: 0.02,
+    scenario,
+    people,
+    personStrategies,
+    socialSecurityStrategies,
+    socialSecurityEarnings,
+    futureWorkStrategies,
+    futureWorkPeriods,
+    spendingStrategies,
+    spendingLineItems,
+    nonInvestmentAccounts,
+    investmentAccounts,
+    investmentAccountHoldings,
+    ssaWageIndex,
+    ssaBendPoints,
+    ssaRetirementAdjustments,
   }
 }
 
@@ -970,7 +1042,12 @@ const ScenarioDetailPage = () => {
 
   const onRun = async (values: ScenarioEditorValues) => {
     const saved = await persistBundle(values, storage, setScenario, reset)
-    const input = buildSimulationInput(saved)
+    const snapshot = await buildSimulationSnapshot(
+      saved.scenario,
+      storage,
+      normalizeSocialSecurityStrategy,
+    )
+    const input: SimulationRequest = { snapshot }
     const run = await simClient.runScenario(input)
     await storage.runRepo.add(run)
     await loadRuns(saved.scenario.id)

@@ -1,6 +1,6 @@
 import type { ISimClient, RunScenarioResponse } from './types'
 import type { SimulationRun } from '../models'
-import type { SimulationInput } from '../sim/input'
+import type { SimulationRequest } from '../sim/input'
 import { createUuid } from '../utils/uuid'
 
 export const createWorkerSimClient = (): ISimClient => {
@@ -23,7 +23,7 @@ export const createWorkerSimClient = (): ISimClient => {
     }
   }
 
-  const runScenario = (input: SimulationInput) =>
+  const runScenario = (input: SimulationRequest) =>
     new Promise<SimulationRun>((resolve) => {
       const requestId = createUuid()
       pending.set(requestId, resolve)

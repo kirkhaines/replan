@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { simulationSnapshotSchema } from './simulationSnapshot'
 
 export const timelinePointSchema = z.object({
   yearIndex: z.number().int().min(0),
@@ -25,6 +26,7 @@ export const simulationRunSchema = z.object({
   status: z.enum(['success', 'error']),
   errorMessage: z.string().optional(),
   result: simulationResultSchema,
+  snapshot: simulationSnapshotSchema.optional(),
 })
 
 export type SimulationResult = z.infer<typeof simulationResultSchema>

@@ -1,14 +1,14 @@
 import type { SimulationRun } from '../models'
-import type { SimulationInput } from '../sim/input'
+import type { SimulationRequest } from '../sim/input'
 
 export interface ISimClient {
-  runScenario: (input: SimulationInput) => Promise<SimulationRun>
+  runScenario: (input: SimulationRequest) => Promise<SimulationRun>
 }
 
 export type RunScenarioRequest = {
   type: 'runScenario'
   requestId: string
-  input: SimulationInput
+  input: SimulationRequest
 }
 
 export type RunScenarioResponse = {
