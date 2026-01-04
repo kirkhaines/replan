@@ -27,9 +27,10 @@ const HoldingDetailPage = () => {
       name: '',
       taxType: 'taxable' as const,
       balance: 0,
+      contributionBasis: 0,
       holdingType: 'sp500' as const,
-      return: 0,
-      risk: 0,
+      returnRate: 0,
+      returnStdDev: 0,
       investmentAccountId: '',
       createdAt: 0,
       updatedAt: 0,
@@ -56,9 +57,18 @@ const HoldingDetailPage = () => {
 
     setIsLoading(true)
     const data = await storage.investmentAccountHoldingRepo.get(id)
-    setHolding(data ?? null)
-    if (data) {
-      reset(data)
+    const legacy = data as InvestmentAccountHolding & { return?: number; risk?: number }
+    const normalized = data
+      ? {
+          ...data,
+          contributionBasis: data.contributionBasis ?? 0,
+          returnRate: data.returnRate ?? legacy.return ?? 0,
+          returnStdDev: data.returnStdDev ?? legacy.risk ?? 0,
+        }
+      : null
+    setHolding(normalized)
+    if (normalized) {
+      reset(normalized)
     }
     setIsLoading(false)
   }, [id, reset, storage])
@@ -148,15 +158,38 @@ const HoldingDetailPage = () => {
           </label>
 
           <label className="field">
-            <span>Return</span>
-            <input type="number" step="0.001" {...register('return', { valueAsNumber: true })} />
-            {errors.return ? <span className="error">{errors.return.message}</span> : null}
+            <span>Contribution basis</span>
+            <input
+              type="number"
+              {...register('contributionBasis', { valueAsNumber: true })}
+            />
+            {errors.contributionBasis ? (
+              <span className="error">{errors.contributionBasis.message}</span>
+            ) : null}
           </label>
 
           <label className="field">
-            <span>Risk</span>
-            <input type="number" step="0.001" {...register('risk', { valueAsNumber: true })} />
-            {errors.risk ? <span className="error">{errors.risk.message}</span> : null}
+            <span>Return</span>
+            <input
+              type="number"
+              step="0.001"
+              {...register('returnRate', { valueAsNumber: true })}
+            />
+            {errors.returnRate ? (
+              <span className="error">{errors.returnRate.message}</span>
+            ) : null}
+          </label>
+
+          <label className="field">
+            <span>Standard deviation of return</span>
+            <input
+              type="number"
+              step="0.001"
+              {...register('returnStdDev', { valueAsNumber: true })}
+            />
+            {errors.returnStdDev ? (
+              <span className="error">{errors.returnStdDev.message}</span>
+            ) : null}
           </label>
         </div>
 

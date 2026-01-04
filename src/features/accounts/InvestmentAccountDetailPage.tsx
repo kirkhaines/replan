@@ -22,9 +22,10 @@ const createHolding = (investmentAccountId: string): InvestmentAccountHolding =>
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 50000,
+    contributionBasis: 50000,
     holdingType: 'sp500',
-    return: 0.05,
-    risk: 0.15,
+    returnRate: 0.05,
+    returnStdDev: 0.15,
     investmentAccountId,
     createdAt: now,
     updatedAt: now,
@@ -74,7 +75,13 @@ const InvestmentAccountDetailPage = () => {
     if (data) {
       reset(data)
       const items = await storage.investmentAccountHoldingRepo.listForAccount(data.id)
-      setHoldings(items)
+      const normalized = items.map((item) => ({
+        ...item,
+        contributionBasis: item.contributionBasis ?? 0,
+        returnRate: item.returnRate ?? (item as InvestmentAccountHolding & { return?: number }).return ?? 0,
+        returnStdDev: item.returnStdDev ?? (item as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
+      }))
+      setHoldings(normalized)
     }
     setIsLoading(false)
   }, [id, reset, storage])
@@ -169,7 +176,7 @@ const InvestmentAccountDetailPage = () => {
                 <th>Tax type</th>
                 <th>Balance</th>
                 <th>Return</th>
-                <th>Risk</th>
+                <th>Std dev of return</th>
               </tr>
             </thead>
             <tbody>
@@ -186,8 +193,8 @@ const InvestmentAccountDetailPage = () => {
                   </td>
                   <td>{holding.taxType}</td>
                   <td>{formatCurrency(holding.balance)}</td>
-                  <td>{holding.return}</td>
-                  <td>{holding.risk}</td>
+                  <td>{holding.returnRate}</td>
+                  <td>{holding.returnStdDev}</td>
                 </tr>
               ))}
             </tbody>

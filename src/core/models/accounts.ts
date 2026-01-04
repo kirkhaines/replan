@@ -16,9 +16,10 @@ export const investmentAccountHoldingSchema = baseEntitySchema.extend({
   name: z.string().min(1),
   taxType: taxTypeSchema,
   balance: z.number().min(0),
+  contributionBasis: z.number().min(0),
   holdingType: holdingTypeSchema,
-  return: z.number(),
-  risk: z.number(),
+  returnRate: z.number(),
+  returnStdDev: z.number(),
   investmentAccountId: z.string().uuid(),
 })
 

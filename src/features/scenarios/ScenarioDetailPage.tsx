@@ -79,9 +79,10 @@ const createHolding = (investmentAccountId: string): InvestmentAccountHolding =>
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 50000,
+    contributionBasis: 50000,
     holdingType: 'sp500',
-    return: 0.05,
-    risk: 0.15,
+    returnRate: 0.05,
+    returnStdDev: 0.15,
     investmentAccountId,
     createdAt: now,
     updatedAt: now,
@@ -124,7 +125,7 @@ const buildSimulationInput = (values: ScenarioEditorValues): SimulationInput => 
   const startingBalance =
     values.nonInvestmentAccount.balance + values.investmentAccountHolding.balance
   const annualReturn =
-    values.investmentAccountHolding.balance > 0 ? values.investmentAccountHolding.return : 0
+    values.investmentAccountHolding.balance > 0 ? values.investmentAccountHolding.returnRate : 0
   const annualSpending =
     (values.spendingLineItem.needAmount + values.spendingLineItem.wantAmount) * 12
   const annualContribution =
@@ -147,6 +148,15 @@ const buildSimulationInput = (values: ScenarioEditorValues): SimulationInput => 
 const normalizeSpendingLineItem = (item: SpendingLineItem): SpendingLineItem => ({
   ...item,
   inflationType: item.inflationType ?? 'cpi',
+})
+
+const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountHolding => ({
+  ...holding,
+  contributionBasis: holding.contributionBasis ?? 0,
+  returnRate:
+    holding.returnRate ?? (holding as InvestmentAccountHolding & { return?: number }).return ?? 0,
+  returnStdDev:
+    holding.returnStdDev ?? (holding as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
 })
 
 const buildInflationMap = (
@@ -452,7 +462,10 @@ const ScenarioDetailPage = () => {
   }
 
   const loadHoldingsForAccount = useCallback(
-    async (accountId: string) => storage.investmentAccountHoldingRepo.listForAccount(accountId),
+    async (accountId: string) =>
+      (await storage.investmentAccountHoldingRepo.listForAccount(accountId)).map(
+        normalizeHolding,
+      ),
     [storage],
   )
 
@@ -603,9 +616,9 @@ const ScenarioDetailPage = () => {
     const spendingLineItems = await storage.spendingLineItemRepo.listForStrategy(
       spendingStrategy.id,
     )
-    const investmentAccountHoldings = await storage.investmentAccountHoldingRepo.listForAccount(
-      investmentAccount.id,
-    )
+    const investmentAccountHoldings = (
+      await storage.investmentAccountHoldingRepo.listForAccount(investmentAccount.id)
+    ).map(normalizeHolding)
 
     if (
       !person ||
@@ -1093,14 +1106,18 @@ const ScenarioDetailPage = () => {
           type="hidden"
           {...register('investmentAccountHolding.balance', { valueAsNumber: true })}
         />
+        <input
+          type="hidden"
+          {...register('investmentAccountHolding.contributionBasis', { valueAsNumber: true })}
+        />
         <input type="hidden" {...register('investmentAccountHolding.holdingType')} />
         <input
           type="hidden"
-          {...register('investmentAccountHolding.return', { valueAsNumber: true })}
+          {...register('investmentAccountHolding.returnRate', { valueAsNumber: true })}
         />
         <input
           type="hidden"
-          {...register('investmentAccountHolding.risk', { valueAsNumber: true })}
+          {...register('investmentAccountHolding.returnStdDev', { valueAsNumber: true })}
         />
         <input type="hidden" {...register('personStrategy.id')} />
         <input type="hidden" {...register('personStrategy.personId')} />
