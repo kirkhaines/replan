@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   inflationTypeSchema,
+  holdingTypeSchema,
   type InflationDefault,
+  type HoldingTypeDefault,
   type SsaBendPoint,
   type SsaRetirementAdjustment,
   type SsaWageIndex,
@@ -11,17 +13,29 @@ import { useAppStore } from '../../state/appStore'
 import { createUuid } from '../../core/utils/uuid'
 import { now } from '../../core/utils/time'
 import PageHeader from '../../components/PageHeader'
-import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
+import {
+  inflationDefaultsSeed,
+  holdingTypeDefaultsSeed,
+} from '../../core/defaults/defaultData'
 
 type InflationType = (typeof inflationTypeSchema.options)[number]
+type HoldingType = (typeof holdingTypeSchema.options)[number]
 
 const defaultInflationRates: Record<InflationType, number> = Object.fromEntries(
   inflationDefaultsSeed.map((seed) => [seed.type, seed.rate]),
 ) as Record<InflationType, number>
 
+const holdingTypeDefaultsByType = new Map(
+  holdingTypeDefaultsSeed.map((seed) => [seed.type, seed]),
+)
+
+const formatStdDevRange = (returnRate: number, returnStdDev: number) =>
+  `(${(returnRate - returnStdDev).toFixed(2)} - ${(returnRate + returnStdDev).toFixed(2)})`
+
 const DefaultsPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [inflationDefaults, setInflationDefaults] = useState<InflationDefault[]>([])
+  const [holdingTypeDefaults, setHoldingTypeDefaults] = useState<HoldingTypeDefault[]>([])
   const [wageIndex, setWageIndex] = useState<SsaWageIndex[]>([])
   const [bendPoints, setBendPoints] = useState<SsaBendPoint[]>([])
   const [retirementAdjustments, setRetirementAdjustments] = useState<SsaRetirementAdjustment[]>([])
@@ -45,8 +59,10 @@ const DefaultsPage = () => {
 
   const loadDefaults = useCallback(async () => {
     setIsLoading(true)
-    const [inflationData, wageData, bendPointData, adjustmentData] = await Promise.all([
+    const [inflationData, holdingTypeData, wageData, bendPointData, adjustmentData] =
+      await Promise.all([
       storage.inflationDefaultRepo.list(),
+      storage.holdingTypeDefaultRepo.list(),
       storage.ssaWageIndexRepo.list(),
       storage.ssaBendPointRepo.list(),
       storage.ssaRetirementAdjustmentRepo.list(),
@@ -67,6 +83,26 @@ const DefaultsPage = () => {
       }
     })
     setInflationDefaults(filled)
+    const holdingByType = new Map(holdingTypeData.map((item) => [item.type, item]))
+    const holdingDefaults = holdingTypeSchema.options
+      .filter((type) => type !== 'other')
+      .map((type) => {
+        const existing = holdingByType.get(type)
+        if (existing) {
+          return existing
+        }
+        const seed = holdingTypeDefaultsByType.get(type)
+        const timestamp = now()
+        return {
+          id: type,
+          type,
+          returnRate: seed?.returnRate ?? 0,
+          returnStdDev: seed?.returnStdDev ?? 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }
+      })
+    setHoldingTypeDefaults(holdingDefaults)
     setWageIndex(wageData)
     setBendPoints(bendPointData)
     setRetirementAdjustments(adjustmentData)
@@ -89,6 +125,31 @@ const DefaultsPage = () => {
     await Promise.all(
       inflationDefaults.map((item) =>
         storage.inflationDefaultRepo.upsert({
+          ...item,
+          id: item.id || item.type,
+          updatedAt: timestamp,
+          createdAt: item.createdAt || timestamp,
+        }),
+      ),
+    )
+    await loadDefaults()
+  }
+
+  const handleHoldingTypeChange = (
+    type: HoldingType,
+    field: 'returnRate' | 'returnStdDev',
+    value: number,
+  ) => {
+    setHoldingTypeDefaults((current) =>
+      current.map((item) => (item.type === type ? { ...item, [field]: value } : item)),
+    )
+  }
+
+  const handleSaveHoldingTypeDefaults = async () => {
+    const timestamp = now()
+    await Promise.all(
+      holdingTypeDefaults.map((item) =>
+        storage.holdingTypeDefaultRepo.upsert({
           ...item,
           id: item.id || item.type,
           updatedAt: timestamp,
@@ -305,6 +366,61 @@ const DefaultsPage = () => {
             </label>
           ))}
         </div>
+      </div>
+
+      <div className="card stack">
+        <div className="row">
+          <h2>Holding type defaults</h2>
+          <button className="button" type="button" onClick={handleSaveHoldingTypeDefaults}>
+            Save holding defaults
+          </button>
+        </div>
+        {holdingTypeDefaults.length === 0 ? (
+          <p className="muted">No holding type defaults yet.</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Holding type</th>
+                <th>Return rate</th>
+                <th>Std dev of return</th>
+                <th>1 std dev range</th>
+              </tr>
+            </thead>
+            <tbody>
+              {holdingTypeDefaults.map((item) => (
+                <tr key={item.type}>
+                  <td>{item.type}</td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={item.returnRate}
+                      onChange={(event) =>
+                        handleHoldingTypeChange(item.type, 'returnRate', Number(event.target.value))
+                      }
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={item.returnStdDev}
+                      onChange={(event) =>
+                        handleHoldingTypeChange(
+                          item.type,
+                          'returnStdDev',
+                          Number(event.target.value),
+                        )
+                      }
+                    />
+                  </td>
+                  <td>{formatStdDevRange(item.returnRate, item.returnStdDev)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="card stack">

@@ -14,6 +14,7 @@ import type {
   SpendingLineItem,
   PersonStrategy,
   InflationDefault,
+  HoldingTypeDefault,
   SsaWageIndex,
   SsaBendPoint,
   SsaRetirementAdjustment,
@@ -34,6 +35,7 @@ import type {
   SpendingLineItemRepo,
   PersonStrategyRepo,
   InflationDefaultRepo,
+  HoldingTypeDefaultRepo,
   SsaWageIndexRepo,
   SsaBendPointRepo,
   SsaRetirementAdjustmentRepo,
@@ -289,6 +291,20 @@ class DexieInflationDefaultRepo implements InflationDefaultRepo {
   }
 }
 
+class DexieHoldingTypeDefaultRepo implements HoldingTypeDefaultRepo {
+  async list() {
+    return db.holdingTypeDefaults.toArray()
+  }
+
+  async get(id: string) {
+    return db.holdingTypeDefaults.get(id)
+  }
+
+  async upsert(record: HoldingTypeDefault) {
+    await db.holdingTypeDefaults.put(record)
+  }
+}
+
 class DexieSsaWageIndexRepo implements SsaWageIndexRepo {
   async list() {
     return db.ssaWageIndex.orderBy('year').reverse().toArray()
@@ -357,6 +373,7 @@ export const createDexieStorageClient = (): StorageClient => ({
   spendingLineItemRepo: new DexieSpendingLineItemRepo(),
   personStrategyRepo: new DexiePersonStrategyRepo(),
   inflationDefaultRepo: new DexieInflationDefaultRepo(),
+  holdingTypeDefaultRepo: new DexieHoldingTypeDefaultRepo(),
   ssaWageIndexRepo: new DexieSsaWageIndexRepo(),
   ssaBendPointRepo: new DexieSsaBendPointRepo(),
   ssaRetirementAdjustmentRepo: new DexieSsaRetirementAdjustmentRepo(),

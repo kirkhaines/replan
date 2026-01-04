@@ -6,11 +6,16 @@ import {
   investmentAccountHoldingSchema,
   holdingTypeSchema,
   taxTypeSchema,
+  type HoldingTypeDefault,
   type InvestmentAccountHolding,
 } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { now } from '../../core/utils/time'
+import { holdingTypeDefaultsSeed } from '../../core/defaults/defaultData'
+
+const formatStdDevRange = (returnRate: number, returnStdDev: number) =>
+  `(${(returnRate - returnStdDev).toFixed(2)} - ${(returnRate + returnStdDev).toFixed(2)})`
 
 const HoldingDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -19,6 +24,7 @@ const HoldingDetailPage = () => {
   const parentFrom = (location.state as { parentFrom?: string } | null)?.parentFrom
   const storage = useAppStore((state) => state.storage)
   const [holding, setHolding] = useState<InvestmentAccountHolding | null>(null)
+  const [holdingDefaults, setHoldingDefaults] = useState<HoldingTypeDefault[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const defaultValues = useMemo<InvestmentAccountHolding>(
@@ -42,11 +48,22 @@ const HoldingDetailPage = () => {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<InvestmentAccountHolding>({
     resolver: zodResolver(investmentAccountHoldingSchema),
     defaultValues,
   })
+
+  const selectedHoldingType = watch('holdingType')
+  const returnRate = watch('returnRate')
+  const returnStdDev = watch('returnStdDev')
+
+  const holdingDefaultsByType = useMemo(
+    () => new Map(holdingDefaults.map((item) => [item.type, item])),
+    [holdingDefaults],
+  )
 
   const loadHolding = useCallback(async () => {
     if (!id) {
@@ -56,7 +73,23 @@ const HoldingDetailPage = () => {
     }
 
     setIsLoading(true)
-    const data = await storage.investmentAccountHoldingRepo.get(id)
+    const [data, defaultData] = await Promise.all([
+      storage.investmentAccountHoldingRepo.get(id),
+      storage.holdingTypeDefaultRepo.list(),
+    ])
+    const timestamp = now()
+    const normalizedDefaults =
+      defaultData.length > 0
+        ? defaultData
+        : holdingTypeDefaultsSeed.map((seed) => ({
+            id: seed.type,
+            type: seed.type,
+            returnRate: seed.returnRate,
+            returnStdDev: seed.returnStdDev,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          }))
+    setHoldingDefaults(normalizedDefaults)
     const legacy = data as InvestmentAccountHolding & { return?: number; risk?: number }
     const normalized = data
       ? {
@@ -77,6 +110,28 @@ const HoldingDetailPage = () => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadHolding()
   }, [loadHolding])
+
+  useEffect(() => {
+    if (!selectedHoldingType || selectedHoldingType === 'other') {
+      return
+    }
+    const defaults = holdingDefaultsByType.get(selectedHoldingType)
+    if (!defaults) {
+      return
+    }
+    if (returnRate !== defaults.returnRate) {
+      setValue('returnRate', defaults.returnRate, { shouldDirty: true })
+    }
+    if (returnStdDev !== defaults.returnStdDev) {
+      setValue('returnStdDev', defaults.returnStdDev, { shouldDirty: true })
+    }
+  }, [
+    holdingDefaultsByType,
+    returnRate,
+    returnStdDev,
+    selectedHoldingType,
+    setValue,
+  ])
 
   const onSubmit: SubmitHandler<InvestmentAccountHolding> = async (values) => {
     const timestamp = now()
@@ -130,17 +185,6 @@ const HoldingDetailPage = () => {
           </label>
 
           <label className="field">
-            <span>Holding type</span>
-            <select {...register('holdingType')}>
-              {holdingTypeSchema.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="field">
             <span>Tax type</span>
             <select {...register('taxType')}>
               {taxTypeSchema.options.map((option) => (
@@ -169,11 +213,23 @@ const HoldingDetailPage = () => {
           </label>
 
           <label className="field">
+            <span>Holding type</span>
+            <select {...register('holdingType')}>
+              {holdingTypeSchema.options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
             <span>Return</span>
             <input
               type="number"
               step="0.001"
               {...register('returnRate', { valueAsNumber: true })}
+              disabled={selectedHoldingType !== 'other'}
             />
             {errors.returnRate ? (
               <span className="error">{errors.returnRate.message}</span>
@@ -186,10 +242,20 @@ const HoldingDetailPage = () => {
               type="number"
               step="0.001"
               {...register('returnStdDev', { valueAsNumber: true })}
+              disabled={selectedHoldingType !== 'other'}
             />
             {errors.returnStdDev ? (
               <span className="error">{errors.returnStdDev.message}</span>
             ) : null}
+          </label>
+
+          <label className="field">
+            <span>1 std dev range</span>
+            <input
+              type="text"
+              readOnly
+              value={formatStdDevRange(returnRate ?? 0, returnStdDev ?? 0)}
+            />
           </label>
         </div>
 

@@ -1,5 +1,6 @@
 import type {
   InflationDefault,
+  HoldingTypeDefault,
   SsaBendPoint,
   SsaRetirementAdjustment,
   SsaWageIndex,
@@ -11,6 +12,19 @@ export const inflationDefaultsSeed: Array<Pick<InflationDefault, 'type' | 'rate'
   { type: 'medical', rate: 0.03 },
   { type: 'housing', rate: 0.025 },
   { type: 'education', rate: 0.03 },
+]
+
+export const holdingTypeDefaultsSeed: Array<
+  Pick<HoldingTypeDefault, 'type' | 'returnRate' | 'returnStdDev'>
+> = [
+  { type: 'bonds', returnRate: 0.04, returnStdDev: 0.06 },
+  { type: 'sp500', returnRate: 0.1, returnStdDev: 0.16 },
+  { type: 'nasdaq', returnRate: 0.12, returnStdDev: 0.22 },
+  { type: 'dow', returnRate: 0.08, returnStdDev: 0.14 },
+  { type: 'non_us_developed', returnRate: 0.08, returnStdDev: 0.17 },
+  { type: 'emerging_markets', returnRate: 0.1, returnStdDev: 0.22 },
+  { type: 'real_estate', returnRate: 0.07, returnStdDev: 0.15 },
+  { type: 'cash', returnRate: 0.02, returnStdDev: 0.01 },
 ]
 
 export const ssaWageIndexSeed: Array<Pick<SsaWageIndex, 'year' | 'index'>> = [

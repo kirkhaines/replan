@@ -176,6 +176,11 @@ const createStorageFixture = (seed: SeedData): StorageClient => {
       get: vi.fn(async () => undefined),
       upsert: vi.fn(async () => undefined),
     },
+    holdingTypeDefaultRepo: {
+      list: vi.fn(async () => []),
+      get: vi.fn(async () => undefined),
+      upsert: vi.fn(async () => undefined),
+    },
     ssaWageIndexRepo: {
       list: vi.fn(async () => []),
       get: vi.fn(async () => undefined),

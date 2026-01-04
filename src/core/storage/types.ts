@@ -16,6 +16,7 @@ import type {
   SsaWageIndex,
   SsaBendPoint,
   SsaRetirementAdjustment,
+  HoldingTypeDefault,
 } from '../models'
 
 export interface ScenarioRepo {
@@ -107,6 +108,12 @@ export interface InflationDefaultRepo {
   upsert: (record: InflationDefault) => Promise<void>
 }
 
+export interface HoldingTypeDefaultRepo {
+  list: () => Promise<HoldingTypeDefault[]>
+  get: (id: string) => Promise<HoldingTypeDefault | undefined>
+  upsert: (record: HoldingTypeDefault) => Promise<void>
+}
+
 export interface SsaWageIndexRepo {
   list: () => Promise<SsaWageIndex[]>
   get: (id: string) => Promise<SsaWageIndex | undefined>
@@ -148,6 +155,7 @@ export interface StorageClient {
   spendingLineItemRepo: SpendingLineItemRepo
   personStrategyRepo: PersonStrategyRepo
   inflationDefaultRepo: InflationDefaultRepo
+  holdingTypeDefaultRepo: HoldingTypeDefaultRepo
   ssaWageIndexRepo: SsaWageIndexRepo
   ssaBendPointRepo: SsaBendPointRepo
   ssaRetirementAdjustmentRepo: SsaRetirementAdjustmentRepo

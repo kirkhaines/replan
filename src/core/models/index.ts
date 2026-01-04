@@ -35,12 +35,14 @@ export type {
   SsaWageIndex,
   SsaBendPoint,
   SsaRetirementAdjustment,
+  HoldingTypeDefault,
 } from './defaults'
 export {
   inflationDefaultSchema,
   ssaWageIndexSchema,
   ssaBendPointSchema,
   ssaRetirementAdjustmentSchema,
+  holdingTypeDefaultSchema,
 } from './defaults'
 export {
   simulationRunSchema,

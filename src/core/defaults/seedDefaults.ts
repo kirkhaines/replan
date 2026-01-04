@@ -1,6 +1,7 @@
 import type { StorageClient } from '../storage/types'
 import {
   inflationDefaultsSeed,
+  holdingTypeDefaultsSeed,
   ssaBendPointSeed,
   ssaRetirementAdjustmentSeed,
   ssaWageIndexSeed,
@@ -38,6 +39,22 @@ export const seedDefaults = async (storage: StorageClient) => {
           id: createUuid(),
           year: seed.year,
           index: seed.index,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      ),
+    )
+  }
+
+  const existingHoldingTypes = await storage.holdingTypeDefaultRepo.list()
+  if (existingHoldingTypes.length === 0) {
+    await Promise.all(
+      holdingTypeDefaultsSeed.map((seed) =>
+        storage.holdingTypeDefaultRepo.upsert({
+          id: seed.type,
+          type: seed.type,
+          returnRate: seed.returnRate,
+          returnStdDev: seed.returnStdDev,
           createdAt: timestamp,
           updatedAt: timestamp,
         }),

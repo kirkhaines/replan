@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { baseEntitySchema } from './common'
-import { inflationTypeSchema } from './enums'
+import { holdingTypeSchema, inflationTypeSchema } from './enums'
 
 export const inflationDefaultSchema = baseEntitySchema.extend({
   type: inflationTypeSchema,
@@ -25,7 +25,14 @@ export const ssaRetirementAdjustmentSchema = baseEntitySchema.extend({
   delayedRetirementCreditPerYear: z.number().min(0),
 })
 
+export const holdingTypeDefaultSchema = baseEntitySchema.extend({
+  type: holdingTypeSchema,
+  returnRate: z.number(),
+  returnStdDev: z.number(),
+})
+
 export type InflationDefault = z.infer<typeof inflationDefaultSchema>
 export type SsaWageIndex = z.infer<typeof ssaWageIndexSchema>
 export type SsaBendPoint = z.infer<typeof ssaBendPointSchema>
 export type SsaRetirementAdjustment = z.infer<typeof ssaRetirementAdjustmentSchema>
+export type HoldingTypeDefault = z.infer<typeof holdingTypeDefaultSchema>

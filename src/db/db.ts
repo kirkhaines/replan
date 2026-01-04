@@ -14,6 +14,7 @@ import type {
   SpendingLineItem,
   PersonStrategy,
   InflationDefault,
+  HoldingTypeDefault,
   SsaWageIndex,
   SsaBendPoint,
   SsaRetirementAdjustment,
@@ -34,6 +35,7 @@ class ReplanDb extends Dexie {
   spendingLineItems!: Table<SpendingLineItem, string>
   personStrategies!: Table<PersonStrategy, string>
   inflationDefaults!: Table<InflationDefault, string>
+  holdingTypeDefaults!: Table<HoldingTypeDefault, string>
   ssaWageIndex!: Table<SsaWageIndex, string>
   ssaBendPoints!: Table<SsaBendPoint, string>
   ssaRetirementAdjustments!: Table<SsaRetirementAdjustment, string>
@@ -127,6 +129,26 @@ class ReplanDb extends Dexie {
       spendingLineItems: 'id, spendingStrategyId, startDate',
       personStrategies: 'id, personId, scenarioId',
       inflationDefaults: 'id, type',
+      ssaWageIndex: 'id, year',
+      ssaBendPoints: 'id, year',
+      ssaRetirementAdjustments: 'id, birthYearStart, birthYearEnd',
+    })
+    this.version(7).stores({
+      scenarios: 'id, updatedAt',
+      runs: 'id, scenarioId, finishedAt',
+      people: 'id, updatedAt',
+      socialSecurityEarnings: 'id, personId, year',
+      socialSecurityStrategies: 'id, personId',
+      nonInvestmentAccounts: 'id, updatedAt',
+      investmentAccounts: 'id, updatedAt',
+      investmentAccountHoldings: 'id, investmentAccountId, updatedAt',
+      futureWorkStrategies: 'id, personId',
+      futureWorkPeriods: 'id, futureWorkStrategyId, startDate',
+      spendingStrategies: 'id, updatedAt',
+      spendingLineItems: 'id, spendingStrategyId, startDate',
+      personStrategies: 'id, personId, scenarioId',
+      inflationDefaults: 'id, type',
+      holdingTypeDefaults: 'id, type',
       ssaWageIndex: 'id, year',
       ssaBendPoints: 'id, year',
       ssaRetirementAdjustments: 'id, birthYearStart, birthYearEnd',
