@@ -476,6 +476,19 @@ const PersonStrategyDetailPage = () => {
     return getAgeInYearsAtDate(selectedPerson.dateOfBirth, socialDraft.startDate)
   }, [selectedPerson, socialDraft])
 
+  const presentDayBenefit = useMemo(() => {
+    if (!socialSecurityEstimate?.details || !scenario) {
+      return null
+    }
+    const currentYear = new Date().getFullYear()
+    const yearsDelta = socialSecurityEstimate.details.claimYear - currentYear
+    const cpiRate = scenario.inflationAssumptions.cpi ?? 0
+    if (cpiRate === 0 || yearsDelta === 0) {
+      return socialSecurityEstimate.monthlyBenefit
+    }
+    return socialSecurityEstimate.monthlyBenefit / Math.pow(1 + cpiRate, yearsDelta)
+  }, [scenario, socialSecurityEstimate])
+
   if (isLoading) {
     return <p className="muted">Loading person strategy...</p>
   }
@@ -586,12 +599,12 @@ const PersonStrategyDetailPage = () => {
                   />
                 </label>
                 <label className="field">
-                  <span>Estimated monthly benefit</span>
+                  <span>Estimated monthly benefit (present-day dollars)</span>
                   <input
                     readOnly
                     value={
-                      socialSecurityEstimate
-                        ? formatCurrency(socialSecurityEstimate.monthlyBenefit)
+                      presentDayBenefit !== null
+                        ? formatCurrency(presentDayBenefit)
                         : ''
                     }
                   />

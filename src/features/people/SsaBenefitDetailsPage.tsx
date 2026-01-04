@@ -38,6 +38,7 @@ const SsaBenefitDetailsPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [estimate, setEstimate] = useState<ReturnType<typeof buildSsaEstimate> | null>(null)
   const [person, setPerson] = useState<Person | null>(null)
+  const [cpiRate, setCpiRate] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -94,6 +95,7 @@ const SsaBenefitDetailsPage = () => {
       })
 
       setPerson(personRecord)
+      setCpiRate(scenario.inflationAssumptions.cpi ?? 0)
       setEstimate(estimateResult)
       setIsLoading(false)
     }
@@ -102,6 +104,17 @@ const SsaBenefitDetailsPage = () => {
   }, [id, storage])
 
   const summary = useMemo(() => estimate?.details ?? null, [estimate])
+  const presentDayBenefit = useMemo(() => {
+    if (!summary) {
+      return null
+    }
+    const currentYear = new Date().getFullYear()
+    const yearsDelta = summary.claimYear - currentYear
+    if (cpiRate === 0 || yearsDelta === 0) {
+      return summary.adjustment.adjustedBenefit
+    }
+    return summary.adjustment.adjustedBenefit / Math.pow(1 + cpiRate, yearsDelta)
+  }, [cpiRate, summary])
 
   if (isLoading) {
     return <p className="muted">Loading benefit details...</p>
@@ -275,8 +288,12 @@ const SsaBenefitDetailsPage = () => {
         <h2>Adjusted monthly benefit</h2>
         <div className="summary">
           <div>
-            <span className="muted">Final monthly benefit</span>
+            <span className="muted">Final monthly benefit (claim-year dollars)</span>
             <strong>{formatCurrency(summary.adjustment.adjustedBenefit)}</strong>
+          </div>
+          <div>
+            <span className="muted">Final monthly benefit (present-day dollars)</span>
+            <strong>{formatCurrency(presentDayBenefit ?? summary.adjustment.adjustedBenefit)}</strong>
           </div>
         </div>
       </div>
