@@ -33,7 +33,11 @@ const getAgeInMonthsAtDate = (dateOfBirth: string, dateValue: string) => {
 const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) =>
   Math.max(0, Math.round((getAgeInMonthsAtDate(dateOfBirth, dateValue) / 12) * 10) / 10)
 
-const getMonthsWorkedForYear = (period: FutureWorkPeriod, year: number) => {
+const getMonthsWorkedForYear = (
+  period: FutureWorkPeriod,
+  year: number,
+  cutoffDate?: Date,
+) => {
   const startRaw = new Date(period.startDate)
   const end = new Date(period.endDate)
   if (Number.isNaN(end.getTime())) {
@@ -48,6 +52,24 @@ const getMonthsWorkedForYear = (period: FutureWorkPeriod, year: number) => {
     const monthStart = new Date(year, month, 1)
     const monthEnd = new Date(year, month + 1, 0)
     if (monthEnd < start || monthStart > end) {
+      continue
+    }
+    if (cutoffDate && monthStart >= cutoffDate) {
+      continue
+    }
+    months += 1
+  }
+  return months
+}
+
+const getMonthsBeforeDateInYear = (year: number, cutoffDate: Date) => {
+  if (cutoffDate.getFullYear() !== year) {
+    return 12
+  }
+  let months = 0
+  for (let month = 0; month < 12; month += 1) {
+    const monthStart = new Date(year, month, 1)
+    if (monthStart >= cutoffDate) {
       continue
     }
     months += 1
@@ -188,16 +210,22 @@ export const buildSsaEstimate = ({
   if (birthYear === null || claimYear === null) {
     return null
   }
+  const claimDate = new Date(socialStrategy.startDate)
+  const hasClaimDate = !Number.isNaN(claimDate.getTime())
+  const claimCutoffMonths = hasClaimDate ? getMonthsBeforeDateInYear(claimYear, claimDate) : 12
   const claimAgeMonths = Math.min(
     getAgeInMonthsAtDate(person.dateOfBirth, socialStrategy.startDate),
     70 * 12,
   )
   const filteredEarnings = earnings
-    .filter((record) => record.year < claimYear)
+    .filter((record) => record.year <= claimYear)
     .map((record) => ({
       year: record.year,
       amount: record.amount,
-      months: record.months,
+      months:
+        record.year === claimYear
+          ? Math.min(record.months, claimCutoffMonths)
+          : record.months,
       source: 'reported' as const,
     }))
   const lastEarningsYear = filteredEarnings.reduce(
@@ -209,7 +237,8 @@ export const buildSsaEstimate = ({
   const monthsByYear = new Map<number, number>()
   const sourceByYear = new Map<number, 'reported' | 'future'>()
   filteredEarnings.forEach((record) => {
-    earningsByYear.set(record.year, record.amount)
+    const monthsFraction = Math.max(0, Math.min(1, record.months / 12))
+    earningsByYear.set(record.year, record.amount * monthsFraction)
     monthsByYear.set(record.year, record.months)
     sourceByYear.set(record.year, record.source)
   })
@@ -229,22 +258,29 @@ export const buildSsaEstimate = ({
     }
     const effectiveStartYear = startYear ?? (Number.isFinite(lastEarningsYear) ? lastEarningsYear + 1 : endYear)
     for (let year = effectiveStartYear; year <= endYear; year += 1) {
+      const monthsInYear =
+        year === claimYear && hasClaimDate
+          ? getMonthsWorkedForYear(period, year, claimDate)
+          : getMonthsWorkedForYear(period, year)
+      if (monthsInYear === 0) {
+        continue
+      }
       const inflationFactor = Math.pow(1 + cpiRate, year - currentYear)
-      const inflatedGross = (period.salary + period.bonus) * inflationFactor
+      const proratedGross =
+        (period.salary + period.bonus) * inflationFactor * (monthsInYear / 12)
       const currentGross = grossByYear.get(year) ?? 0
-      grossByYear.set(year, currentGross + inflatedGross)
+      grossByYear.set(year, currentGross + proratedGross)
       const currentMonths = monthsWorkedByYear.get(year) ?? 0
-      monthsWorkedByYear.set(
-        year,
-        Math.min(12, currentMonths + getMonthsWorkedForYear(period, year)),
-      )
+      monthsWorkedByYear.set(year, Math.min(12, currentMonths + monthsInYear))
     }
   })
 
   grossByYear.forEach((gross, year) => {
-    if (year <= lastEarningsYear || year >= claimYear) {
+    if (year <= lastEarningsYear || year > claimYear) {
       return
     }
+    const monthsWorked = Math.min(12, monthsWorkedByYear.get(year) ?? 0)
+    const monthsFraction = monthsWorked / 12
     const preTax = preTaxItems
       .filter((item) =>
         isYearInRange(
@@ -257,18 +293,18 @@ export const buildSsaEstimate = ({
         (total, item) => total + toAnnualAmount(item, year, scenario.inflationAssumptions),
         0,
       )
-    earningsByYear.set(year, Math.max(0, gross - preTax))
-    monthsByYear.set(year, Math.max(1, monthsWorkedByYear.get(year) ?? 0))
+    earningsByYear.set(year, Math.max(0, gross - preTax * monthsFraction))
+    monthsByYear.set(year, monthsWorked)
     sourceByYear.set(year, 'future')
   })
 
-  const awiClaim = getAwiValue(claimYear, wageIndex, cpiRate)
+  const awiClaim = getAwiValue(claimYear - 2, wageIndex, cpiRate)
   if (!awiClaim) {
     return null
   }
 
   const indexedByYear = Array.from(earningsByYear.entries())
-    .filter(([year]) => year < claimYear)
+    .filter(([year]) => year <= claimYear)
     .map(([year, amount]) => {
       const awiYear = getAwiValue(year, wageIndex, cpiRate)
       if (!awiYear) {
@@ -315,7 +351,7 @@ export const buildSsaEstimate = ({
   }
 
   const earningsRows: SsaEstimateEarningsRow[] = Array.from(earningsByYear.entries())
-    .filter(([year]) => year < claimYear)
+    .filter(([year]) => year <= claimYear)
     .sort(([yearA], [yearB]) => yearA - yearB)
     .map(([year, amount]) => {
       const awiYear = getAwiValue(year, wageIndex, cpiRate)
