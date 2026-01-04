@@ -67,7 +67,8 @@ Core should not depend on UI.
 
 ## Data Model (current)
 
-Every entity has `id`, `createdAt`, and `updatedAt` fields. Relationships are stored by id.
+Most entities have `id`, `createdAt`, and `updatedAt` fields. Relationships are stored by id.
+Simulation runs are stored separately with `startedAt`/`finishedAt` timestamps.
 
 Key entities include:
 
@@ -84,6 +85,10 @@ Key entities include:
 - PersonStrategy
 - Scenario (references people, accounts, strategies, and funding choices)
 - SimulationRun
+- InflationDefault
+- SsaWageIndex
+- SsaBendPoint
+- SsaRetirementAdjustment
 
 ## Simulation (v0 deterministic)
 
@@ -100,7 +105,7 @@ Outputs:
 
 Database name: `replan`
 
-Tables (v2 schema):
+Tables (v6 schema):
 - `scenarios` (primary key `id`, index `updatedAt`)
 - `runs` (primary key `id`, indexes `scenarioId`, `finishedAt`)
 - `people` (primary key `id`, index `updatedAt`)
@@ -113,7 +118,11 @@ Tables (v2 schema):
 - `futureWorkPeriods` (primary key `id`, indexes `futureWorkStrategyId`, `startDate`)
 - `spendingStrategies` (primary key `id`, index `updatedAt`)
 - `spendingLineItems` (primary key `id`, indexes `spendingStrategyId`, `startDate`)
-- `personStrategies` (primary key `id`, index `personId`)
+- `personStrategies` (primary key `id`, indexes `personId`, `scenarioId`)
+- `inflationDefaults` (primary key `id`, index `type`)
+- `ssaWageIndex` (primary key `id`, index `year`)
+- `ssaBendPoints` (primary key `id`, index `year`)
+- `ssaRetirementAdjustments` (primary key `id`, indexes `birthYearStart`, `birthYearEnd`)
 
 The Dexie schema lives in `src/db/db.ts` and supports versioning/migrations.
 

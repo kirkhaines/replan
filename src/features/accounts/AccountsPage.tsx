@@ -81,6 +81,26 @@ const AccountsPage = () => {
     void loadAccounts()
   }, [loadAccounts])
 
+  const handleRemoveCash = async (accountId: string) => {
+    const confirmed = window.confirm('Remove this cash account?')
+    if (!confirmed) {
+      return
+    }
+    await storage.nonInvestmentAccountRepo.remove(accountId)
+    await loadAccounts()
+  }
+
+  const handleRemoveInvestment = async (accountId: string) => {
+    const confirmed = window.confirm('Remove this investment account?')
+    if (!confirmed) {
+      return
+    }
+    const holdings = await storage.investmentAccountHoldingRepo.listForAccount(accountId)
+    await Promise.all(holdings.map((holding) => storage.investmentAccountHoldingRepo.remove(holding.id)))
+    await storage.investmentAccountRepo.remove(accountId)
+    await loadAccounts()
+  }
+
   const handleCreateCash = async () => {
     const account = createNonInvestmentAccount()
     await storage.nonInvestmentAccountRepo.upsert(account)
@@ -125,6 +145,7 @@ const AccountsPage = () => {
                 <th>Name</th>
                 <th>Balance</th>
                 <th>Interest rate</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -141,6 +162,15 @@ const AccountsPage = () => {
                   </td>
                   <td>{formatCurrency(account.balance)}</td>
                   <td>{account.interestRate}</td>
+                  <td>
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={() => void handleRemoveCash(account.id)}
+                    >
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -160,6 +190,7 @@ const AccountsPage = () => {
               <tr>
                 <th>Name</th>
                 <th>Balance</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -175,6 +206,15 @@ const AccountsPage = () => {
                     </Link>
                   </td>
                   <td>{formatCurrency(investmentBalances[account.id] ?? 0)}</td>
+                  <td>
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={() => void handleRemoveInvestment(account.id)}
+                    >
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

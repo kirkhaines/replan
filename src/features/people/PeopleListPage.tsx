@@ -35,6 +35,15 @@ const PeopleListPage = () => {
     void loadPeople()
   }, [loadPeople])
 
+  const handleRemove = async (personId: string) => {
+    const confirmed = window.confirm('Remove this person?')
+    if (!confirmed) {
+      return
+    }
+    await storage.personRepo.remove(personId)
+    await loadPeople()
+  }
+
   const handleCreate = async () => {
     const person = createPerson()
     const now = Date.now()
@@ -104,6 +113,7 @@ const PeopleListPage = () => {
                 <th>Date of birth</th>
                 <th>Life expectancy</th>
                 <th>Updated</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -121,6 +131,15 @@ const PeopleListPage = () => {
                   <td>{person.dateOfBirth}</td>
                   <td>{person.lifeExpectancy}</td>
                   <td>{new Date(person.updatedAt).toLocaleDateString()}</td>
+                  <td>
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={() => void handleRemove(person.id)}
+                    >
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

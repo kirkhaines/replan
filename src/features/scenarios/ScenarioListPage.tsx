@@ -34,9 +34,30 @@ const ScenarioListPage = () => {
     void loadScenarios()
   }, [loadScenarios])
 
+  const handleRemove = async (scenarioId: string) => {
+    const confirmed = window.confirm('Remove this scenario?')
+    if (!confirmed) {
+      return
+    }
+    await storage.scenarioRepo.remove(scenarioId)
+    await loadScenarios()
+  }
+
   const columns = useMemo<ColumnDef<Scenario>[]>(
     () => [
-      { header: 'Name', accessorKey: 'name' },
+      {
+        header: 'Name',
+        accessorKey: 'name',
+        cell: ({ row }) => (
+          <Link
+            className="link"
+            to={`/scenarios/${row.original.id}`}
+            state={{ from: location.pathname }}
+          >
+            {row.original.name}
+          </Link>
+        ),
+      },
       {
         header: 'Updated',
         accessorKey: 'updatedAt',
@@ -45,17 +66,19 @@ const ScenarioListPage = () => {
       {
         header: 'Actions',
         cell: ({ row }) => (
-          <Link
-            className="link"
-            to={`/scenarios/${row.original.id}`}
-            state={{ from: location.pathname }}
-          >
-            Open
-          </Link>
+          <div className="button-row">
+            <button
+              className="link-button"
+              type="button"
+              onClick={() => void handleRemove(row.original.id)}
+            >
+              Remove
+            </button>
+          </div>
         ),
       },
     ],
-    [],
+    [handleRemove, location.pathname],
   )
 
   // eslint-disable-next-line react-hooks/incompatible-library
