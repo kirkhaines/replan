@@ -229,14 +229,14 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
   const socialSecurityStrategy: SocialSecurityStrategy = {
     id: '00000000-0000-4000-8000-000000000102',
     personId: person.id,
-    startAge: 67,
+    startDate: '2049-02-02',
     createdAt: now,
     updatedAt: now,
   }
   const socialSecurityStrategyTwo: SocialSecurityStrategy = {
     id: '00000000-0000-4000-8000-000000000202',
     personId: personTwo.id,
-    startAge: 66,
+    startDate: '2046-02-02',
     createdAt: now,
     updatedAt: now,
   }

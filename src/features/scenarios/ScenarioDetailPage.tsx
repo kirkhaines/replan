@@ -50,6 +50,39 @@ const ageFromDob = (dateOfBirth: string) => {
   return Math.max(0, Math.floor(years))
 }
 
+const addYearsToIsoDate = (isoDate: string, years: number) => {
+  const date = new Date(isoDate)
+  date.setFullYear(date.getFullYear() + years)
+  return date.toISOString().slice(0, 10)
+}
+
+const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
+  const birth = new Date(dateOfBirth)
+  const target = new Date(dateValue)
+  let months =
+    (target.getFullYear() - birth.getFullYear()) * 12 +
+    (target.getMonth() - birth.getMonth())
+  if (target.getDate() < birth.getDate()) {
+    months -= 1
+  }
+  return Math.max(0, Math.round((months / 12) * 10) / 10)
+}
+
+const normalizeSocialSecurityStrategy = (
+  strategy: SocialSecurityStrategy,
+  person: Person,
+): SocialSecurityStrategy => {
+  const legacy = strategy as SocialSecurityStrategy & { startAge?: number }
+  if (strategy.startDate) {
+    return strategy
+  }
+  const startAge = legacy.startAge ?? 67
+  return {
+    ...strategy,
+    startDate: addYearsToIsoDate(person.dateOfBirth, startAge),
+  }
+}
+
 const createCashAccount = (): NonInvestmentAccount => {
   const now = Date.now()
   return {
@@ -173,17 +206,20 @@ const buildInflationMap = (
 }
 
 const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
-    const scenario = {
-      ...values.scenario,
-      updatedAt: now,
-      spendingStrategyId: values.spendingStrategy.id,
-    }
+  const scenario = {
+    ...values.scenario,
+    updatedAt: now,
+    spendingStrategyId: values.spendingStrategy.id,
+  }
+  const { startAge: _startAge, ...socialStrategy } = values.socialSecurityStrategy as SocialSecurityStrategy & {
+    startAge?: number
+  }
 
   return {
     scenario,
     person: { ...values.person, updatedAt: now },
     socialSecurityStrategy: {
-      ...values.socialSecurityStrategy,
+      ...socialStrategy,
       updatedAt: now,
       personId: values.person.id,
     },
@@ -430,7 +466,11 @@ const ScenarioDetailPage = () => {
     ])
     setPeople(peopleData)
     setPersonStrategies(personStrategyData)
-    setSocialSecurityStrategies(socialSecurityData)
+    const normalizedSocial = socialSecurityData.map((strategy) => {
+      const person = peopleData.find((entry) => entry.id === strategy.personId)
+      return person ? normalizeSocialSecurityStrategy(strategy, person) : strategy
+    })
+    setSocialSecurityStrategies(normalizedSocial)
     setFutureWorkStrategies(futureWorkData)
     setSpendingStrategies(spendingStrategyData)
     setCashAccounts(cashData)
@@ -554,9 +594,10 @@ const ScenarioDetailPage = () => {
         return
       }
 
+      const normalizedSocial = normalizeSocialSecurityStrategy(socialSecurityStrategy, person)
       setValue('person', person, { shouldDirty: true })
       setValue('personStrategy', personStrategy, { shouldDirty: true })
-      setValue('socialSecurityStrategy', socialSecurityStrategy, { shouldDirty: true })
+      setValue('socialSecurityStrategy', normalizedSocial, { shouldDirty: true })
       setValue('futureWorkStrategy', futureWorkStrategy, { shouldDirty: true })
       setValue('futureWorkPeriod', futureWorkPeriods[0], { shouldDirty: true })
       setSelectionError(null)
@@ -625,20 +666,22 @@ const ScenarioDetailPage = () => {
       !socialSecurityStrategy ||
       !futureWorkStrategy ||
       futureWorkPeriods.length === 0 ||
-    spendingLineItems.length === 0 ||
-    investmentAccountHoldings.length === 0
-  ) {
+      spendingLineItems.length === 0 ||
+      investmentAccountHoldings.length === 0
+    ) {
       setLoadError('Scenario is missing linked data. Create a new scenario to continue.')
       setScenario(null)
-    setIsLoading(false)
-    return
-  }
+      setIsLoading(false)
+      return
+    }
+
+    const normalizedSocial = normalizeSocialSecurityStrategy(socialSecurityStrategy, person)
 
     const inflationAssumptions = buildInflationMap(inflationDefaults, data.inflationAssumptions)
     const bundle: ScenarioEditorValues = {
       scenario: { ...data, inflationAssumptions },
     person,
-    socialSecurityStrategy,
+    socialSecurityStrategy: normalizedSocial,
     futureWorkStrategy,
     futureWorkPeriod: futureWorkPeriods[0],
     spendingStrategy,
@@ -651,9 +694,9 @@ const ScenarioDetailPage = () => {
 
     setScenario({ ...data, inflationAssumptions })
     reset(bundle)
-  setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
-  setSelectionError(null)
-  setIsLoading(false)
+    setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
+    setSelectionError(null)
+    setIsLoading(false)
   }, [id, inflationDefaults, reset, storage])
 
   const loadRuns = useCallback(
@@ -740,7 +783,7 @@ const ScenarioDetailPage = () => {
     await storage.socialSecurityStrategyRepo.upsert({
       id: socialSecurityStrategyId,
       personId,
-      startAge: 67,
+      startDate: addYearsToIsoDate('1985-01-01', 67),
       createdAt: now,
       updatedAt: now,
     })
@@ -1012,6 +1055,7 @@ const ScenarioDetailPage = () => {
         <input type="hidden" {...register('person.lifeExpectancy', { valueAsNumber: true })} />
         <input type="hidden" {...register('socialSecurityStrategy.id')} />
         <input type="hidden" {...register('socialSecurityStrategy.personId')} />
+        <input type="hidden" {...register('socialSecurityStrategy.startDate')} />
         <input
           type="hidden"
           {...register('socialSecurityStrategy.createdAt', { valueAsNumber: true })}
@@ -1169,7 +1213,7 @@ const ScenarioDetailPage = () => {
                   <th>Person</th>
                   <th>Date of birth</th>
                   <th>Life expectancy</th>
-                  <th>Social Security age</th>
+                  <th>Social Security start</th>
                   <th>Work strategy</th>
                   <th>Actions</th>
                 </tr>
@@ -1196,7 +1240,14 @@ const ScenarioDetailPage = () => {
                       </td>
                       <td>{person?.dateOfBirth ?? '-'}</td>
                       <td>{person?.lifeExpectancy ?? '-'}</td>
-                      <td>{socialSecurity?.startAge ?? '-'}</td>
+                      <td>
+                        {person && socialSecurity?.startDate
+                          ? `${socialSecurity.startDate} (age ${getAgeInYearsAtDate(
+                              person.dateOfBirth,
+                              socialSecurity.startDate,
+                            )})`
+                          : '-'}
+                      </td>
                       <td>{futureWork?.name ?? '-'}</td>
                       <td>
                           <button

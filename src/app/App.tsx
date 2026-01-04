@@ -6,6 +6,7 @@ import RunResultsPage from '../features/runs/RunResultsPage'
 import PeopleListPage from '../features/people/PeopleListPage'
 import PeopleDetailPage from '../features/people/PeopleDetailPage'
 import PersonStrategyDetailPage from '../features/people/PersonStrategyDetailPage'
+import SsaBenefitDetailsPage from '../features/people/SsaBenefitDetailsPage'
 import FutureWorkPeriodDetailPage from '../features/people/FutureWorkPeriodDetailPage'
 import SpendingStrategyDetailPage from '../features/spending/SpendingStrategyDetailPage'
 import SpendingLineItemDetailPage from '../features/spending/SpendingLineItemDetailPage'
@@ -117,6 +118,7 @@ const AppShell = () => {
           <Route path="/people" element={<PeopleListPage />} />
           <Route path="/people/:id" element={<PeopleDetailPage />} />
           <Route path="/person-strategies/:id" element={<PersonStrategyDetailPage />} />
+          <Route path="/person-strategies/:id/ssa-benefit" element={<SsaBenefitDetailsPage />} />
           <Route path="/future-work-periods/:id" element={<FutureWorkPeriodDetailPage />} />
           <Route path="/spending-strategies/:id" element={<SpendingStrategyDetailPage />} />
           <Route path="/spending-line-items/:id" element={<SpendingLineItemDetailPage />} />

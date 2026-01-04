@@ -17,6 +17,12 @@ const createPerson = (): Person => {
   }
 }
 
+const addYearsToIsoDate = (isoDate: string, years: number) => {
+  const date = new Date(isoDate)
+  date.setFullYear(date.getFullYear() + years)
+  return date.toISOString().slice(0, 10)
+}
+
 const PeopleListPage = () => {
   const storage = useAppStore((state) => state.storage)
   const location = useLocation()
@@ -59,7 +65,7 @@ const PeopleListPage = () => {
     await storage.socialSecurityStrategyRepo.upsert({
       id: socialSecurityStrategyId,
       personId: person.id,
-      startAge: 67,
+      startDate: addYearsToIsoDate(person.dateOfBirth, 67),
       createdAt: now,
       updatedAt: now,
     })

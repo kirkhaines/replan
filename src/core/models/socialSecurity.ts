@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { baseEntitySchema } from './common'
+import { baseEntitySchema, isoDateStringSchema } from './common'
 
 export const socialSecurityEarningsSchema = baseEntitySchema.extend({
   personId: z.string().uuid(),
@@ -10,7 +10,7 @@ export const socialSecurityEarningsSchema = baseEntitySchema.extend({
 
 export const socialSecurityStrategySchema = baseEntitySchema.extend({
   personId: z.string().uuid(),
-  startAge: z.number().min(0),
+  startDate: isoDateStringSchema,
 })
 
 export type SocialSecurityEarnings = z.infer<typeof socialSecurityEarningsSchema>

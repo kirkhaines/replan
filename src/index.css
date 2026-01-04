@@ -253,6 +253,10 @@ h2 {
   background: var(--surface-muted);
 }
 
+.table tbody tr.table-row-highlight {
+  background: var(--surface-muted);
+}
+
 .row {
   display: flex;
   justify-content: space-between;

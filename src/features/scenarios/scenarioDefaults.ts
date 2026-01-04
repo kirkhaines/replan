@@ -30,6 +30,12 @@ export type ScenarioBundle = {
 
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
 
+const addYearsToIsoDate = (isoDate: string, years: number) => {
+  const date = new Date(isoDate)
+  date.setFullYear(date.getFullYear() + years)
+  return toIsoDate(date)
+}
+
 export const createDefaultScenarioBundle = (): ScenarioBundle => {
   const now = Date.now()
   const today = new Date()
@@ -62,7 +68,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
   const socialSecurityStrategy: SocialSecurityStrategy = {
     id: socialSecurityStrategyId,
     personId,
-    startAge: 67,
+    startDate: addYearsToIsoDate(person.dateOfBirth, 67),
     createdAt: now,
     updatedAt: now,
   }

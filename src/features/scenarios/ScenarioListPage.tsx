@@ -16,6 +16,12 @@ import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 const formatDate = (value: number) =>
   new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
+const addYearsToIsoDate = (isoDate: string, years: number) => {
+  const date = new Date(isoDate)
+  date.setFullYear(date.getFullYear() + years)
+  return date.toISOString().slice(0, 10)
+}
+
 const ScenarioListPage = () => {
   const storage = useAppStore((state) => state.storage)
   const navigate = useNavigate()
@@ -156,7 +162,7 @@ const ScenarioListPage = () => {
     await storage.socialSecurityStrategyRepo.upsert({
       id: socialSecurityStrategyId,
       personId: person.id,
-      startAge: 67,
+      startDate: addYearsToIsoDate(person.dateOfBirth, 67),
       createdAt: now,
       updatedAt: now,
     })

@@ -22,6 +22,34 @@ const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 
+const addMonthsToIsoDate = (isoDate: string, months: number) => {
+  const date = new Date(isoDate)
+  date.setMonth(date.getMonth() + months)
+  return toIsoDate(date)
+}
+
+const addYearsToIsoDate = (isoDate: string, years: number) => {
+  const date = new Date(isoDate)
+  date.setFullYear(date.getFullYear() + years)
+  return toIsoDate(date)
+}
+
+const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
+  const birth = new Date(dateOfBirth)
+  const target = new Date(dateValue)
+  let months =
+    (target.getFullYear() - birth.getFullYear()) * 12 +
+    (target.getMonth() - birth.getMonth())
+  if (target.getDate() < birth.getDate()) {
+    months -= 1
+  }
+  return Math.max(0, Math.round((months / 12) * 10) / 10)
+}
+
+const getStartDateFromAge = (dateOfBirth: string, ageYears: number) => {
+  const months = Math.round(ageYears * 12)
+  return addMonthsToIsoDate(dateOfBirth, months)
+}
 
 const PersonStrategyDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -50,6 +78,11 @@ const PersonStrategyDetailPage = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const selectedPerson = useMemo(
+    () => people.find((person) => person.id === selectedPersonId) ?? null,
+    [people, selectedPersonId],
+  )
+
   const filteredSocialStrategies = useMemo(
     () => socialStrategies.filter((strategy) => strategy.personId === selectedPersonId),
     [socialStrategies, selectedPersonId],
@@ -72,15 +105,37 @@ const PersonStrategyDetailPage = () => {
     [storage],
   )
 
-  const refreshStrategies = useCallback(async () => {
-    const [socialList, futureList] = await Promise.all([
-      storage.socialSecurityStrategyRepo.list(),
-      storage.futureWorkStrategyRepo.list(),
-    ])
-    setSocialStrategies(socialList)
-    setFutureWorkStrategies(futureList)
-    return { socialList, futureList }
-  }, [storage])
+  const normalizeSocialStrategy = useCallback(
+    (strategy: SocialSecurityStrategy, person: Person) => {
+      const legacy = strategy as SocialSecurityStrategy & { startAge?: number }
+      if (strategy.startDate) {
+        return strategy
+      }
+      const startAge = legacy.startAge ?? 67
+      return {
+        ...strategy,
+        startDate: addYearsToIsoDate(person.dateOfBirth, startAge),
+      }
+    },
+    [],
+  )
+
+  const refreshStrategies = useCallback(
+    async (peopleList: Person[] = people) => {
+      const [socialList, futureList] = await Promise.all([
+        storage.socialSecurityStrategyRepo.list(),
+        storage.futureWorkStrategyRepo.list(),
+      ])
+      const normalizedSocialList = socialList.map((strategy) => {
+        const person = peopleList.find((entry) => entry.id === strategy.personId)
+        return person ? normalizeSocialStrategy(strategy, person) : strategy
+      })
+      setSocialStrategies(normalizedSocialList)
+      setFutureWorkStrategies(futureList)
+      return { socialList: normalizedSocialList, futureList }
+    },
+    [normalizeSocialStrategy, people, storage],
+  )
 
   const loadData = useCallback(async () => {
     if (!id) {
@@ -94,7 +149,8 @@ const PersonStrategyDetailPage = () => {
     const [
       strategy,
       peopleList,
-      strategies,
+      socialList,
+      futureList,
       holdings,
       wageIndex,
       bendPoints,
@@ -102,7 +158,8 @@ const PersonStrategyDetailPage = () => {
     ] = await Promise.all([
       storage.personStrategyRepo.get(id),
       storage.personRepo.list(),
-      refreshStrategies(),
+      storage.socialSecurityStrategyRepo.list(),
+      storage.futureWorkStrategyRepo.list(),
       storage.investmentAccountHoldingRepo.list(),
       storage.ssaWageIndexRepo.list(),
       storage.ssaBendPointRepo.list(),
@@ -114,6 +171,12 @@ const PersonStrategyDetailPage = () => {
     setSsaWageIndex(wageIndex)
     setSsaBendPoints(bendPoints)
     setRetirementAdjustments(adjustmentList)
+    const normalizedSocialList = socialList.map((item) => {
+      const person = peopleList.find((entry) => entry.id === item.personId)
+      return person ? normalizeSocialStrategy(item, person) : item
+    })
+    setSocialStrategies(normalizedSocialList)
+    setFutureWorkStrategies(futureList)
 
     if (!strategy) {
       setPersonStrategy(null)
@@ -134,10 +197,12 @@ const PersonStrategyDetailPage = () => {
     setSelectedFutureWorkId(resolvedStrategy.futureWorkStrategyId)
 
     const social =
-      strategies.socialList.find((item) => item.id === resolvedStrategy.socialSecurityStrategyId) ??
+      normalizedSocialList.find(
+        (item) => item.id === resolvedStrategy.socialSecurityStrategyId,
+      ) ??
       null
     const future =
-      strategies.futureList.find((item) => item.id === resolvedStrategy.futureWorkStrategyId) ??
+      futureList.find((item) => item.id === resolvedStrategy.futureWorkStrategyId) ??
       null
     setSocialDraft(social)
     setFutureWorkDraft(future)
@@ -165,7 +230,7 @@ const PersonStrategyDetailPage = () => {
     setSsaEarnings(earnings)
     setSpendingLineItems(lineItems)
     setIsLoading(false)
-  }, [id, loadPeriods, refreshStrategies, scenarioIdFromState, storage])
+  }, [id, loadPeriods, normalizeSocialStrategy, scenarioIdFromState, storage])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -236,7 +301,7 @@ const PersonStrategyDetailPage = () => {
   }
 
   const handleAddSocialStrategy = async () => {
-    if (!selectedPersonId) {
+    if (!selectedPersonId || !selectedPerson) {
       setError('Select a person before adding a Social Security strategy.')
       return
     }
@@ -244,7 +309,7 @@ const PersonStrategyDetailPage = () => {
     const strategy: SocialSecurityStrategy = {
       id: createUuid(),
       personId: selectedPersonId,
-      startAge: 67,
+      startDate: addYearsToIsoDate(selectedPerson.dateOfBirth, 67),
       createdAt: now,
       updatedAt: now,
     }
@@ -285,7 +350,10 @@ const PersonStrategyDetailPage = () => {
       return
     }
     const now = Date.now()
-    const next = { ...socialDraft, updatedAt: now }
+    const { startAge: _startAge, ...rest } = socialDraft as SocialSecurityStrategy & {
+      startAge?: number
+    }
+    const next = { ...rest, updatedAt: now }
     await storage.socialSecurityStrategyRepo.upsert(next)
     setSocialDraft(next)
     await refreshStrategies()
@@ -401,6 +469,13 @@ const PersonStrategyDetailPage = () => {
     retirementAdjustments,
   ])
 
+  const socialStartAge = useMemo(() => {
+    if (!socialDraft || !selectedPerson) {
+      return null
+    }
+    return getAgeInYearsAtDate(selectedPerson.dateOfBirth, socialDraft.startDate)
+  }, [selectedPerson, socialDraft])
+
   if (isLoading) {
     return <p className="muted">Loading person strategy...</p>
   }
@@ -462,7 +537,12 @@ const PersonStrategyDetailPage = () => {
                 ) : null}
                 {filteredSocialStrategies.map((strategy) => (
                   <option key={strategy.id} value={strategy.id}>
-                    Start age {strategy.startAge}
+                    {strategy.startDate && selectedPerson
+                      ? `Start ${strategy.startDate} (age ${getAgeInYearsAtDate(
+                          selectedPerson.dateOfBirth,
+                          strategy.startDate,
+                        )})`
+                      : 'Start date not set'}
                   </option>
                 ))}
               </select>
@@ -476,13 +556,33 @@ const PersonStrategyDetailPage = () => {
             <div className="stack">
               <div className="form-grid">
                 <label className="field">
+                  <span>Start date</span>
+                  <input
+                    type="date"
+                    value={socialDraft.startDate}
+                    onChange={(event) =>
+                      setSocialDraft({ ...socialDraft, startDate: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="field">
                   <span>Start age</span>
                   <input
                     type="number"
-                    value={socialDraft.startAge}
-                    onChange={(event) =>
-                      setSocialDraft({ ...socialDraft, startAge: Number(event.target.value) })
-                    }
+                    value={socialStartAge ?? ''}
+                    onChange={(event) => {
+                      if (!selectedPerson) {
+                        return
+                      }
+                      const nextAge = Number(event.target.value)
+                      if (Number.isNaN(nextAge)) {
+                        return
+                      }
+                      setSocialDraft({
+                        ...socialDraft,
+                        startDate: getStartDateFromAge(selectedPerson.dateOfBirth, nextAge),
+                      })
+                    }}
                   />
                 </label>
                 <label className="field">
@@ -496,6 +596,18 @@ const PersonStrategyDetailPage = () => {
                     }
                   />
                 </label>
+                {socialSecurityEstimate ? (
+                  <label className="field">
+                    <span>Benefit details</span>
+                    <Link
+                      className="button secondary"
+                      to={`/person-strategies/${personStrategy.id}/ssa-benefit`}
+                      state={{ from: location.pathname }}
+                    >
+                      View calculation
+                    </Link>
+                  </label>
+                ) : null}
               </div>
               <div className="button-row">
                 <button className="button" type="button" onClick={handleSaveSocial}>

@@ -83,24 +83,6 @@ const FutureWorkPeriodDetailPage = () => {
           </label>
 
           <label className="field">
-            <span>Salary</span>
-            <input
-              type="number"
-              value={period.salary}
-              onChange={(event) => handleChange('salary', Number(event.target.value))}
-            />
-          </label>
-
-          <label className="field">
-            <span>Bonus</span>
-            <input
-              type="number"
-              value={period.bonus}
-              onChange={(event) => handleChange('bonus', Number(event.target.value))}
-            />
-          </label>
-
-          <label className="field">
             <span>Start date</span>
             <input
               type="date"
@@ -117,7 +99,29 @@ const FutureWorkPeriodDetailPage = () => {
               onChange={(event) => handleChange('endDate', event.target.value)}
             />
           </label>
+        </div>
 
+        <div className="form-grid">
+          <label className="field">
+            <span>Salary</span>
+            <input
+              type="number"
+              value={period.salary}
+              onChange={(event) => handleChange('salary', Number(event.target.value))}
+            />
+          </label>
+
+          <label className="field">
+            <span>Bonus</span>
+            <input
+              type="number"
+              value={period.bonus}
+              onChange={(event) => handleChange('bonus', Number(event.target.value))}
+            />
+          </label>
+        </div>
+
+        <div className="form-grid">
           <label className="field">
             <span>401k match pct cap</span>
             <input
@@ -158,7 +162,9 @@ const FutureWorkPeriodDetailPage = () => {
               ))}
             </select>
           </label>
+        </div>
 
+        <div className="form-grid">
           <label className="field">
             <span>Includes health insurance</span>
             <select
