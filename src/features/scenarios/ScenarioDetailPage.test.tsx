@@ -386,6 +386,7 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
   }
   const personStrategy: PersonStrategy = {
     id: '00000000-0000-4000-8000-000000000105',
+    scenarioId: '00000000-0000-4000-8000-000000009999',
     personId: person.id,
     futureWorkStrategyId: futureWorkStrategy.id,
     socialSecurityStrategyId: socialSecurityStrategy.id,
@@ -394,6 +395,7 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
   }
   const personStrategyTwo: PersonStrategy = {
     id: '00000000-0000-4000-8000-000000000205',
+    scenarioId: '00000000-0000-4000-8000-000000009999',
     personId: personTwo.id,
     futureWorkStrategyId: futureWorkStrategyTwo.id,
     socialSecurityStrategyId: socialSecurityStrategyTwo.id,

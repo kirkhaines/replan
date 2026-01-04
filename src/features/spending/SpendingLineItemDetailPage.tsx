@@ -30,10 +30,6 @@ const SpendingLineItemDetailPage = () => {
       setPeriods([])
       setHoldings([])
       setCategories([])
-      setStrategy(null)
-      setScenarios([])
-      setPersonStrategies([])
-      setFutureWorkStrategies([])
       setIsLoading(false)
       return
     }
@@ -41,14 +37,12 @@ const SpendingLineItemDetailPage = () => {
       allLineItems,
       scenarioList,
       allPersonStrategies,
-      allFutureWorkStrategies,
       allFutureWorkPeriods,
       allHoldings,
     ] = await Promise.all([
       storage.spendingLineItemRepo.listForStrategy(data.spendingStrategyId),
       storage.scenarioRepo.list(),
       storage.personStrategyRepo.list(),
-      storage.futureWorkStrategyRepo.list(),
       storage.futureWorkPeriodRepo.list(),
       storage.investmentAccountHoldingRepo.list(),
     ])

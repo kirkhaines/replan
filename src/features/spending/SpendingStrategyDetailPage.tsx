@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { SpendingLineItem, SpendingStrategy } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
@@ -17,30 +17,6 @@ const SpendingStrategyDetailPage = () => {
 
   const formatCurrency = (value: number) =>
     value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
-
-  const categoryOptions = useMemo(() => {
-    const baseCategories = [
-      'Housing',
-      'Utilities',
-      'Groceries',
-      'Transportation',
-      'Insurance',
-      'Healthcare',
-      'Debt',
-      'Savings',
-      'Entertainment',
-      'Travel',
-      'Education',
-      'Childcare',
-      'Taxes',
-      'Gifts',
-      'Charity',
-      'Other',
-    ]
-    const fromItems = lineItems.map((item) => item.category).filter(Boolean)
-    const unique = Array.from(new Set([...fromItems, ...baseCategories]))
-    return unique
-  }, [lineItems])
 
   const loadStrategy = useCallback(async () => {
     if (!id) {

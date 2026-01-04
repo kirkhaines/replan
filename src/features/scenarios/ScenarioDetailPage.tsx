@@ -194,15 +194,15 @@ const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountH
 
 const buildInflationMap = (
   defaults: InflationDefault[],
-  current?: Record<string, number>,
-): Record<string, number> => {
+  current?: Scenario['inflationAssumptions'],
+): Scenario['inflationAssumptions'] => {
   const fallback = defaults.length > 0 ? defaults : inflationDefaultsSeed
   return Object.fromEntries(
     inflationTypeSchema.options.map((type) => [
       type,
       current?.[type] ?? fallback.find((item) => item.type === type)?.rate ?? 0,
     ]),
-  )
+  ) as Scenario['inflationAssumptions']
 }
 
 const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
@@ -755,6 +755,10 @@ const ScenarioDetailPage = () => {
   }
 
   const handleAddPersonStrategy = async () => {
+    if (!scenario) {
+      setSelectionError('Scenario data is not loaded yet.')
+      return
+    }
     const holdingList = await storage.investmentAccountHoldingRepo.list()
     if (holdingList.length === 0) {
       setSelectionError('Create an investment account holding before adding a person strategy.')

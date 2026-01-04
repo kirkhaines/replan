@@ -226,8 +226,9 @@ const ScenarioListPage = () => {
       investmentAccountIds: [investmentAccount.id],
       spendingStrategyId,
       fundingStrategyType: 'pro_rata',
-      inflationAssumptions: Object.fromEntries(
-        inflationDefaultsSeed.map((seed) => [seed.type, seed.rate]),
+      inflationAssumptions: inflationDefaultsSeed.reduce<Scenario['inflationAssumptions']>(
+        (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
+        {} as Scenario['inflationAssumptions'],
       ),
     }
 

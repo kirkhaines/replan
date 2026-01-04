@@ -155,6 +155,21 @@ The Dexie schema lives in `src/db/db.ts` and supports versioning/migrations.
 - Node.js (LTS recommended)
 - pnpm
 
+Ubuntu (22.04+):
+```bash
+sudo apt-get update
+sudo apt-get install -y nodejs npm
+corepack enable
+corepack prepare pnpm@latest --activate
+```
+
+Windows (PowerShell):
+```powershell
+winget install OpenJS.NodeJS.LTS
+corepack enable
+corepack prepare pnpm@latest --activate
+```
+
 ### Install
 ```bash
 pnpm install
