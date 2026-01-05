@@ -458,7 +458,7 @@ const ScenarioDetailPage = () => {
         boundaries.add(start)
       }
       if (end !== null) {
-        boundaries.add(end + dayMs)
+        boundaries.add(end)
       }
     })
 
@@ -486,7 +486,7 @@ const ScenarioDetailPage = () => {
                 const start = parseDate(item.startDate)
                 const end = parseDate(item.endDate)
                 const startsBefore = start === null || sample >= start
-                const endsAfter = end === null || sample <= end + dayMs - 1
+                const endsAfter = end === null || sample < end
                 return startsBefore && endsAfter
               })
 

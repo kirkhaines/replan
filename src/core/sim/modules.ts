@@ -49,7 +49,7 @@ const isWithinRange = (dateIso: string, start?: string | null, end?: string | nu
   if (startDate && date < startDate) {
     return false
   }
-  if (endDate && date > endDate) {
+  if (endDate && date >= endDate) {
     return false
   }
   return true

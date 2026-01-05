@@ -50,8 +50,11 @@ const getMonthsWorkedForYear = (
   let months = 0
   for (let month = 0; month < 12; month += 1) {
     const monthStart = new Date(year, month, 1)
-    const monthEnd = new Date(year, month + 1, 0)
-    if (monthEnd < start || monthStart > end) {
+    const monthEnd = new Date(year, month + 1, 1)
+    if (monthEnd <= start) {
+      continue
+    }
+    if (monthStart >= end) {
       continue
     }
     if (cutoffDate && monthStart >= cutoffDate) {
@@ -76,6 +79,35 @@ const getMonthsBeforeDateInYear = (year: number, cutoffDate: Date) => {
   }
   return months
 }
+
+
+const getMonthsActiveForSpendingItemInYear = (
+  item: SpendingLineItem,
+  year: number,
+  cutoffDate?: Date,
+) => {
+  const startRaw = item.startDate ? new Date(item.startDate) : null
+  const endRaw = item.endDate ? new Date(item.endDate) : null
+  const start = startRaw && !Number.isNaN(startRaw.getTime()) ? startRaw : new Date(year, 0, 1)
+  const end = endRaw && !Number.isNaN(endRaw.getTime()) ? endRaw : null
+  let months = 0
+  for (let month = 0; month < 12; month += 1) {
+    const monthStart = new Date(year, month, 1)
+    const monthEnd = new Date(year, month + 1, 1)
+    if (monthEnd <= start) {
+      continue
+    }
+    if (end && monthStart >= end) {
+      continue
+    }
+    if (cutoffDate && monthStart >= cutoffDate) {
+      continue
+    }
+    months += 1
+  }
+  return months
+}
+
 
 export type SsaEstimateEarningsRow = {
   year: number
@@ -160,16 +192,6 @@ const getBendPoints = (year: number, records: SsaBendPoint[], cpiRate: number) =
   }
   const previous = [...sorted].reverse().find((record) => record.year < year)
   return previous ?? min
-}
-
-const isYearInRange = (year: number, start: number | null, end: number | null) => {
-  if (start !== null && year < start) {
-    return false
-  }
-  if (end !== null && year > end) {
-    return false
-  }
-  return true
 }
 
 const toAnnualAmount = (
@@ -280,20 +302,17 @@ export const buildSsaEstimate = ({
       return
     }
     const monthsWorked = Math.min(12, monthsWorkedByYear.get(year) ?? 0)
-    const monthsFraction = monthsWorked / 12
-    const preTax = preTaxItems
-      .filter((item) =>
-        isYearInRange(
-          year,
-          getYearFromIsoDate(item.startDate),
-          getYearFromIsoDate(item.endDate),
-        ),
-      )
-      .reduce(
-        (total, item) => total + toAnnualAmount(item, year, scenario.inflationAssumptions),
-        0,
-      )
-    earningsByYear.set(year, Math.max(0, gross - preTax * monthsFraction))
+    const cutoff = year === claimYear && hasClaimDate ? claimDate : undefined
+    const preTax = preTaxItems.reduce((total, item) => {
+      const monthsActive = getMonthsActiveForSpendingItemInYear(item, year, cutoff)
+      if (monthsActive <= 0) {
+        return total
+      }
+      const annual = toAnnualAmount(item, year, scenario.inflationAssumptions)
+      const cappedMonths = Math.min(monthsActive, monthsWorked)
+      return total + annual * (cappedMonths / 12)
+    }, 0)
+    earningsByYear.set(year, Math.max(0, gross - preTax))
     monthsByYear.set(year, monthsWorked)
     sourceByYear.set(year, 'future')
   })
