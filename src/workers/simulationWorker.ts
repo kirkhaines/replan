@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { runSimulation } from '../core/sim/engine'
 import {
-  buildSimulationInputFromSnapshot,
+  buildSimulationInputFromRequest,
   simulationRequestSchema,
 } from '../core/sim/input'
 import type { RunScenarioRequest, RunScenarioResponse } from '../core/simClient/types'
@@ -39,7 +39,7 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
     return
   }
 
-  const simulationInput = buildSimulationInputFromSnapshot(parsed.data.snapshot)
+  const simulationInput = buildSimulationInputFromRequest(parsed.data)
   if (!simulationInput) {
     const response: RunScenarioResponse = {
       type: 'runScenarioResult',

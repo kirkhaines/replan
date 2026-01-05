@@ -1047,7 +1047,11 @@ const ScenarioDetailPage = () => {
       storage,
       normalizeSocialSecurityStrategy,
     )
-    const input: SimulationRequest = { snapshot }
+    const input: SimulationRequest = {
+      snapshot,
+      // Default to today's date until scenarios have a configurable start date.
+      startDate: new Date().toISOString().slice(0, 10),
+    }
     const run = await simClient.runScenario(input)
     await storage.runRepo.add(run)
     await loadRuns(saved.scenario.id)
