@@ -11,6 +11,15 @@ import { now } from '../utils/time'
 import { createUuid } from '../utils/uuid'
 
 const loadLocalScenarioSeed = (): LocalScenarioSeed | null => {
+  const jsonModules = import.meta.glob('./localSeed.json', { eager: true })
+  const jsonValues = Object.values(jsonModules) as Array<{
+    default?: LocalScenarioSeed
+  }>
+  const jsonSeed = jsonValues[0]?.default
+  if (jsonSeed) {
+    return jsonSeed
+  }
+
   const modules = import.meta.glob('./localSeed.{ts,js}', { eager: true })
   const values = Object.values(modules) as Array<{
     localScenarioSeed?: LocalScenarioSeed

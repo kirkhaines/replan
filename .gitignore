@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 src/core/defaults/localSeed.ts
+src/core/defaults/localSeed.json
 
 # Editor directories and files
 .vscode/*
