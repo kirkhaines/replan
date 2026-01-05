@@ -4,6 +4,9 @@ import type {
   SsaBendPoint,
   SsaRetirementAdjustment,
   SsaWageIndex,
+  TaxPolicy,
+  IrmaaTable,
+  RmdTableEntry,
 } from '../models'
 
 export const inflationDefaultsSeed: Array<Pick<InflationDefault, 'type' | 'rate'>> = [
@@ -141,3 +144,149 @@ export const ssaRetirementAdjustmentSeed: Array<
   { birthYearStart: 1959, birthYearEnd: 1959, normalRetirementAgeMonths: 66 * 12 + 10, delayedRetirementCreditPerYear: 0.08 },
   { birthYearStart: 1960, birthYearEnd: 9999, normalRetirementAgeMonths: 67 * 12, delayedRetirementCreditPerYear: 0.08 },
 ]
+
+export const taxPolicySeed: TaxPolicy[] = [
+  {
+    year: 2024,
+    filingStatus: 'single',
+    standardDeduction: 14600,
+    ordinaryBrackets: [
+      { upTo: 11600, rate: 0.1 },
+      { upTo: 47150, rate: 0.12 },
+      { upTo: 100525, rate: 0.22 },
+      { upTo: 191950, rate: 0.24 },
+      { upTo: 243725, rate: 0.32 },
+      { upTo: 609350, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 47025, rate: 0 },
+      { upTo: 518900, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  },
+  {
+    year: 2024,
+    filingStatus: 'married_joint',
+    standardDeduction: 29200,
+    ordinaryBrackets: [
+      { upTo: 23200, rate: 0.1 },
+      { upTo: 94300, rate: 0.12 },
+      { upTo: 201050, rate: 0.22 },
+      { upTo: 383900, rate: 0.24 },
+      { upTo: 487450, rate: 0.32 },
+      { upTo: 731200, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 94050, rate: 0 },
+      { upTo: 583750, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  },
+  {
+    year: 2024,
+    filingStatus: 'married_separate',
+    standardDeduction: 14600,
+    ordinaryBrackets: [
+      { upTo: 11600, rate: 0.1 },
+      { upTo: 47150, rate: 0.12 },
+      { upTo: 100525, rate: 0.22 },
+      { upTo: 191950, rate: 0.24 },
+      { upTo: 243725, rate: 0.32 },
+      { upTo: 365600, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 47025, rate: 0 },
+      { upTo: 291850, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  },
+  {
+    year: 2024,
+    filingStatus: 'head_of_household',
+    standardDeduction: 21900,
+    ordinaryBrackets: [
+      { upTo: 16550, rate: 0.1 },
+      { upTo: 63100, rate: 0.12 },
+      { upTo: 100500, rate: 0.22 },
+      { upTo: 191950, rate: 0.24 },
+      { upTo: 243700, rate: 0.32 },
+      { upTo: 609350, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 63000, rate: 0 },
+      { upTo: 551350, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  },
+]
+
+export const irmaaTableSeed: IrmaaTable[] = [
+  {
+    year: 2024,
+    filingStatus: 'single',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 103000, partBMonthly: 174.7, partDMonthly: 0 },
+      { maxMagi: 129000, partBMonthly: 244.6, partDMonthly: 12.9 },
+      { maxMagi: 161000, partBMonthly: 349.4, partDMonthly: 33.3 },
+      { maxMagi: 193000, partBMonthly: 454.2, partDMonthly: 53.8 },
+      { maxMagi: 500000, partBMonthly: 559, partDMonthly: 74.2 },
+      { maxMagi: null, partBMonthly: 594, partDMonthly: 81 },
+    ],
+  },
+  {
+    year: 2024,
+    filingStatus: 'married_joint',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 206000, partBMonthly: 174.7, partDMonthly: 0 },
+      { maxMagi: 258000, partBMonthly: 244.6, partDMonthly: 12.9 },
+      { maxMagi: 322000, partBMonthly: 349.4, partDMonthly: 33.3 },
+      { maxMagi: 386000, partBMonthly: 454.2, partDMonthly: 53.8 },
+      { maxMagi: 750000, partBMonthly: 559, partDMonthly: 74.2 },
+      { maxMagi: null, partBMonthly: 594, partDMonthly: 81 },
+    ],
+  },
+  {
+    year: 2024,
+    filingStatus: 'married_separate',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 103000, partBMonthly: 174.7, partDMonthly: 0 },
+      { maxMagi: 129000, partBMonthly: 244.6, partDMonthly: 12.9 },
+      { maxMagi: 161000, partBMonthly: 349.4, partDMonthly: 33.3 },
+      { maxMagi: 193000, partBMonthly: 454.2, partDMonthly: 53.8 },
+      { maxMagi: 500000, partBMonthly: 559, partDMonthly: 74.2 },
+      { maxMagi: null, partBMonthly: 594, partDMonthly: 81 },
+    ],
+  },
+  {
+    year: 2024,
+    filingStatus: 'head_of_household',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 103000, partBMonthly: 174.7, partDMonthly: 0 },
+      { maxMagi: 129000, partBMonthly: 244.6, partDMonthly: 12.9 },
+      { maxMagi: 161000, partBMonthly: 349.4, partDMonthly: 33.3 },
+      { maxMagi: 193000, partBMonthly: 454.2, partDMonthly: 53.8 },
+      { maxMagi: 500000, partBMonthly: 559, partDMonthly: 74.2 },
+      { maxMagi: null, partBMonthly: 594, partDMonthly: 81 },
+    ],
+  },
+]
+
+const buildRmdTableSeed = () => {
+  const table: RmdTableEntry[] = []
+  let divisor = 26.5
+  for (let age = 73; age <= 100; age += 1) {
+    table.push({ age, divisor })
+    divisor = Math.max(1, divisor - 1)
+  }
+  return table
+}
+
+export const rmdTableSeed: RmdTableEntry[] = buildRmdTableSeed()

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { baseEntitySchema } from './common'
 import { fundingStrategyTypeSchema, inflationTypeSchema } from './enums'
+import { scenarioStrategiesSchema } from './scenarioStrategies'
 
 const inflationAssumptionsSchema = z.object(
   Object.fromEntries(
@@ -16,6 +17,7 @@ export const scenarioSchema = baseEntitySchema.extend({
   spendingStrategyId: z.string().uuid(),
   fundingStrategyType: fundingStrategyTypeSchema,
   inflationAssumptions: inflationAssumptionsSchema,
+  strategies: scenarioStrategiesSchema,
 })
 
 export type Scenario = z.infer<typeof scenarioSchema>

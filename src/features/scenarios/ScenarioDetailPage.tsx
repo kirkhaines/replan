@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useFieldArray, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -17,6 +17,9 @@ import {
   personStrategySchema,
   fundingStrategyTypeSchema,
   inflationTypeSchema,
+  taxTypeSchema,
+  taxTreatmentSchema,
+  normalizeScenarioStrategies,
   type InflationDefault,
   type Scenario,
   type SimulationRun,
@@ -38,7 +41,12 @@ import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
-import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
+import {
+  inflationDefaultsSeed,
+  taxPolicySeed,
+  irmaaTableSeed,
+  rmdTableSeed,
+} from '../../core/defaults/defaultData'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -152,9 +160,13 @@ const buildSimulationSnapshot = async (
   storage: StorageClient,
   normalizeSocial: (strategy: SocialSecurityStrategy, person: Person) => SocialSecurityStrategy,
 ): Promise<SimulationSnapshot> => {
+  const normalizedScenario = {
+    ...scenario,
+    strategies: normalizeScenarioStrategies(scenario.strategies),
+  }
   const personStrategies = (
     await Promise.all(
-      scenario.personStrategyIds.map((id) => storage.personStrategyRepo.get(id)),
+      normalizedScenario.personStrategyIds.map((id) => storage.personStrategyRepo.get(id)),
     )
   ).filter(isDefined)
 
@@ -198,7 +210,7 @@ const buildSimulationSnapshot = async (
   ).flat()
 
   const spendingStrategy = await storage.spendingStrategyRepo.get(
-    scenario.spendingStrategyId,
+    normalizedScenario.spendingStrategyId,
   )
   const spendingStrategies = spendingStrategy ? [spendingStrategy] : []
   const spendingLineItems = spendingStrategy
@@ -207,13 +219,17 @@ const buildSimulationSnapshot = async (
 
   const nonInvestmentAccounts = (
     await Promise.all(
-      scenario.nonInvestmentAccountIds.map((id) => storage.nonInvestmentAccountRepo.get(id)),
+      normalizedScenario.nonInvestmentAccountIds.map((id) =>
+        storage.nonInvestmentAccountRepo.get(id),
+      ),
     )
   ).filter(isDefined)
 
   const investmentAccounts = (
     await Promise.all(
-      scenario.investmentAccountIds.map((id) => storage.investmentAccountRepo.get(id)),
+      normalizedScenario.investmentAccountIds.map((id) =>
+        storage.investmentAccountRepo.get(id),
+      ),
     )
   ).filter(isDefined)
 
@@ -232,7 +248,7 @@ const buildSimulationSnapshot = async (
   ])
 
   return {
-    scenario,
+    scenario: normalizedScenario,
     people,
     personStrategies,
     socialSecurityStrategies,
@@ -247,6 +263,9 @@ const buildSimulationSnapshot = async (
     ssaWageIndex,
     ssaBendPoints,
     ssaRetirementAdjustments,
+    taxPolicies: taxPolicySeed,
+    irmaaTables: irmaaTableSeed,
+    rmdTable: rmdTableSeed,
   }
 }
 
@@ -388,6 +407,7 @@ const ScenarioDetailPage = () => {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setValue,
@@ -403,6 +423,18 @@ const ScenarioDetailPage = () => {
   const personStrategyIds = watch('scenario.personStrategyIds')
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
   const investmentAccountIds = watch('scenario.investmentAccountIds')
+  const glidepathTargets = useFieldArray({
+    control,
+    name: 'scenario.strategies.glidepath.targets',
+  })
+  const eventFields = useFieldArray({
+    control,
+    name: 'scenario.strategies.events',
+  })
+  const pensionFields = useFieldArray({
+    control,
+    name: 'scenario.strategies.pensions',
+  })
 
   const spendingSummaryRows = useMemo(() => {
     if (spendingLineItems.length === 0) {
@@ -750,21 +782,26 @@ const ScenarioDetailPage = () => {
     const normalizedSocial = normalizeSocialSecurityStrategy(socialSecurityStrategy, person)
 
     const inflationAssumptions = buildInflationMap(inflationDefaults, data.inflationAssumptions)
+    const normalizedScenario = {
+      ...data,
+      inflationAssumptions,
+      strategies: normalizeScenarioStrategies(data.strategies),
+    }
     const bundle: ScenarioEditorValues = {
-      scenario: { ...data, inflationAssumptions },
-    person,
-    socialSecurityStrategy: normalizedSocial,
-    futureWorkStrategy,
-    futureWorkPeriod: futureWorkPeriods[0],
-    spendingStrategy,
-    spendingLineItem: normalizeSpendingLineItem(spendingLineItems[0]),
-    nonInvestmentAccount,
-    investmentAccount,
-    investmentAccountHolding: investmentAccountHoldings[0],
-    personStrategy,
-  }
+      scenario: normalizedScenario,
+      person,
+      socialSecurityStrategy: normalizedSocial,
+      futureWorkStrategy,
+      futureWorkPeriod: futureWorkPeriods[0],
+      spendingStrategy,
+      spendingLineItem: normalizeSpendingLineItem(spendingLineItems[0]),
+      nonInvestmentAccount,
+      investmentAccount,
+      investmentAccountHolding: investmentAccountHoldings[0],
+      personStrategy,
+    }
 
-    setScenario({ ...data, inflationAssumptions })
+    setScenario(normalizedScenario)
     reset(bundle)
     setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
     setSelectionError(null)
@@ -780,18 +817,15 @@ const ScenarioDetailPage = () => {
   )
 
   useEffect(() => {
-     
     void loadReferenceData()
   }, [loadReferenceData])
 
   useEffect(() => {
-     
     void loadScenario()
   }, [loadScenario])
 
   useEffect(() => {
     if (scenario?.id) {
-       
       void loadRuns(scenario.id)
     }
   }, [loadRuns, scenario?.id])
@@ -1533,6 +1567,883 @@ const ScenarioDetailPage = () => {
                 </label>
               )
             })}
+          </div>
+        </div>
+
+        <div className="stack">
+          <div className="row">
+            <h2>Simulation strategies</h2>
+          </div>
+
+          <div className="stack">
+            <h3>Market and allocation</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Return model</span>
+                <select {...register('scenario.strategies.returnModel.mode')}>
+                  <option value="deterministic">Deterministic</option>
+                  <option value="stochastic">Stochastic</option>
+                  <option value="historical">Historical</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Sequence model</span>
+                <select {...register('scenario.strategies.returnModel.sequenceModel')}>
+                  <option value="independent">Independent</option>
+                  <option value="regime">Regime</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Volatility scale</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.returnModel.volatilityScale', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Correlation model</span>
+                <select {...register('scenario.strategies.returnModel.correlationModel')}>
+                  <option value="none">None</option>
+                  <option value="asset_class">Asset class</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Cash yield rate</span>
+                <input
+                  type="number"
+                  step="0.001"
+                  {...register('scenario.strategies.returnModel.cashYieldRate', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Return seed</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.returnModel.seed', {
+                    setValueAs: (value) => (value === '' ? undefined : Number(value)),
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Glidepath mode</span>
+                <select {...register('scenario.strategies.glidepath.mode')}>
+                  <option value="age">Age</option>
+                  <option value="year">Year</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Glidepath scope</span>
+                <select {...register('scenario.strategies.glidepath.scope')}>
+                  <option value="global">Global</option>
+                  <option value="per_account">Per account</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="stack">
+              <div className="row">
+                <h3>Glidepath targets</h3>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() =>
+                    glidepathTargets.append({
+                      age: 65,
+                      equity: 0.6,
+                      bonds: 0.3,
+                      cash: 0.05,
+                      realEstate: 0.05,
+                      other: 0,
+                    })
+                  }
+                >
+                  Add target
+                </button>
+              </div>
+              {glidepathTargets.fields.length === 0 ? (
+                <p className="muted">No glidepath targets yet.</p>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Age</th>
+                      <th>Equity</th>
+                      <th>Bonds</th>
+                      <th>Cash</th>
+                      <th>Real estate</th>
+                      <th>Other</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {glidepathTargets.fields.map((field, index) => (
+                      <tr key={field.id}>
+                        <td>
+                          <input
+                            type="number"
+                            {...register(
+                              `scenario.strategies.glidepath.targets.${index}.age`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register(
+                              `scenario.strategies.glidepath.targets.${index}.equity`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register(
+                              `scenario.strategies.glidepath.targets.${index}.bonds`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register(
+                              `scenario.strategies.glidepath.targets.${index}.cash`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register(
+                              `scenario.strategies.glidepath.targets.${index}.realEstate`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            {...register(
+                              `scenario.strategies.glidepath.targets.${index}.other`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            className="link-button"
+                            type="button"
+                            disabled={glidepathTargets.fields.length <= 1}
+                            onClick={() => glidepathTargets.remove(index)}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="form-grid">
+              <label className="field">
+                <span>Rebalance frequency</span>
+                <select {...register('scenario.strategies.rebalancing.frequency')}>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="annual">Annual</option>
+                  <option value="threshold">Threshold</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Drift threshold</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.rebalancing.driftThreshold', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Min trade amount</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rebalancing.minTradeAmount', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rebalancing.useContributions')} />
+                <span>Use contributions first</span>
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rebalancing.taxAware')} />
+                <span>Tax aware</span>
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field">
+                <span>Cash buffer target (months)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.cashBuffer.targetMonths', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Cash buffer min (months)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.cashBuffer.minMonths', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Cash buffer max (months)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.cashBuffer.maxMonths', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Refill priority</span>
+                <select {...register('scenario.strategies.cashBuffer.refillPriority')}>
+                  <option value="taxable_first">Taxable first</option>
+                  <option value="tax_deferred_first">Tax deferred first</option>
+                  <option value="pro_rata">Pro rata</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Withdrawals and conversions</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Withdrawal order 1</span>
+                <select {...register('scenario.strategies.withdrawal.order.0')}>
+                  {taxTypeSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Withdrawal order 2</span>
+                <select {...register('scenario.strategies.withdrawal.order.1')}>
+                  {taxTypeSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Withdrawal order 3</span>
+                <select {...register('scenario.strategies.withdrawal.order.2')}>
+                  {taxTypeSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Withdrawal order 4</span>
+                <select {...register('scenario.strategies.withdrawal.order.3')}>
+                  {taxTypeSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.withdrawal.useCashFirst')} />
+                <span>Use cash first</span>
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.withdrawal.avoidEarlyPenalty')}
+                />
+                <span>Avoid early penalties</span>
+              </label>
+              <label className="field">
+                <span>Guardrail percent</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.withdrawal.guardrailPct', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Taxable gain harvest target</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.withdrawal.taxableGainHarvestTarget', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field">
+                <span>Cost basis method</span>
+                <select {...register('scenario.strategies.taxableLot.costBasisMethod')}>
+                  <option value="average">Average</option>
+                  <option value="fifo">FIFO</option>
+                  <option value="lifo">LIFO</option>
+                </select>
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.taxableLot.harvestLosses')} />
+                <span>Harvest losses</span>
+              </label>
+              <label className="field">
+                <span>Gain realization target</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.taxableLot.gainRealizationTarget', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.earlyRetirement.useRothBasisFirst')}
+                />
+                <span>Use Roth basis first</span>
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.earlyRetirement.allowPenalty')}
+                />
+                <span>Allow early penalties</span>
+              </label>
+              <label className="field">
+                <span>Penalty rate</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.earlyRetirement.penaltyRate', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.earlyRetirement.use72t')} />
+                <span>Use 72(t)</span>
+              </label>
+              <label className="field">
+                <span>Bridge cash years</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.earlyRetirement.bridgeCashYears', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rothConversion.enabled')} />
+                <span>Enable Roth conversions</span>
+              </label>
+              <label className="field">
+                <span>Conversion start age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.startAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Conversion end age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.endAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Target ordinary income</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.targetOrdinaryIncome', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Min conversion</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.minConversion', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Max conversion</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.maxConversion', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.rothConversion.respectIrmaa')}
+                />
+                <span>Respect IRMAA</span>
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rothLadder.enabled')} />
+                <span>Enable Roth ladder</span>
+              </label>
+              <label className="field">
+                <span>Ladder lead time (years)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.leadTimeYears', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Ladder start age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.startAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Ladder end age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.endAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Target after-tax spending</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.targetAfterTaxSpending', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Annual conversion</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.annualConversion', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rmd.enabled')} />
+                <span>Apply RMDs</span>
+              </label>
+              <label className="field">
+                <span>RMD start age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rmd.startAge', { valueAsNumber: true })}
+                />
+              </label>
+              <label className="field">
+                <span>Excess handling</span>
+                <select {...register('scenario.strategies.rmd.excessHandling')}>
+                  <option value="spend">Spend</option>
+                  <option value="taxable">Taxable</option>
+                  <option value="roth">Roth</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Withholding rate</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.rmd.withholdingRate', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <div className="field">
+                <span>RMD account types</span>
+                <div className="line-item-flags">
+                  {taxTypeSchema.options.map((taxType) => (
+                    <label className="field checkbox" key={taxType}>
+                      <input
+                        type="checkbox"
+                        value={taxType}
+                        {...register('scenario.strategies.rmd.accountTypes')}
+                      />
+                      <span>{taxType}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Taxes, healthcare, and giving</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Filing status</span>
+                <select {...register('scenario.strategies.tax.filingStatus')}>
+                  <option value="single">Single</option>
+                  <option value="married_joint">Married filing jointly</option>
+                  <option value="married_separate">Married filing separately</option>
+                  <option value="head_of_household">Head of household</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Policy year</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.tax.policyYear', { valueAsNumber: true })}
+                />
+              </label>
+              <label className="field">
+                <span>State tax rate</span>
+                <input
+                  type="number"
+                  step="0.001"
+                  {...register('scenario.strategies.tax.stateTaxRate', { valueAsNumber: true })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.tax.useStandardDeduction')} />
+                <span>Use standard deduction</span>
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.tax.applyCapitalGainsRates')}
+                />
+                <span>Apply capital gains rates</span>
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field">
+                <span>Pre-Medicare premium</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.healthcare.preMedicareMonthly', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Medicare Part B</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.healthcare.medicarePartBMonthly', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Medicare Part D</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.healthcare.medicarePartDMonthly', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Medigap / MA plan</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.healthcare.medigapMonthly', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Health inflation</span>
+                <select {...register('scenario.strategies.healthcare.inflationType')}>
+                  {inflationTypeSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.healthcare.applyIrmaa')} />
+                <span>Apply IRMAA</span>
+              </label>
+            </div>
+
+            <div className="form-grid">
+              <label className="field">
+                <span>Annual giving</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.charitable.annualGiving', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Giving start age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.charitable.startAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Giving end age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.charitable.endAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.charitable.useQcd')} />
+                <span>Use QCD</span>
+              </label>
+              <label className="field">
+                <span>QCD annual amount</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.charitable.qcdAnnualAmount', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <div className="row">
+              <h3>Events</h3>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => {
+                  const today = new Date().toISOString().slice(0, 10)
+                  eventFields.append({
+                    id: createUuid(),
+                    name: 'Event',
+                    date: today,
+                    amount: 0,
+                    taxTreatment: 'none',
+                  })
+                }}
+              >
+                Add event
+              </button>
+            </div>
+            {eventFields.fields.length === 0 ? (
+              <p className="muted">No events yet.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Tax treatment</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {eventFields.fields.map((field, index) => (
+                    <tr key={field.id}>
+                      <td>
+                        <input
+                          type="hidden"
+                          {...register(`scenario.strategies.events.${index}.id`)}
+                        />
+                        <input {...register(`scenario.strategies.events.${index}.name`)} />
+                      </td>
+                      <td>
+                        <input type="date" {...register(`scenario.strategies.events.${index}.date`)} />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          {...register(`scenario.strategies.events.${index}.amount`, {
+                            valueAsNumber: true,
+                          })}
+                        />
+                      </td>
+                      <td>
+                        <select {...register(`scenario.strategies.events.${index}.taxTreatment`)}>
+                          {taxTreatmentSchema.options.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => eventFields.remove(index)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="stack">
+            <div className="row">
+              <h3>Pensions</h3>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => {
+                  const today = new Date().toISOString().slice(0, 10)
+                  pensionFields.append({
+                    id: createUuid(),
+                    name: 'Pension',
+                    startDate: today,
+                    endDate: '',
+                    monthlyAmount: 0,
+                    inflationType: 'cpi',
+                    taxTreatment: 'ordinary',
+                  })
+                }}
+              >
+                Add pension
+              </button>
+            </div>
+            {pensionFields.fields.length === 0 ? (
+              <p className="muted">No pensions yet.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Monthly</th>
+                    <th>Inflation</th>
+                    <th>Tax</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pensionFields.fields.map((field, index) => (
+                    <tr key={field.id}>
+                      <td>
+                        <input
+                          type="hidden"
+                          {...register(`scenario.strategies.pensions.${index}.id`)}
+                        />
+                        <input {...register(`scenario.strategies.pensions.${index}.name`)} />
+                      </td>
+                      <td>
+                        <input type="date" {...register(`scenario.strategies.pensions.${index}.startDate`)} />
+                      </td>
+                      <td>
+                        <input type="date" {...register(`scenario.strategies.pensions.${index}.endDate`)} />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          {...register(`scenario.strategies.pensions.${index}.monthlyAmount`, {
+                            valueAsNumber: true,
+                          })}
+                        />
+                      </td>
+                      <td>
+                        <select {...register(`scenario.strategies.pensions.${index}.inflationType`)}>
+                          {inflationTypeSchema.options.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select {...register(`scenario.strategies.pensions.${index}.taxTreatment`)}>
+                          {taxTreatmentSchema.options.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => pensionFields.remove(index)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 

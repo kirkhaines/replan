@@ -12,6 +12,7 @@ import type {
   InvestmentAccountHolding,
   PersonStrategy,
 } from '../../core/models'
+import { createDefaultScenarioStrategies } from '../../core/models'
 import { createUuid } from '../../core/utils/uuid'
 import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 
@@ -199,6 +200,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
       (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
       {} as Scenario['inflationAssumptions'],
     ),
+    strategies: createDefaultScenarioStrategies(),
   }
 
   return {

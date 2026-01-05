@@ -27,3 +27,17 @@ export const inflationTypeSchema = z.enum([
   'housing',
   'education',
 ])
+
+export const filingStatusSchema = z.enum([
+  'single',
+  'married_joint',
+  'married_separate',
+  'head_of_household',
+])
+
+export const taxTreatmentSchema = z.enum([
+  'ordinary',
+  'capital_gains',
+  'tax_exempt',
+  'none',
+])

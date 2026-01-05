@@ -18,6 +18,7 @@ import {
   ssaRetirementAdjustmentSchema,
   ssaWageIndexSchema,
 } from './defaults'
+import { irmaaTableSchema, rmdTableSchema, taxPolicySchema } from './policies'
 
 export const simulationSnapshotSchema = z.object({
   scenario: scenarioSchema,
@@ -35,6 +36,9 @@ export const simulationSnapshotSchema = z.object({
   ssaWageIndex: z.array(ssaWageIndexSchema),
   ssaBendPoints: z.array(ssaBendPointSchema),
   ssaRetirementAdjustments: z.array(ssaRetirementAdjustmentSchema),
+  taxPolicies: z.array(taxPolicySchema),
+  irmaaTables: z.array(irmaaTableSchema),
+  rmdTable: z.array(rmdTableSchema),
 })
 
 export type SimulationSnapshot = z.infer<typeof simulationSnapshotSchema>

@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useAppStore } from '../../state/appStore'
 import type { Scenario } from '../../core/models'
+import { createDefaultScenarioStrategies, normalizeScenarioStrategies } from '../../core/models'
 import { createUuid } from '../../core/utils/uuid'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
@@ -56,6 +57,10 @@ const ScenarioListPage = () => {
       const scenario = await storage.scenarioRepo.get(scenarioId)
       if (!scenario) {
         return null
+      }
+      const normalizedScenario = {
+        ...scenario,
+        strategies: normalizeScenarioStrategies(scenario.strategies),
       }
 
       const personStrategies = (
@@ -133,7 +138,7 @@ const ScenarioListPage = () => {
       ).flat()
 
       return {
-        scenario,
+        scenario: normalizedScenario,
         people,
         personStrategies,
         socialSecurityStrategies,
@@ -451,6 +456,7 @@ const ScenarioListPage = () => {
         (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
         {} as Scenario['inflationAssumptions'],
       ),
+      strategies: createDefaultScenarioStrategies(),
     }
 
     await storage.personStrategyRepo.upsert({

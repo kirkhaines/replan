@@ -29,6 +29,7 @@ export type TaxLedger = {
   capitalGains: number
   deductions: number
   taxExemptIncome: number
+  penalties: number
   taxPaid: number
 }
 
@@ -63,9 +64,11 @@ export type ActionIntent = {
   amount: number
   sourceHoldingId?: string
   targetHoldingId?: string
+  fromCash?: boolean
   priority?: number
   label?: string
   taxTreatment?: 'ordinary' | 'capital_gains' | 'tax_exempt'
+  skipPenalty?: boolean
 }
 
 export type ActionRecord = ActionIntent & {
@@ -107,6 +110,8 @@ export type SimulationState = {
   cashAccounts: SimCashAccount[]
   holdings: SimHolding[]
   yearLedger: TaxLedger
+  magiHistory: Record<number, number>
+  initialBalance: number
 }
 
 export type SimulationContext = {
@@ -114,6 +119,7 @@ export type SimulationContext = {
   settings: SimulationSettings
   monthIndex: number
   yearIndex: number
+  age: number
   date: Date
   dateIso: string
   isStartOfYear: boolean

@@ -53,13 +53,13 @@ const createEmptyTotals = (): MonthTotals => ({
   deductions: 0,
 })
 
-const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationState => ({
-  cashAccounts: snapshot.nonInvestmentAccounts.map((account) => ({
+const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationState => {
+  const cashAccounts = snapshot.nonInvestmentAccounts.map((account) => ({
     id: account.id,
     balance: account.balance,
     interestRate: account.interestRate,
-  })),
-  holdings: snapshot.investmentAccountHoldings.map((holding) => ({
+  }))
+  const holdings = snapshot.investmentAccountHoldings.map((holding) => ({
     id: holding.id,
     investmentAccountId: holding.investmentAccountId,
     taxType: holding.taxType,
@@ -68,15 +68,25 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     contributionBasis: holding.contributionBasis,
     returnRate: holding.returnRate,
     returnStdDev: holding.returnStdDev,
-  })),
-  yearLedger: {
-    ordinaryIncome: 0,
-    capitalGains: 0,
-    deductions: 0,
-    taxExemptIncome: 0,
-    taxPaid: 0,
-  },
-})
+  }))
+  const initialBalance =
+    cashAccounts.reduce((sum, account) => sum + account.balance, 0) +
+    holdings.reduce((sum, holding) => sum + holding.balance, 0)
+  return {
+    cashAccounts,
+    holdings,
+    yearLedger: {
+      ordinaryIncome: 0,
+      capitalGains: 0,
+      deductions: 0,
+      taxExemptIncome: 0,
+      penalties: 0,
+      taxPaid: 0,
+    },
+    magiHistory: {},
+    initialBalance,
+  }
+}
 
 const getPrimaryPerson = (snapshot: SimulationInput['snapshot']): Person | null => {
   const primaryStrategyId = snapshot.scenario.personStrategyIds[0]
@@ -127,12 +137,19 @@ const applyCashflows = (
     if (flow.cash >= 0) {
       totals.income += flow.cash
     } else {
-      totals.spending += Math.abs(flow.cash)
+      const amount = Math.abs(flow.cash)
+      if (flow.category === 'tax') {
+        totals.taxes += amount
+        state.yearLedger.taxPaid += amount
+      } else {
+        totals.spending += amount
+      }
     }
     applyCashToAccounts(state, flow.cash)
     state.yearLedger.ordinaryIncome += flow.ordinaryIncome ?? 0
     state.yearLedger.capitalGains += flow.capitalGains ?? 0
     state.yearLedger.deductions += flow.deductions ?? 0
+    state.yearLedger.taxExemptIncome += flow.taxExemptIncome ?? 0
     totals.ordinaryIncome += flow.ordinaryIncome ?? 0
     totals.capitalGains += flow.capitalGains ?? 0
     totals.deductions += flow.deductions ?? 0
@@ -144,6 +161,9 @@ const applyHoldingWithdrawal = (
   holdingId: string,
   amount: number,
   totals: MonthTotals,
+  context: SimulationContext,
+  taxTreatmentOverride?: ActionIntent['taxTreatment'],
+  skipPenalty?: boolean,
 ) => {
   const holding = state.holdings.find((entry) => entry.id === holdingId)
   if (!holding || amount <= 0) {
@@ -155,9 +175,19 @@ const applyHoldingWithdrawal = (
     return 0
   }
   holding.balance -= withdrawal
-  if (holding.taxType === 'taxable') {
+  if (taxTreatmentOverride === 'ordinary') {
+    state.yearLedger.ordinaryIncome += withdrawal
+    totals.ordinaryIncome += withdrawal
+  } else if (taxTreatmentOverride === 'capital_gains') {
+    state.yearLedger.capitalGains += withdrawal
+    totals.capitalGains += withdrawal
+  } else if (taxTreatmentOverride === 'tax_exempt') {
+    state.yearLedger.taxExemptIncome += withdrawal
+  } else if (holding.taxType === 'taxable') {
+    const basisMethod = context.snapshot.scenario.strategies.taxableLot.costBasisMethod
     const basisRatio = startingBalance > 0 ? holding.contributionBasis / startingBalance : 0
-    const basisUsed = withdrawal * basisRatio
+    // FIFO/LIFO need lot data; fall back to average-basis for now.
+    const basisUsed = withdrawal * (basisMethod === 'average' ? basisRatio : basisRatio)
     holding.contributionBasis = Math.max(0, holding.contributionBasis - basisUsed)
     const gain = Math.max(0, withdrawal - basisUsed)
     state.yearLedger.capitalGains += gain
@@ -168,11 +198,28 @@ const applyHoldingWithdrawal = (
   } else {
     state.yearLedger.taxExemptIncome += withdrawal
   }
+
+  const early = context.snapshot.scenario.strategies.earlyRetirement
+  const penaltyApplies =
+    !skipPenalty &&
+    context.age < 59.5 &&
+    ((holding.taxType === 'traditional' && !early.use72t) ||
+      (holding.taxType === 'roth' && !early.useRothBasisFirst))
+  if (penaltyApplies) {
+    state.yearLedger.penalties += withdrawal * early.penaltyRate
+  }
   totals.withdrawals += withdrawal
   return withdrawal
 }
 
-const withdrawProRata = (state: SimulationState, amount: number, totals: MonthTotals) => {
+const withdrawProRata = (
+  state: SimulationState,
+  amount: number,
+  totals: MonthTotals,
+  context: SimulationContext,
+  taxTreatmentOverride?: ActionIntent['taxTreatment'],
+  skipPenalty?: boolean,
+) => {
   const totalHoldings = sumHoldings(state)
   if (totalHoldings <= 0 || amount <= 0) {
     return 0
@@ -185,7 +232,15 @@ const withdrawProRata = (state: SimulationState, amount: number, totals: MonthTo
     const weight = holding.balance / totalHoldings
     const target =
       index === state.holdings.length - 1 ? remaining : Math.max(0, amount * weight)
-    const applied = applyHoldingWithdrawal(state, holding.id, target, totals)
+    const applied = applyHoldingWithdrawal(
+      state,
+      holding.id,
+      target,
+      totals,
+      context,
+      taxTreatmentOverride,
+      skipPenalty,
+    )
     remaining -= applied
   })
   return amount - remaining
@@ -209,13 +264,29 @@ const applyActions = (
   state: SimulationState,
   actions: ActionRecord[],
   totals: MonthTotals,
+  context: SimulationContext,
 ) => {
   actions.forEach((action) => {
     if (action.kind === 'withdraw') {
       const applied =
         action.sourceHoldingId
-          ? applyHoldingWithdrawal(state, action.sourceHoldingId, action.resolvedAmount, totals)
-          : withdrawProRata(state, action.resolvedAmount, totals)
+          ? applyHoldingWithdrawal(
+              state,
+              action.sourceHoldingId,
+              action.resolvedAmount,
+              totals,
+              context,
+              action.taxTreatment,
+              action.skipPenalty,
+            )
+          : withdrawProRata(
+              state,
+              action.resolvedAmount,
+              totals,
+              context,
+              action.taxTreatment,
+              action.skipPenalty,
+            )
       if (applied > 0) {
         applyCashToAccounts(state, applied)
       }
@@ -225,6 +296,9 @@ const applyActions = (
       if (action.targetHoldingId) {
         const holding = state.holdings.find((entry) => entry.id === action.targetHoldingId)
         if (holding) {
+          if (action.fromCash !== false) {
+            applyCashToAccounts(state, -action.resolvedAmount)
+          }
           holding.balance += action.resolvedAmount
           if (holding.taxType === 'taxable') {
             holding.contributionBasis += action.resolvedAmount
@@ -236,6 +310,32 @@ const applyActions = (
         totals.contributions += action.resolvedAmount
       }
       return
+    }
+    if (action.kind === 'convert') {
+      const sourceHolding =
+        action.sourceHoldingId ??
+        state.holdings.find((holding) => holding.taxType === 'traditional')?.id
+      const targetHolding =
+        action.targetHoldingId ??
+        state.holdings.find((holding) => holding.taxType === 'roth')?.id
+      if (!sourceHolding || !targetHolding) {
+        return
+      }
+      const applied = applyHoldingWithdrawal(
+        state,
+        sourceHolding,
+        action.resolvedAmount,
+        totals,
+        context,
+        'ordinary',
+        true,
+      )
+      if (applied > 0) {
+        const holding = state.holdings.find((entry) => entry.id === targetHolding)
+        if (holding) {
+          holding.balance += applied
+        }
+      }
     }
   })
 }
@@ -314,6 +414,9 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
     const yearIndex = Math.floor(monthIndex / 12)
     const isStartOfYear = monthIndex % 12 === 0
     const isEndOfYear = monthIndex % 12 === 11 || monthIndex + 1 >= totalMonths
+    const age = primaryPerson
+      ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, dateIso)
+      : yearIndex
 
     if (isStartOfYear) {
       state.yearLedger = {
@@ -321,6 +424,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
         capitalGains: 0,
         deductions: 0,
         taxExemptIncome: 0,
+        penalties: 0,
         taxPaid: 0,
       }
       yearTotals = createEmptyTotals()
@@ -331,6 +435,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       settings,
       monthIndex,
       yearIndex,
+      age,
       date,
       dateIso,
       isStartOfYear,
@@ -348,13 +453,10 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
 
     const intents = modules.flatMap((module) => module.getActionIntents?.(state, context) ?? [])
     const actions = resolveIntents(intents, state)
-    applyActions(state, actions, monthTotals)
+    applyActions(state, actions, monthTotals, context)
 
     modules.forEach((module) => module.onEndOfMonth?.(state, context))
 
-    const age = primaryPerson
-      ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, dateIso)
-      : yearIndex
     const monthRecord = buildMonthlyRecord(monthIndex, dateIso, age, monthTotals, state)
     monthlyTimeline.push(monthRecord)
 

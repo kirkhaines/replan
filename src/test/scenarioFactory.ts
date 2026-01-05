@@ -1,4 +1,5 @@
 import type { Scenario } from '../core/models'
+import { createDefaultScenarioStrategies } from '../core/models'
 import { inflationDefaultsSeed } from '../core/defaults/defaultData'
 
 type ScenarioOverrides = Partial<Scenario>
@@ -19,6 +20,7 @@ export const buildScenario = (overrides: ScenarioOverrides = {}): Scenario => {
       (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
       {} as Scenario['inflationAssumptions'],
     ),
+    strategies: createDefaultScenarioStrategies(),
     ...overrides,
   }
 }

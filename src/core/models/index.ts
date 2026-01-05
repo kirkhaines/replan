@@ -1,11 +1,19 @@
 export { scenarioSchema } from './scenario'
 export type { Scenario } from './scenario'
+export {
+  scenarioStrategiesSchema,
+  createDefaultScenarioStrategies,
+  normalizeScenarioStrategies,
+} from './scenarioStrategies'
+export type { ScenarioStrategies } from './scenarioStrategies'
 export { baseEntitySchema, isoDateStringSchema } from './common'
 export {
   taxTypeSchema,
   holdingTypeSchema,
   fundingStrategyTypeSchema,
   inflationTypeSchema,
+  filingStatusSchema,
+  taxTreatmentSchema,
 } from './enums'
 export type { Person } from './person'
 export { personSchema } from './person'
@@ -52,3 +60,17 @@ export {
 export type { SimulationRun, SimulationResult } from './simulationRun'
 export { simulationSnapshotSchema } from './simulationSnapshot'
 export type { SimulationSnapshot } from './simulationSnapshot'
+export {
+  taxBracketSchema,
+  taxPolicySchema,
+  irmaaTierSchema,
+  irmaaTableSchema,
+  rmdTableSchema,
+} from './policies'
+export type {
+  TaxBracket,
+  TaxPolicy,
+  IrmaaTier,
+  IrmaaTable,
+  RmdTableEntry,
+} from './policies'

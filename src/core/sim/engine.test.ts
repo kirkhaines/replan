@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { runSimulation } from './engine'
 import { buildSimulationInputFromRequest } from './input'
 import type { SimulationInput } from './input'
+import { createDefaultScenarioStrategies } from '../models'
 
 describe('runSimulation', () => {
   it('produces deterministic balances', () => {
@@ -25,6 +26,7 @@ describe('runSimulation', () => {
             housing: 0,
             education: 0,
           },
+          strategies: createDefaultScenarioStrategies(),
         },
         people: [
           {
@@ -112,6 +114,9 @@ describe('runSimulation', () => {
         ssaWageIndex: [],
         ssaBendPoints: [],
         ssaRetirementAdjustments: [],
+        taxPolicies: [],
+        irmaaTables: [],
+        rmdTable: [],
       },
     }
     const input = buildSimulationInputFromRequest(request)
