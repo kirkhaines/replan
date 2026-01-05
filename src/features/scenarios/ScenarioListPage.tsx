@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   getCoreRowModel,
@@ -12,6 +12,7 @@ import { createUuid } from '../../core/utils/uuid'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
 import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
+import type { LocalScenarioSeed } from '../../core/defaults/localSeedTypes'
 
 const formatDate = (value: number) =>
   new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -28,6 +29,7 @@ const ScenarioListPage = () => {
   const location = useLocation()
   const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
   const loadScenarios = useCallback(async () => {
     setIsLoading(true)
@@ -47,6 +49,213 @@ const ScenarioListPage = () => {
     }
     await storage.scenarioRepo.remove(scenarioId)
     await loadScenarios()
+  }
+
+  const buildLocalScenarioSeed = useCallback(
+    async (scenarioId: string): Promise<LocalScenarioSeed | null> => {
+      const scenario = await storage.scenarioRepo.get(scenarioId)
+      if (!scenario) {
+        return null
+      }
+
+      const personStrategies = (
+        await Promise.all(
+          scenario.personStrategyIds.map((id) => storage.personStrategyRepo.get(id)),
+        )
+      ).filter((strategy): strategy is NonNullable<typeof strategy> => Boolean(strategy))
+
+      const people = (
+        await Promise.all(
+          personStrategies.map((strategy) => storage.personRepo.get(strategy.personId)),
+        )
+      ).filter((person): person is NonNullable<typeof person> => Boolean(person))
+
+      const socialSecurityStrategies = (
+        await Promise.all(
+          personStrategies.map((strategy) =>
+            storage.socialSecurityStrategyRepo.get(strategy.socialSecurityStrategyId),
+          ),
+        )
+      ).filter((strategy): strategy is NonNullable<typeof strategy> => Boolean(strategy))
+
+      const socialSecurityEarnings = (
+        await Promise.all(
+          people.map((person) => storage.socialSecurityEarningsRepo.listForPerson(person.id)),
+        )
+      ).flat()
+
+      const futureWorkStrategies = (
+        await Promise.all(
+          personStrategies.map((strategy) =>
+            storage.futureWorkStrategyRepo.get(strategy.futureWorkStrategyId),
+          ),
+        )
+      ).filter((strategy): strategy is NonNullable<typeof strategy> => Boolean(strategy))
+
+      const futureWorkPeriods = (
+        await Promise.all(
+          futureWorkStrategies.map((strategy) =>
+            storage.futureWorkPeriodRepo.listForStrategy(strategy.id),
+          ),
+        )
+      ).flat()
+
+      const spendingStrategy = await storage.spendingStrategyRepo.get(
+        scenario.spendingStrategyId,
+      )
+      const spendingStrategies = spendingStrategy ? [spendingStrategy] : []
+      const spendingLineItems = spendingStrategy
+        ? await storage.spendingLineItemRepo.listForStrategy(spendingStrategy.id)
+        : []
+
+      const nonInvestmentAccounts = (
+        await Promise.all(
+          scenario.nonInvestmentAccountIds.map((id) =>
+            storage.nonInvestmentAccountRepo.get(id),
+          ),
+        )
+      ).filter((account): account is NonNullable<typeof account> => Boolean(account))
+
+      const investmentAccounts = (
+        await Promise.all(
+          scenario.investmentAccountIds.map((id) =>
+            storage.investmentAccountRepo.get(id),
+          ),
+        )
+      ).filter((account): account is NonNullable<typeof account> => Boolean(account))
+
+      const investmentAccountHoldings = (
+        await Promise.all(
+          investmentAccounts.map((account) =>
+            storage.investmentAccountHoldingRepo.listForAccount(account.id),
+          ),
+        )
+      ).flat()
+
+      return {
+        scenario,
+        people,
+        personStrategies,
+        socialSecurityStrategies,
+        socialSecurityEarnings,
+        futureWorkStrategies,
+        futureWorkPeriods,
+        spendingStrategies,
+        spendingLineItems,
+        nonInvestmentAccounts,
+        investmentAccounts,
+        investmentAccountHoldings,
+      }
+    },
+    [storage],
+  )
+
+  const handleExport = useCallback(
+    async (scenarioId: string) => {
+      const seed = await buildLocalScenarioSeed(scenarioId)
+      if (!seed) {
+        return
+      }
+      const filenameBase = seed.scenario.name
+        ? seed.scenario.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+        : seed.scenario.id
+      const blob = new Blob([JSON.stringify(seed, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${filenameBase || 'scenario'}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+    [buildLocalScenarioSeed],
+  )
+
+  const isLocalScenarioSeed = (value: unknown): value is LocalScenarioSeed => {
+    if (!value || typeof value !== 'object') {
+      return false
+    }
+    const seed = value as LocalScenarioSeed
+    return Boolean(
+      seed.scenario &&
+        Array.isArray(seed.people) &&
+        Array.isArray(seed.personStrategies) &&
+        Array.isArray(seed.socialSecurityStrategies) &&
+        Array.isArray(seed.futureWorkStrategies) &&
+        Array.isArray(seed.futureWorkPeriods) &&
+        Array.isArray(seed.spendingStrategies) &&
+        Array.isArray(seed.spendingLineItems) &&
+        Array.isArray(seed.nonInvestmentAccounts) &&
+        Array.isArray(seed.investmentAccounts) &&
+        Array.isArray(seed.investmentAccountHoldings),
+    )
+  }
+
+  const handleImportFile = async (file: File) => {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+    if (!isLocalScenarioSeed(parsed)) {
+      window.alert('Invalid scenario seed file.')
+      return
+    }
+    await Promise.all(parsed.people.map((record) => storage.personRepo.upsert(record)))
+    await Promise.all(
+      parsed.socialSecurityEarnings.map((record) =>
+        storage.socialSecurityEarningsRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.socialSecurityStrategies.map((record) =>
+        storage.socialSecurityStrategyRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.futureWorkStrategies.map((record) =>
+        storage.futureWorkStrategyRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.futureWorkPeriods.map((record) =>
+        storage.futureWorkPeriodRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.spendingStrategies.map((record) =>
+        storage.spendingStrategyRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.spendingLineItems.map((record) =>
+        storage.spendingLineItemRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.nonInvestmentAccounts.map((record) =>
+        storage.nonInvestmentAccountRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.investmentAccounts.map((record) =>
+        storage.investmentAccountRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.investmentAccountHoldings.map((record) =>
+        storage.investmentAccountHoldingRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      parsed.personStrategies.map((record) =>
+        storage.personStrategyRepo.upsert(record),
+      ),
+    )
+    await storage.scenarioRepo.upsert(parsed.scenario)
+    await loadScenarios()
+  }
+
+  const handleImportClick = () => {
+    importInputRef.current?.click()
   }
 
   const columns = useMemo<ColumnDef<Scenario>[]>(
@@ -76,6 +285,13 @@ const ScenarioListPage = () => {
             <button
               className="link-button"
               type="button"
+              onClick={() => void handleExport(row.original.id)}
+            >
+              Export
+            </button>
+            <button
+              className="link-button"
+              type="button"
               onClick={() => void handleRemove(row.original.id)}
             >
               Remove
@@ -84,7 +300,7 @@ const ScenarioListPage = () => {
         ),
       },
     ],
-    [handleRemove, location.pathname],
+    [handleExport, handleRemove, location.pathname],
   )
 
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -258,10 +474,29 @@ const ScenarioListPage = () => {
         title="Scenarios"
         subtitle="Build local-first retirement plans and run deterministic simulations."
         actions={
-          <button className="button" onClick={handleCreate}>
-            Create Scenario
-          </button>
+          <div className="button-row">
+            <button className="button" onClick={handleCreate}>
+              Create Scenario
+            </button>
+            <button className="button secondary" type="button" onClick={handleImportClick}>
+              Import Scenario
+            </button>
+          </div>
         }
+      />
+      <input
+        ref={importInputRef}
+        className="sr-only"
+        type="file"
+        accept="application/json"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          if (!file) {
+            return
+          }
+          void handleImportFile(file)
+          event.target.value = ''
+        }}
       />
 
       <div className="card">

@@ -1,4 +1,5 @@
 import type { StorageClient } from '../storage/types'
+import type { LocalScenarioSeed } from './localSeedTypes'
 import {
   inflationDefaultsSeed,
   holdingTypeDefaultsSeed,
@@ -8,6 +9,78 @@ import {
 } from './defaultData'
 import { now } from '../utils/time'
 import { createUuid } from '../utils/uuid'
+
+const loadLocalScenarioSeed = (): LocalScenarioSeed | null => {
+  const modules = import.meta.glob('./localSeed.{ts,js}', { eager: true })
+  const values = Object.values(modules) as Array<{
+    localScenarioSeed?: LocalScenarioSeed
+  }>
+  return values[0]?.localScenarioSeed ?? null
+}
+
+const seedLocalScenario = async (storage: StorageClient) => {
+  const localSeed = loadLocalScenarioSeed()
+  if (!localSeed) {
+    return
+  }
+  const existing = await storage.scenarioRepo.get(localSeed.scenario.id)
+  if (existing) {
+    return
+  }
+
+  await Promise.all(localSeed.people.map((record) => storage.personRepo.upsert(record)))
+  await Promise.all(
+    localSeed.socialSecurityEarnings.map((record) =>
+      storage.socialSecurityEarningsRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.socialSecurityStrategies.map((record) =>
+      storage.socialSecurityStrategyRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.futureWorkStrategies.map((record) =>
+      storage.futureWorkStrategyRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.futureWorkPeriods.map((record) =>
+      storage.futureWorkPeriodRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.spendingStrategies.map((record) =>
+      storage.spendingStrategyRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.spendingLineItems.map((record) =>
+      storage.spendingLineItemRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.nonInvestmentAccounts.map((record) =>
+      storage.nonInvestmentAccountRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.investmentAccounts.map((record) =>
+      storage.investmentAccountRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.investmentAccountHoldings.map((record) =>
+      storage.investmentAccountHoldingRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    localSeed.personStrategies.map((record) =>
+      storage.personStrategyRepo.upsert(record),
+    ),
+  )
+  await storage.scenarioRepo.upsert(localSeed.scenario)
+}
 
 export const seedDefaults = async (storage: StorageClient) => {
   const timestamp = now()
@@ -94,4 +167,6 @@ export const seedDefaults = async (storage: StorageClient) => {
       ),
     )
   }
+
+  await seedLocalScenario(storage)
 }
