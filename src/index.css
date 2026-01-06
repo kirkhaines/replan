@@ -234,6 +234,17 @@ h2 {
   font-size: 0.95rem;
 }
 
+.table input:not([type='hidden']),
+.table select {
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: white;
+  width: 100%;
+}
+
 .table th,
 .table td {
   text-align: left;
