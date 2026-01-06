@@ -16,6 +16,7 @@ import { createUuid } from '../utils/uuid'
 
 describe('runSimulation', () => {
   it('produces deterministic balances', () => {
+    const baseStrategies = createDefaultScenarioStrategies()
     const request = {
       startDate: '2020-01-01',
       snapshot: {
@@ -28,14 +29,19 @@ describe('runSimulation', () => {
           nonInvestmentAccountIds: ['00000000-0000-4000-8000-000000000002'],
           investmentAccountIds: ['00000000-0000-4000-8000-000000000003'],
           spendingStrategyId: '00000000-0000-4000-8000-000000000004',
-          inflationAssumptions: {
-            none: 0,
-            cpi: 0,
-            medical: 0,
-            housing: 0,
-            education: 0,
+          strategies: {
+            ...baseStrategies,
+            returnModel: {
+              ...baseStrategies.returnModel,
+              inflationAssumptions: {
+                none: 0,
+                cpi: 0,
+                medical: 0,
+                housing: 0,
+                education: 0,
+              },
+            },
           },
-          strategies: createDefaultScenarioStrategies(),
         },
         people: [
           {

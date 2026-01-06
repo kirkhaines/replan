@@ -95,7 +95,7 @@ const SsaBenefitDetailsPage = () => {
       })
 
       setPerson(personRecord)
-      setCpiRate(scenario.inflationAssumptions.cpi ?? 0)
+      setCpiRate(scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0)
       setEstimate(estimateResult)
       setIsLoading(false)
     }

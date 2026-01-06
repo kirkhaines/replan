@@ -2,6 +2,12 @@ import { z } from 'zod'
 import { filingStatusSchema, inflationTypeSchema, taxTreatmentSchema, taxTypeSchema } from './enums'
 import { isoDateStringSchema } from './common'
 
+const inflationAssumptionsSchema = z.object(
+  Object.fromEntries(
+    inflationTypeSchema.options.map((key) => [key, z.number()]),
+  ) as Record<(typeof inflationTypeSchema.options)[number], z.ZodNumber>,
+)
+
 export const returnModelStrategySchema = z.object({
   mode: z.enum(['deterministic', 'stochastic', 'historical']),
   sequenceModel: z.enum(['independent', 'regime']),
@@ -9,6 +15,7 @@ export const returnModelStrategySchema = z.object({
   correlationModel: z.enum(['none', 'asset_class']),
   cashYieldRate: z.number().min(0),
   seed: z.number().int().optional(),
+  inflationAssumptions: inflationAssumptionsSchema,
 })
 
 export const allocationTargetSchema = z.object({
@@ -160,6 +167,10 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     volatilityScale: 1,
     correlationModel: 'none',
     cashYieldRate: 0,
+    inflationAssumptions: inflationTypeSchema.options.reduce(
+      (acc, type) => ({ ...acc, [type]: 0 }),
+      {} as Record<(typeof inflationTypeSchema.options)[number], number>,
+    ),
   },
   glidepath: {
     mode: 'age',

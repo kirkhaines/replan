@@ -482,7 +482,7 @@ const PersonStrategyDetailPage = () => {
     }
     const currentYear = new Date().getFullYear()
     const yearsDelta = socialSecurityEstimate.details.claimYear - currentYear
-    const cpiRate = scenario.inflationAssumptions.cpi ?? 0
+    const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
     if (cpiRate === 0 || yearsDelta === 0) {
       return socialSecurityEstimate.monthlyBenefit
     }

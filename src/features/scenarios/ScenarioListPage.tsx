@@ -442,6 +442,7 @@ const ScenarioListPage = () => {
       updatedAt: now,
     })
 
+    const baseStrategies = createDefaultScenarioStrategies()
     const scenario: Scenario = {
       id: createUuid(),
       name: 'New Scenario',
@@ -451,11 +452,18 @@ const ScenarioListPage = () => {
       nonInvestmentAccountIds: [nonInvestmentAccount.id],
       investmentAccountIds: [investmentAccount.id],
       spendingStrategyId,
-      inflationAssumptions: inflationDefaultsSeed.reduce<Scenario['inflationAssumptions']>(
-        (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
-        {} as Scenario['inflationAssumptions'],
-      ),
-      strategies: createDefaultScenarioStrategies(),
+      strategies: {
+        ...baseStrategies,
+        returnModel: {
+          ...baseStrategies.returnModel,
+          inflationAssumptions: inflationDefaultsSeed.reduce<
+            Scenario['strategies']['returnModel']['inflationAssumptions']
+          >(
+            (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
+            {} as Scenario['strategies']['returnModel']['inflationAssumptions'],
+          ),
+        },
+      },
     }
 
     await storage.personStrategyRepo.upsert({

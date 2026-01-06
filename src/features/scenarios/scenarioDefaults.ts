@@ -186,6 +186,8 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     updatedAt: now,
   }
 
+  const baseStrategies = createDefaultScenarioStrategies()
+
   const scenario: Scenario = {
     id: scenarioId,
     name: 'New Scenario',
@@ -195,11 +197,18 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     nonInvestmentAccountIds: [nonInvestmentAccountId],
     investmentAccountIds: [investmentAccountId],
     spendingStrategyId,
-    inflationAssumptions: inflationDefaultsSeed.reduce<Scenario['inflationAssumptions']>(
-      (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
-      {} as Scenario['inflationAssumptions'],
-    ),
-    strategies: createDefaultScenarioStrategies(),
+    strategies: {
+      ...baseStrategies,
+      returnModel: {
+        ...baseStrategies.returnModel,
+        inflationAssumptions: inflationDefaultsSeed.reduce<
+          Scenario['strategies']['returnModel']['inflationAssumptions']
+        >(
+          (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
+          {} as Scenario['strategies']['returnModel']['inflationAssumptions'],
+        ),
+      },
+    },
   }
 
   return {

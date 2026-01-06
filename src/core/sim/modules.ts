@@ -84,7 +84,8 @@ const sumMonthlySpending = (
     if (!isWithinRange(dateIso, item.startDate, item.endDate)) {
       return total
     }
-    const inflationRate = scenario.inflationAssumptions[item.inflationType] ?? 0
+    const inflationRate =
+      scenario.strategies.returnModel.inflationAssumptions[item.inflationType] ?? 0
     const startIso = item.startDate ? item.startDate : null
     const monthly =
       inflateAmount(item.needAmount, startIso, dateIso, inflationRate) +
@@ -168,7 +169,8 @@ const createSpendingModule = (snapshot: SimulationSnapshot): SimulationModule =>
         if (!isWithinRange(context.dateIso, item.startDate, item.endDate)) {
           return
         }
-        const inflationRate = scenario.inflationAssumptions[item.inflationType] ?? 0
+        const inflationRate =
+          scenario.strategies.returnModel.inflationAssumptions[item.inflationType] ?? 0
         const startIso = item.startDate ? item.startDate : null
         const needAmount = inflateAmount(item.needAmount, startIso, context.dateIso, inflationRate)
         const wantAmount =
@@ -337,7 +339,7 @@ const createSocialSecurityModule = (snapshot: SimulationSnapshot): SimulationMod
     })
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
 
-  const cpiRate = scenario.inflationAssumptions.cpi ?? 0
+  const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
 
   return {
     id: 'social-security',
@@ -410,7 +412,8 @@ const createPensionModule = (snapshot: SimulationSnapshot): SimulationModule => 
         if (!isWithinRange(context.dateIso, pension.startDate, pension.endDate)) {
           return
         }
-        const inflationRate = scenario.inflationAssumptions[pension.inflationType] ?? 0
+        const inflationRate =
+          scenario.strategies.returnModel.inflationAssumptions[pension.inflationType] ?? 0
         const amount = inflateAmount(
           pension.monthlyAmount,
           pension.startDate,
@@ -527,7 +530,8 @@ const createHealthcareModule = (
       if (baseMonthly <= 0) {
         return []
       }
-      const inflationRate = scenario.inflationAssumptions[strategy.inflationType] ?? 0
+      const inflationRate =
+        scenario.strategies.returnModel.inflationAssumptions[strategy.inflationType] ?? 0
       const inflatedBase = inflateAmount(
         baseMonthly,
         settings.startDate,

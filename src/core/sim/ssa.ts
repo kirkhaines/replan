@@ -197,7 +197,7 @@ const getBendPoints = (year: number, records: SsaBendPoint[], cpiRate: number) =
 const toAnnualAmount = (
   item: SpendingLineItem,
   year: number,
-  inflationAssumptions: Scenario['inflationAssumptions'],
+  inflationAssumptions: Scenario['strategies']['returnModel']['inflationAssumptions'],
 ) => {
   const startYear = getYearFromIsoDate(item.startDate) ?? year
   const yearsElapsed = Math.max(0, year - startYear)
@@ -266,7 +266,8 @@ export const buildSsaEstimate = ({
   })
 
   const preTaxItems = spendingLineItems.filter((item) => item.isPreTax)
-  const cpiRate = scenario.inflationAssumptions.cpi ?? 0
+  const inflationAssumptions = scenario.strategies.returnModel.inflationAssumptions
+  const cpiRate = inflationAssumptions.cpi ?? 0
   const currentYear = new Date().getFullYear()
 
   const grossByYear = new Map<number, number>()
@@ -308,7 +309,7 @@ export const buildSsaEstimate = ({
       if (monthsActive <= 0) {
         return total
       }
-      const annual = toAnnualAmount(item, year, scenario.inflationAssumptions)
+      const annual = toAnnualAmount(item, year, inflationAssumptions)
       const cappedMonths = Math.min(monthsActive, monthsWorked)
       return total + annual * (cappedMonths / 12)
     }, 0)

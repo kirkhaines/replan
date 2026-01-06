@@ -88,9 +88,24 @@ const buildSimulationSnapshot = async (
   storage: StorageClient,
   normalizeSocial: (strategy: SocialSecurityStrategy, person: Person) => SocialSecurityStrategy,
 ): Promise<SimulationSnapshot> => {
+  const legacyInflation = (
+    scenario as Scenario & {
+      inflationAssumptions?: Scenario['strategies']['returnModel']['inflationAssumptions']
+    }
+  ).inflationAssumptions
+  const inflationAssumptions = buildInflationMap(
+    inflationDefaultsSeed,
+    scenario.strategies?.returnModel?.inflationAssumptions ?? legacyInflation,
+  )
   const normalizedScenario = {
     ...scenario,
-    strategies: normalizeScenarioStrategies(scenario.strategies),
+    strategies: normalizeScenarioStrategies({
+      ...scenario.strategies,
+      returnModel: {
+        ...scenario.strategies.returnModel,
+        inflationAssumptions,
+      },
+    }),
   }
   const personStrategies = (
     await Promise.all(
@@ -215,15 +230,15 @@ const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountH
 
 const buildInflationMap = (
   defaults: InflationDefault[],
-  current?: Scenario['inflationAssumptions'],
-): Scenario['inflationAssumptions'] => {
+  current?: Scenario['strategies']['returnModel']['inflationAssumptions'],
+): Scenario['strategies']['returnModel']['inflationAssumptions'] => {
   const fallback = defaults.length > 0 ? defaults : inflationDefaultsSeed
   return Object.fromEntries(
     inflationTypeSchema.options.map((type) => [
       type,
       current?.[type] ?? fallback.find((item) => item.type === type)?.rate ?? 0,
     ]),
-  ) as Scenario['inflationAssumptions']
+  ) as Scenario['strategies']['returnModel']['inflationAssumptions']
 }
 
 const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => ({
@@ -299,7 +314,7 @@ const ScenarioDetailPage = () => {
   useUnsavedChangesWarning(isDirty)
 
   const selectedSpendingStrategyId = watch('scenario.spendingStrategyId')
-  const inflationAssumptions = watch('scenario.inflationAssumptions')
+  const inflationAssumptions = watch('scenario.strategies.returnModel.inflationAssumptions')
   const personStrategyIds = watch('scenario.personStrategyIds')
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
   const investmentAccountIds = watch('scenario.investmentAccountIds')
@@ -507,7 +522,9 @@ const ScenarioDetailPage = () => {
   )
 
   const handleInflationChange = (type: InflationDefault['type'], value: number) => {
-    setValue(`scenario.inflationAssumptions.${type}`, value, { shouldDirty: true })
+    setValue(`scenario.strategies.returnModel.inflationAssumptions.${type}`, value, {
+      shouldDirty: true,
+    })
   }
 
   const loadHoldingsForAccount = useCallback(
@@ -622,14 +639,24 @@ const ScenarioDetailPage = () => {
       return
     }
 
+    const legacyInflation = (
+      data as Scenario & {
+        inflationAssumptions?: Scenario['strategies']['returnModel']['inflationAssumptions']
+      }
+    ).inflationAssumptions
     const inflationAssumptions = buildInflationMap(
       inflationDefaultsRef.current,
-      data.inflationAssumptions,
+      data.strategies?.returnModel?.inflationAssumptions ?? legacyInflation,
     )
     const normalizedScenario = {
       ...data,
-      inflationAssumptions,
-      strategies: normalizeScenarioStrategies(data.strategies),
+      strategies: normalizeScenarioStrategies({
+        ...data.strategies,
+        returnModel: {
+          ...data.strategies?.returnModel,
+          inflationAssumptions,
+        },
+      }),
     }
     setScenario(normalizedScenario)
     reset({ scenario: normalizedScenario })
@@ -1063,7 +1090,9 @@ const ScenarioDetailPage = () => {
           <input
             key={type}
             type="hidden"
-            {...register(`scenario.inflationAssumptions.${type}`, { valueAsNumber: true })}
+            {...register(`scenario.strategies.returnModel.inflationAssumptions.${type}`, {
+              valueAsNumber: true,
+            })}
           />
         ))}
 
@@ -1354,34 +1383,11 @@ const ScenarioDetailPage = () => {
 
         <div className="stack">
           <div className="row">
-            <h2>Inflation assumptions</h2>
-          </div>
-          <div className="form-grid">
-            {inflationTypeSchema.options.map((type) => {
-              const currentValue =
-                inflationAssumptions?.[type] ?? inflationByType.get(type)?.rate ?? 0
-              return (
-                <label className="field" key={type}>
-                  <span>{type}</span>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={currentValue}
-                    onChange={(event) => handleInflationChange(type, Number(event.target.value))}
-                  />
-                </label>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="stack">
-          <div className="row">
             <h2>Simulation strategies</h2>
           </div>
 
           <div className="stack">
-            <h3>Market and allocation</h3>
+            <h3>Market</h3>
             <div className="form-grid">
               <label className="field">
                 <span>Return model</span>
@@ -1434,6 +1440,29 @@ const ScenarioDetailPage = () => {
                   })}
                 />
               </label>
+              {inflationTypeSchema.options.map((type) => {
+                const currentValue =
+                  inflationAssumptions?.[type] ?? inflationByType.get(type)?.rate ?? 0
+                return (
+                  <label className="field" key={type}>
+                    <span>{type} inflation</span>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={currentValue}
+                      onChange={(event) =>
+                        handleInflationChange(type, Number(event.target.value))
+                      }
+                    />
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Allocation</h3>
+            <div className="form-grid">
               <label className="field">
                 <span>Glidepath mode</span>
                 <select {...register('scenario.strategies.glidepath.mode')}>
@@ -1449,127 +1478,129 @@ const ScenarioDetailPage = () => {
                 </select>
               </label>
             </div>
+          </div>
 
-            <div className="stack">
-              <div className="row">
-                <h3>Glidepath targets</h3>
-                <button
-                  className="button secondary"
-                  type="button"
-                  onClick={() =>
-                    appendGlidepathTarget({
-                      age: 65,
-                      equity: 0.6,
-                      bonds: 0.3,
-                      cash: 0.05,
-                      realEstate: 0.05,
-                      other: 0,
-                    })
-                  }
-                >
-                  Add target
-                </button>
-              </div>
-              {glidepathTargetFields.length === 0 ? (
-                <p className="muted">No glidepath targets yet.</p>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Age</th>
-                      <th>Equity</th>
-                      <th>Bonds</th>
-                      <th>Cash</th>
-                      <th>Real estate</th>
-                      <th>Other</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {glidepathTargetFields.map((field, index) => (
-                      <tr key={field.id}>
-                        <td>
-                          <input
-                            type="number"
-                            defaultValue={field.age}
-                            {...register(
-                              `scenario.strategies.glidepath.targets.${index}.age`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.equity}
-                            {...register(
-                              `scenario.strategies.glidepath.targets.${index}.equity`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.bonds}
-                            {...register(
-                              `scenario.strategies.glidepath.targets.${index}.bonds`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.cash}
-                            {...register(
-                              `scenario.strategies.glidepath.targets.${index}.cash`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.realEstate}
-                            {...register(
-                              `scenario.strategies.glidepath.targets.${index}.realEstate`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.other}
-                            {...register(
-                              `scenario.strategies.glidepath.targets.${index}.other`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            className="link-button"
-                            type="button"
-                            disabled={glidepathTargetFields.length <= 1}
-                            onClick={() => removeGlidepathTarget(index)}
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+          <div className="stack">
+            <div className="row">
+              <h3>Glidepath targets</h3>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() =>
+                  appendGlidepathTarget({
+                    age: 65,
+                    equity: 0.6,
+                    bonds: 0.3,
+                    cash: 0.05,
+                    realEstate: 0.05,
+                    other: 0,
+                  })
+                }
+              >
+                Add target
+              </button>
             </div>
+            {glidepathTargetFields.length === 0 ? (
+              <p className="muted">No glidepath targets yet.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Age</th>
+                    <th>Equity</th>
+                    <th>Bonds</th>
+                    <th>Cash</th>
+                    <th>Real estate</th>
+                    <th>Other</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {glidepathTargetFields.map((field, index) => (
+                    <tr key={field.id}>
+                      <td>
+                        <input
+                          type="number"
+                          defaultValue={field.age}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.age`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.equity}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.equity`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.bonds}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.bonds`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.cash}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.cash`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.realEstate}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.realEstate`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.other}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.other`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          disabled={glidepathTargetFields.length <= 1}
+                          onClick={() => removeGlidepathTarget(index)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
 
+          <div className="stack">
             <div className="form-grid">
               <label className="field">
                 <span>Rebalance frequency</span>
