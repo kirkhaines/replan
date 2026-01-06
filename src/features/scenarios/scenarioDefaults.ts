@@ -195,7 +195,6 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     nonInvestmentAccountIds: [nonInvestmentAccountId],
     investmentAccountIds: [investmentAccountId],
     spendingStrategyId,
-    fundingStrategyType: 'pro_rata',
     inflationAssumptions: inflationDefaultsSeed.reduce<Scenario['inflationAssumptions']>(
       (acc, seed) => ({ ...acc, [seed.type]: seed.rate }),
       {} as Scenario['inflationAssumptions'],

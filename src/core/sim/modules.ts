@@ -1073,17 +1073,6 @@ const createFundingModule = (snapshot: SimulationSnapshot): SimulationModule => 
   const early = scenario.strategies.earlyRetirement
   const taxableLot = scenario.strategies.taxableLot
 
-  const fallbackOrder = () => {
-    const strategy = scenario.fundingStrategyType
-    if (strategy === 'tax_deferred_then_tax_free') {
-      return ['traditional', 'taxable', 'roth', 'hsa'] as const
-    }
-    if (strategy === 'roth_ladder_then_taxable') {
-      return ['taxable', 'traditional', 'roth', 'hsa'] as const
-    }
-    return [] as const
-  }
-
   return {
     id: 'funding-core',
     getActionIntents: (state, context) => {
@@ -1092,19 +1081,8 @@ const createFundingModule = (snapshot: SimulationSnapshot): SimulationModule => 
         return []
       }
       const deficit = Math.abs(cashBalance)
-      if (scenario.fundingStrategyType === 'pro_rata') {
-        return [
-          {
-            id: 'funding-cash-deficit',
-            kind: 'withdraw',
-            amount: deficit,
-            priority: 100,
-            label: 'Cover cash deficit',
-          },
-        ]
-      }
 
-      const baseOrder = withdrawal.order.length > 0 ? withdrawal.order : [...fallbackOrder()]
+      const baseOrder = withdrawal.order
       const penalizedTypes = new Set<string>()
       if (context.age < 59.5) {
         if (!early.use72t) {

@@ -502,7 +502,7 @@ test('shows not found state when scenario is missing', async () => {
   expect(await screen.findByText('Scenario not found')).toBeTruthy()
 })
 
-test('saving persists name, funding strategy, and spending strategy changes', async () => {
+test('saving persists name and spending strategy changes', async () => {
   const { seed, scenario, spendingStrategyTwo } = buildSeed()
   const storage = createStorageFixture(seed)
   mockStore.storage = storage
@@ -513,9 +513,6 @@ test('saving persists name, funding strategy, and spending strategy changes', as
 
   const nameInput = screen.getByLabelText('Scenario name')
   fireEvent.change(nameInput, { target: { value: 'Updated plan' } })
-
-  const fundingSelect = screen.getByLabelText('Funding strategy')
-  fireEvent.change(fundingSelect, { target: { value: 'tax_deferred_then_tax_free' } })
 
   const spendingSelect = screen.getByLabelText('Spending strategy')
   fireEvent.change(spendingSelect, { target: { value: spendingStrategyTwo.id } })
@@ -530,7 +527,6 @@ test('saving persists name, funding strategy, and spending strategy changes', as
   const lastCall =
     (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
   expect(lastCall?.name).toBe('Updated plan')
-  expect(lastCall?.fundingStrategyType).toBe('tax_deferred_then_tax_free')
   expect(lastCall?.spendingStrategyId).toBe(spendingStrategyTwo.id)
 })
 

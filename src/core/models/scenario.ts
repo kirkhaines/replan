@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { baseEntitySchema } from './common'
-import { fundingStrategyTypeSchema, inflationTypeSchema } from './enums'
+import { inflationTypeSchema } from './enums'
 import { scenarioStrategiesSchema } from './scenarioStrategies'
 
 const inflationAssumptionsSchema = z.object(
@@ -15,7 +15,6 @@ export const scenarioSchema = baseEntitySchema.extend({
   nonInvestmentAccountIds: z.array(z.string().uuid()).min(1),
   investmentAccountIds: z.array(z.string().uuid()).min(1),
   spendingStrategyId: z.string().uuid(),
-  fundingStrategyType: fundingStrategyTypeSchema,
   inflationAssumptions: inflationAssumptionsSchema,
   strategies: scenarioStrategiesSchema,
 })

@@ -15,7 +15,6 @@ import {
   investmentAccountSchema,
   investmentAccountHoldingSchema,
   personStrategySchema,
-  fundingStrategyTypeSchema,
   inflationTypeSchema,
   taxTypeSchema,
   taxTreatmentSchema,
@@ -1324,17 +1323,6 @@ const ScenarioDetailPage = () => {
             {errors.scenario?.name ? (
               <span className="error">{errors.scenario.name.message}</span>
             ) : null}
-          </label>
-
-          <label className="field">
-            <span>Funding strategy</span>
-            <select {...register('scenario.fundingStrategyType')}>
-              {fundingStrategyTypeSchema.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
           </label>
         </div>
 

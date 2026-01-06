@@ -18,7 +18,6 @@ describe('runSimulation', () => {
           nonInvestmentAccountIds: ['00000000-0000-4000-8000-000000000002'],
           investmentAccountIds: ['00000000-0000-4000-8000-000000000003'],
           spendingStrategyId: '00000000-0000-4000-8000-000000000004',
-          fundingStrategyType: 'pro_rata',
           inflationAssumptions: {
             none: 0,
             cpi: 0,

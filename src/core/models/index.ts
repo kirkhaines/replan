@@ -10,7 +10,6 @@ export { baseEntitySchema, isoDateStringSchema } from './common'
 export {
   taxTypeSchema,
   holdingTypeSchema,
-  fundingStrategyTypeSchema,
   inflationTypeSchema,
   filingStatusSchema,
   taxTreatmentSchema,

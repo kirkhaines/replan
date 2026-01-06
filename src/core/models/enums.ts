@@ -14,12 +14,6 @@ export const holdingTypeSchema = z.enum([
   'other',
 ])
 
-export const fundingStrategyTypeSchema = z.enum([
-  'pro_rata',
-  'roth_ladder_then_taxable',
-  'tax_deferred_then_tax_free',
-])
-
 export const inflationTypeSchema = z.enum([
   'none',
   'cpi',
