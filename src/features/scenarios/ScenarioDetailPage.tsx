@@ -2017,7 +2017,7 @@ const ScenarioDetailPage = () => {
           </div>
 
           <div className="stack">
-            <h3>Taxes, healthcare, and giving</h3>
+            <h3>Taxes</h3>
             <div className="form-grid">
               <label className="field">
                 <span>Filing status</span>
@@ -2055,7 +2055,10 @@ const ScenarioDetailPage = () => {
                 <span>Apply capital gains rates</span>
               </label>
             </div>
+          </div>
 
+          <div className="stack">
+            <h3>Healthcare</h3>
             <div className="form-grid">
               <label className="field">
                 <span>Pre-Medicare premium</span>
@@ -2108,7 +2111,10 @@ const ScenarioDetailPage = () => {
                 <span>Apply IRMAA</span>
               </label>
             </div>
+          </div>
 
+          <div className="stack">
+            <h3>Giving</h3>
             <div className="form-grid">
               <label className="field">
                 <span>Annual giving</span>
