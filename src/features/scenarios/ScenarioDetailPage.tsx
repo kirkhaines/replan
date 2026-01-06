@@ -84,45 +84,6 @@ const normalizeSocialSecurityStrategy = (
   }
 }
 
-const createCashAccount = (): NonInvestmentAccount => {
-  const now = Date.now()
-  return {
-    id: createUuid(),
-    name: 'Cash',
-    balance: 10000,
-    interestRate: 0.01,
-    createdAt: now,
-    updatedAt: now,
-  }
-}
-
-const createInvestmentAccount = (): InvestmentAccount => {
-  const now = Date.now()
-  return {
-    id: createUuid(),
-    name: 'Brokerage',
-    createdAt: now,
-    updatedAt: now,
-  }
-}
-
-const createHolding = (investmentAccountId: string): InvestmentAccountHolding => {
-  const now = Date.now()
-  return {
-    id: createUuid(),
-    name: 'S&P 500',
-    taxType: 'taxable',
-    balance: 50000,
-    contributionBasis: 50000,
-    holdingType: 'sp500',
-    returnRate: 0.1,
-    returnStdDev: 0.16,
-    investmentAccountId,
-    createdAt: now,
-    updatedAt: now,
-  }
-}
-
 type ScenarioEditorValues = {
   scenario: Scenario
   person: Person
@@ -399,6 +360,8 @@ const ScenarioDetailPage = () => {
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
   const [investmentBalances, setInvestmentBalances] = useState<Record<string, number>>({})
   const [inflationDefaults, setInflationDefaults] = useState<InflationDefault[]>([])
+  const [selectedCashAccountId, setSelectedCashAccountId] = useState('')
+  const [selectedInvestmentAccountId, setSelectedInvestmentAccountId] = useState('')
 
   const defaultValues = useMemo(() => {
     const bundle = createDefaultScenarioBundle()
@@ -544,6 +507,16 @@ const ScenarioDetailPage = () => {
   const scenarioInvestmentAccounts = useMemo(() => {
     const ids = new Set(scenario?.investmentAccountIds ?? [])
     return investmentAccounts.filter((account) => ids.has(account.id))
+  }, [investmentAccounts, scenario?.investmentAccountIds])
+
+  const availableCashAccounts = useMemo(() => {
+    const ids = new Set(scenario?.nonInvestmentAccountIds ?? [])
+    return cashAccounts.filter((account) => !ids.has(account.id))
+  }, [cashAccounts, scenario?.nonInvestmentAccountIds])
+
+  const availableInvestmentAccounts = useMemo(() => {
+    const ids = new Set(scenario?.investmentAccountIds ?? [])
+    return investmentAccounts.filter((account) => !ids.has(account.id))
   }, [investmentAccounts, scenario?.investmentAccountIds])
 
   const loadReferenceData = useCallback(async () => {
@@ -825,6 +798,28 @@ const ScenarioDetailPage = () => {
   }, [loadScenario])
 
   useEffect(() => {
+    if (availableCashAccounts.length === 0) {
+      setSelectedCashAccountId('')
+      return
+    }
+    if (!availableCashAccounts.some((account) => account.id === selectedCashAccountId)) {
+      setSelectedCashAccountId(availableCashAccounts[0].id)
+    }
+  }, [availableCashAccounts, selectedCashAccountId])
+
+  useEffect(() => {
+    if (availableInvestmentAccounts.length === 0) {
+      setSelectedInvestmentAccountId('')
+      return
+    }
+    if (
+      !availableInvestmentAccounts.some((account) => account.id === selectedInvestmentAccountId)
+    ) {
+      setSelectedInvestmentAccountId(availableInvestmentAccounts[0].id)
+    }
+  }, [availableInvestmentAccounts, selectedInvestmentAccountId])
+
+  useEffect(() => {
     if (scenario?.id) {
       void loadRuns(scenario.id)
     }
@@ -974,8 +969,19 @@ const ScenarioDetailPage = () => {
   }
 
   const handleAddCashAccount = async () => {
-    const account = createCashAccount()
-    await storage.nonInvestmentAccountRepo.upsert(account)
+    if (!scenario) {
+      setSelectionError('Scenario data is not loaded yet.')
+      return
+    }
+    const account = cashAccounts.find((item) => item.id === selectedCashAccountId)
+    if (!account) {
+      setSelectionError('Select a cash account to add.')
+      return
+    }
+    if (scenario.nonInvestmentAccountIds.includes(account.id)) {
+      setSelectionError('Cash account is already linked to this scenario.')
+      return
+    }
     const now = Date.now()
     await updateScenarioIds(
       (current) => ({
@@ -990,6 +996,7 @@ const ScenarioDetailPage = () => {
     if (next) {
       applyCashAccountSelection(next)
     }
+    setSelectionError(null)
   }
 
   const handleRemoveCashAccount = async (accountId: string) => {
@@ -1019,10 +1026,24 @@ const ScenarioDetailPage = () => {
   }
 
   const handleAddInvestmentAccount = async () => {
-    const account = createInvestmentAccount()
-    await storage.investmentAccountRepo.upsert(account)
-    const holding = createHolding(account.id)
-    await storage.investmentAccountHoldingRepo.upsert(holding)
+    if (!scenario) {
+      setSelectionError('Scenario data is not loaded yet.')
+      return
+    }
+    const account = investmentAccounts.find((item) => item.id === selectedInvestmentAccountId)
+    if (!account) {
+      setSelectionError('Select an investment account to add.')
+      return
+    }
+    if (scenario.investmentAccountIds.includes(account.id)) {
+      setSelectionError('Investment account is already linked to this scenario.')
+      return
+    }
+    const holdings = await loadHoldingsForAccount(account.id)
+    if (holdings.length === 0) {
+      setSelectionError('Selected investment account has no holdings.')
+      return
+    }
     const now = Date.now()
     await updateScenarioIds(
       (current) => ({
@@ -1037,6 +1058,7 @@ const ScenarioDetailPage = () => {
     if (next) {
       await applyInvestmentAccountSelection(next)
     }
+    setSelectionError(null)
   }
 
   const handleRemoveInvestmentAccount = async (accountId: string) => {
@@ -1388,9 +1410,31 @@ const ScenarioDetailPage = () => {
         <div className="stack">
           <div className="row">
             <h2>Cash accounts</h2>
-            <button className="button secondary" type="button" onClick={handleAddCashAccount}>
-              Add cash account
-            </button>
+            <div className="button-row">
+              <select
+                aria-label="Add cash account"
+                value={selectedCashAccountId}
+                onChange={(event) => setSelectedCashAccountId(event.target.value)}
+                disabled={availableCashAccounts.length === 0}
+              >
+                {availableCashAccounts.length === 0 ? (
+                  <option value="">No cash accounts available</option>
+                ) : null}
+                {availableCashAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={handleAddCashAccount}
+                disabled={!selectedCashAccountId}
+              >
+                Add cash account
+              </button>
+            </div>
           </div>
           {scenarioCashAccounts.length === 0 ? (
             <p className="muted">No cash accounts available.</p>
@@ -1437,9 +1481,31 @@ const ScenarioDetailPage = () => {
         <div className="stack">
           <div className="row">
             <h2>Investment accounts</h2>
-            <button className="button secondary" type="button" onClick={handleAddInvestmentAccount}>
-              Add investment account
-            </button>
+            <div className="button-row">
+              <select
+                aria-label="Add investment account"
+                value={selectedInvestmentAccountId}
+                onChange={(event) => setSelectedInvestmentAccountId(event.target.value)}
+                disabled={availableInvestmentAccounts.length === 0}
+              >
+                {availableInvestmentAccounts.length === 0 ? (
+                  <option value="">No investment accounts available</option>
+                ) : null}
+                {availableInvestmentAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={handleAddInvestmentAccount}
+                disabled={!selectedInvestmentAccountId}
+              >
+                Add investment account
+              </button>
+            </div>
           </div>
           {scenarioInvestmentAccounts.length === 0 ? (
             <p className="muted">No investment accounts available.</p>

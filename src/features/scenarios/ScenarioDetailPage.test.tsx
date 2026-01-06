@@ -536,6 +536,37 @@ test('saving persists name, funding strategy, and spending strategy changes', as
 
 test('saving persists added person strategy, cash account, and investment account', async () => {
   const { seed, scenario } = buildSeed()
+  const now = Date.now()
+  const extraCash: NonInvestmentAccount = {
+    id: '00000000-0000-4000-8000-000000000308',
+    name: 'Extra cash',
+    balance: 2500,
+    interestRate: 0.015,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const extraInvestment: InvestmentAccount = {
+    id: '00000000-0000-4000-8000-000000000309',
+    name: 'Extra IRA',
+    createdAt: now,
+    updatedAt: now,
+  }
+  const extraHolding: InvestmentAccountHolding = {
+    id: '00000000-0000-4000-8000-000000000310',
+    name: 'Extra bonds',
+    taxType: 'traditional',
+    balance: 15000,
+    contributionBasis: 15000,
+    holdingType: 'bonds',
+    returnRate: 0.03,
+    returnStdDev: 0.1,
+    investmentAccountId: extraInvestment.id,
+    createdAt: now,
+    updatedAt: now,
+  }
+  seed.nonInvestmentAccounts.push(extraCash)
+  seed.investmentAccounts.push(extraInvestment)
+  seed.investmentAccountHoldings.push(extraHolding)
   const storage = createStorageFixture(seed)
   mockStore.storage = storage
 
@@ -551,13 +582,19 @@ test('saving persists added person strategy, cash account, and investment accoun
   await waitFor(() => {
     expect(storage.personStrategyRepo.upsert).toHaveBeenCalled()
   })
+  fireEvent.change(screen.getByLabelText('Add cash account'), {
+    target: { value: extraCash.id },
+  })
   fireEvent.click(screen.getByRole('button', { name: /add cash account/i }))
   await waitFor(() => {
-    expect(storage.nonInvestmentAccountRepo.upsert).toHaveBeenCalled()
+    expect(screen.getByText('Extra cash')).toBeTruthy()
+  })
+  fireEvent.change(screen.getByLabelText('Add investment account'), {
+    target: { value: extraInvestment.id },
   })
   fireEvent.click(screen.getByRole('button', { name: /add investment account/i }))
   await waitFor(() => {
-    expect(storage.investmentAccountRepo.upsert).toHaveBeenCalled()
+    expect(screen.getByText('Extra IRA')).toBeTruthy()
   })
 
   const personStrategies = await storage.personStrategyRepo.list()
