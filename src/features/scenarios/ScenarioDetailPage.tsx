@@ -1681,297 +1681,336 @@ const ScenarioDetailPage = () => {
 
           <div className="stack">
             <h3>Withdrawals and conversions</h3>
-            <div className="form-grid">
-              <label className="field">
-                <span>Withdrawal order 1</span>
-                <select {...register('scenario.strategies.withdrawal.order.0')}>
-                  {taxTypeSchema.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Withdrawal order 2</span>
-                <select {...register('scenario.strategies.withdrawal.order.1')}>
-                  {taxTypeSchema.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Withdrawal order 3</span>
-                <select {...register('scenario.strategies.withdrawal.order.2')}>
-                  {taxTypeSchema.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Withdrawal order 4</span>
-                <select {...register('scenario.strategies.withdrawal.order.3')}>
-                  {taxTypeSchema.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.withdrawal.useCashFirst')} />
-                <span>Use cash first</span>
-              </label>
-              <label className="field checkbox">
-                <input
-                  type="checkbox"
-                  {...register('scenario.strategies.withdrawal.avoidEarlyPenalty')}
-                />
-                <span>Avoid early penalties</span>
-              </label>
-              <label className="field">
-                <span>Guardrail percent</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register('scenario.strategies.withdrawal.guardrailPct', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Taxable gain harvest target</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.withdrawal.taxableGainHarvestTarget', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
+            <div className="stack">
+              <h4>Withdrawal order</h4>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Withdrawal order 1</span>
+                  <select {...register('scenario.strategies.withdrawal.order.0')}>
+                    {taxTypeSchema.options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Withdrawal order 2</span>
+                  <select {...register('scenario.strategies.withdrawal.order.1')}>
+                    {taxTypeSchema.options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Withdrawal order 3</span>
+                  <select {...register('scenario.strategies.withdrawal.order.2')}>
+                    {taxTypeSchema.options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Withdrawal order 4</span>
+                  <select {...register('scenario.strategies.withdrawal.order.3')}>
+                    {taxTypeSchema.options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
 
-            <div className="form-grid">
-              <label className="field">
-                <span>Cost basis method</span>
-                <select {...register('scenario.strategies.taxableLot.costBasisMethod')}>
-                  <option value="average">Average</option>
-                  <option value="fifo">FIFO</option>
-                  <option value="lifo">LIFO</option>
-                </select>
-              </label>
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.taxableLot.harvestLosses')} />
-                <span>Harvest losses</span>
-              </label>
-              <label className="field">
-                <span>Gain realization target</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.taxableLot.gainRealizationTarget', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
+            <div className="stack">
+              <h4>Withdrawal guardrails</h4>
+              <div className="form-grid">
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.withdrawal.useCashFirst')}
+                  />
+                  <span>Use cash first</span>
+                </label>
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.withdrawal.avoidEarlyPenalty')}
+                  />
+                  <span>Avoid early penalties</span>
+                </label>
+                <label className="field">
+                  <span>Guardrail percent</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    {...register('scenario.strategies.withdrawal.guardrailPct', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Taxable gain harvest target</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.withdrawal.taxableGainHarvestTarget', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="form-grid">
-              <label className="field checkbox">
-                <input
-                  type="checkbox"
-                  {...register('scenario.strategies.earlyRetirement.useRothBasisFirst')}
-                />
-                <span>Use Roth basis first</span>
-              </label>
-              <label className="field checkbox">
-                <input
-                  type="checkbox"
-                  {...register('scenario.strategies.earlyRetirement.allowPenalty')}
-                />
-                <span>Allow early penalties</span>
-              </label>
-              <label className="field">
-                <span>Penalty rate</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register('scenario.strategies.earlyRetirement.penaltyRate', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.earlyRetirement.use72t')} />
-                <span>Use 72(t)</span>
-              </label>
-              <label className="field">
-                <span>Bridge cash years</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.earlyRetirement.bridgeCashYears', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
+            <div className="stack">
+              <h4>Taxable lots</h4>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Cost basis method</span>
+                  <select {...register('scenario.strategies.taxableLot.costBasisMethod')}>
+                    <option value="average">Average</option>
+                    <option value="fifo">FIFO</option>
+                    <option value="lifo">LIFO</option>
+                  </select>
+                </label>
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.taxableLot.harvestLosses')}
+                  />
+                  <span>Harvest losses</span>
+                </label>
+                <label className="field">
+                  <span>Gain realization target</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.taxableLot.gainRealizationTarget', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="form-grid">
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.rothConversion.enabled')} />
-                <span>Enable Roth conversions</span>
-              </label>
-              <label className="field">
-                <span>Conversion start age</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothConversion.startAge', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Conversion end age</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothConversion.endAge', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Target ordinary income</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothConversion.targetOrdinaryIncome', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Min conversion</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothConversion.minConversion', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Max conversion</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothConversion.maxConversion', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field checkbox">
-                <input
-                  type="checkbox"
-                  {...register('scenario.strategies.rothConversion.respectIrmaa')}
-                />
-                <span>Respect IRMAA</span>
-              </label>
+            <div className="stack">
+              <h4>Early retirement</h4>
+              <div className="form-grid">
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.earlyRetirement.useRothBasisFirst')}
+                  />
+                  <span>Use Roth basis first</span>
+                </label>
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.earlyRetirement.allowPenalty')}
+                  />
+                  <span>Allow early penalties</span>
+                </label>
+                <label className="field">
+                  <span>Penalty rate</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    {...register('scenario.strategies.earlyRetirement.penaltyRate', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.earlyRetirement.use72t')}
+                  />
+                  <span>Use 72(t)</span>
+                </label>
+                <label className="field">
+                  <span>Bridge cash years</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.earlyRetirement.bridgeCashYears', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="form-grid">
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.rothLadder.enabled')} />
-                <span>Enable Roth ladder</span>
-              </label>
-              <label className="field">
-                <span>Ladder lead time (years)</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothLadder.leadTimeYears', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Ladder start age</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothLadder.startAge', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Ladder end age</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothLadder.endAge', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Target after-tax spending</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothLadder.targetAfterTaxSpending', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Annual conversion</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rothLadder.annualConversion', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
+            <div className="stack">
+              <h4>Roth conversions</h4>
+              <div className="form-grid">
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.rothConversion.enabled')}
+                  />
+                  <span>Enable Roth conversions</span>
+                </label>
+                <label className="field">
+                  <span>Conversion start age</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothConversion.startAge', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Conversion end age</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothConversion.endAge', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Target ordinary income</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothConversion.targetOrdinaryIncome', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Min conversion</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothConversion.minConversion', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Max conversion</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothConversion.maxConversion', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.rothConversion.respectIrmaa')}
+                  />
+                  <span>Respect IRMAA</span>
+                </label>
+              </div>
             </div>
 
-            <div className="form-grid">
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.rmd.enabled')} />
-                <span>Apply RMDs</span>
-              </label>
-              <label className="field">
-                <span>RMD start age</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rmd.startAge', { valueAsNumber: true })}
-                />
-              </label>
-              <label className="field">
-                <span>Excess handling</span>
-                <select {...register('scenario.strategies.rmd.excessHandling')}>
-                  <option value="spend">Spend</option>
-                  <option value="taxable">Taxable</option>
-                  <option value="roth">Roth</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Withholding rate</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register('scenario.strategies.rmd.withholdingRate', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <div className="field">
-                <span>RMD account types</span>
-                <div className="line-item-flags">
-                  {taxTypeSchema.options.map((taxType) => (
-                    <label className="field checkbox" key={taxType}>
-                      <input
-                        type="checkbox"
-                        value={taxType}
-                        {...register('scenario.strategies.rmd.accountTypes')}
-                      />
-                      <span>{taxType}</span>
-                    </label>
-                  ))}
+            <div className="stack">
+              <h4>Roth ladder</h4>
+              <div className="form-grid">
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.rothLadder.enabled')}
+                  />
+                  <span>Enable Roth ladder</span>
+                </label>
+                <label className="field">
+                  <span>Ladder lead time (years)</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothLadder.leadTimeYears', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Ladder start age</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothLadder.startAge', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Ladder end age</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothLadder.endAge', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Target after-tax spending</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothLadder.targetAfterTaxSpending', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Annual conversion</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rothLadder.annualConversion', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="stack">
+              <h4>Required minimum distributions</h4>
+              <div className="form-grid">
+                <label className="field checkbox">
+                  <input type="checkbox" {...register('scenario.strategies.rmd.enabled')} />
+                  <span>Apply RMDs</span>
+                </label>
+                <label className="field">
+                  <span>RMD start age</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.rmd.startAge', { valueAsNumber: true })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Excess handling</span>
+                  <select {...register('scenario.strategies.rmd.excessHandling')}>
+                    <option value="spend">Spend</option>
+                    <option value="taxable">Taxable</option>
+                    <option value="roth">Roth</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Withholding rate</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    {...register('scenario.strategies.rmd.withholdingRate', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <div className="field">
+                  <span>RMD account types</span>
+                  <div className="line-item-flags">
+                    {taxTypeSchema.options.map((taxType) => (
+                      <label className="field checkbox" key={taxType}>
+                        <input
+                          type="checkbox"
+                          value={taxType}
+                          {...register('scenario.strategies.rmd.accountTypes')}
+                        />
+                        <span>{taxType}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
