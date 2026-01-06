@@ -903,11 +903,7 @@ const ScenarioDetailPage = () => {
       }),
       { persist: true },
     )
-    const data = await loadReferenceData()
-    const next = data?.cashData[0]
-    if (next) {
-      applyCashAccountSelection(next)
-    }
+    await loadReferenceData()
   }
 
   const handleAddInvestmentAccount = async () => {

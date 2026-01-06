@@ -52,24 +52,21 @@ const computeCapitalGainsTax = (
   ordinaryIncome: number,
   brackets: TaxPolicy['capitalGainsBrackets'],
 ) => {
-  let remaining = capitalGains
+  let remaining = ordinaryIncome + capitalGains
+  let remainingOrdinaryIncome = ordinaryIncome
+  let lastLimit = 0
   let tax = 0
-  let offset = ordinaryIncome
   for (const bracket of brackets) {
     const limit = bracket.upTo ?? Infinity
-    const available = Math.max(0, limit - offset)
-    const taxable = Math.max(0, Math.min(remaining, available))
+    const taxable = Math.max(0, Math.min(remaining, limit - lastLimit))
+    const taxableOrdinaryIncome = Math.max(0, Math.min(remainingOrdinaryIncome, limit - lastLimit))
     if (taxable <= 0) {
-      offset = Math.min(limit, offset)
-      continue
+      break
     }
-    tax += taxable * bracket.rate
+    tax += (taxable - taxableOrdinaryIncome) * bracket.rate
     remaining -= taxable
-    offset += taxable
-  }
-  if (remaining > 0) {
-    const topRate = brackets.length > 0 ? brackets[brackets.length - 1].rate : 0
-    tax += remaining * topRate
+    remainingOrdinaryIncome -= taxableOrdinaryIncome
+    lastLimit = limit
   }
   return tax
 }

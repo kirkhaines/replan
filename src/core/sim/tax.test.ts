@@ -36,7 +36,8 @@ describe('tax helpers', () => {
       ],
       capitalGainsBrackets: [
         { upTo: 5000, rate: 0 },
-        { upTo: null, rate: 0.1 },
+        { upTo: 20000, rate: 0.1 },
+        { upTo: null, rate: 0.2 },
       ],
     }
 
@@ -51,7 +52,7 @@ describe('tax helpers', () => {
       applyCapitalGainsRates: true,
     })
 
-    expect(result.taxOwed).toBeCloseTo(2100, 5)
+    expect(result.taxOwed).toBeCloseTo(2700, 5)
     expect(result.magi).toBe(21000)
   })
 
