@@ -38,12 +38,12 @@ const getMonthsWorkedForYear = (
   year: number,
   cutoffDate?: Date,
 ) => {
-  const startRaw = new Date(period.startDate)
-  const end = new Date(period.endDate)
-  if (Number.isNaN(end.getTime())) {
-    return 0
-  }
-  const start = Number.isNaN(startRaw.getTime()) ? new Date(year, 0, 1) : startRaw
+  const startRaw = period.startDate ? new Date(period.startDate) : null
+  const endRaw = period.endDate ? new Date(period.endDate) : null
+  const start =
+    startRaw && !Number.isNaN(startRaw.getTime()) ? startRaw : new Date(year, 0, 1)
+  const end =
+    endRaw && !Number.isNaN(endRaw.getTime()) ? endRaw : new Date(year + 1, 0, 1)
   if (year < start.getFullYear() || year > end.getFullYear()) {
     return 0
   }

@@ -72,8 +72,8 @@ const SpendingLineItemDetailPage = () => {
 
     const normalized = {
       ...data,
-      inflationType:
-        data.inflationType ? data.inflationType : 'cpi',
+      inflationType: data.inflationType ? data.inflationType : 'cpi',
+      targetInvestmentAccountHoldingId: data.targetInvestmentAccountHoldingId ?? null,
     }
     setItem(normalized)
     setCategories(Array.from(new Set(allLineItems.map((item) => item.category))).filter(Boolean))
@@ -89,7 +89,7 @@ const SpendingLineItemDetailPage = () => {
 
   const handleChange = (
     field: keyof SpendingLineItem,
-    value: string | number | boolean | undefined,
+    value: string | number | boolean | null | undefined,
   ) => {
     setItem((current) => (current ? { ...current, [field]: value } : current))
   }
@@ -292,7 +292,7 @@ const SpendingLineItemDetailPage = () => {
                 <select
                   value={item.targetInvestmentAccountHoldingId ?? ''}
                   onChange={(event) =>
-                    handleChange('targetInvestmentAccountHoldingId', event.target.value || undefined)
+                    handleChange('targetInvestmentAccountHoldingId', event.target.value || null)
                   }
                 >
                   <option value="">None</option>

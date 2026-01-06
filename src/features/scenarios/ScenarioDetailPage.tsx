@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { useFieldArray, useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -40,6 +40,7 @@ import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
+import useUnsavedChangesWarning from '../../hooks/useUnsavedChangesWarning'
 import {
   inflationDefaultsSeed,
   taxPolicySeed,
@@ -232,6 +233,7 @@ const buildSimulationSnapshot = async (
 const normalizeSpendingLineItem = (item: SpendingLineItem): SpendingLineItem => ({
   ...item,
   inflationType: item.inflationType ?? 'cpi',
+  targetInvestmentAccountHoldingId: item.targetInvestmentAccountHoldingId ?? null,
 })
 
 const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountHolding => ({
@@ -241,6 +243,27 @@ const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountH
     holding.returnRate ?? (holding as InvestmentAccountHolding & { return?: number }).return ?? 0,
   returnStdDev:
     holding.returnStdDev ?? (holding as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
+})
+
+const toIsoDateString = (value?: string | null) => {
+  if (!value) {
+    return null
+  }
+  const matches = /^\d{4}-\d{2}-\d{2}$/.test(value)
+  if (!matches) {
+    return null
+  }
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+  return value
+}
+
+const normalizeFutureWorkPeriod = (period: FutureWorkPeriod): FutureWorkPeriod => ({
+  ...period,
+  startDate: toIsoDateString(period.startDate),
+  endDate: toIsoDateString(period.endDate),
 })
 
 const buildInflationMap = (
@@ -261,6 +284,7 @@ const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEdi
     ...values.scenario,
     updatedAt: now,
     spendingStrategyId: values.spendingStrategy.id,
+    strategies: normalizeScenarioStrategies(values.scenario.strategies),
   }
   const { startAge: _startAge, ...socialStrategy } = values.socialSecurityStrategy as SocialSecurityStrategy & {
     startAge?: number
@@ -361,6 +385,7 @@ const ScenarioDetailPage = () => {
   const [inflationDefaults, setInflationDefaults] = useState<InflationDefault[]>([])
   const [selectedCashAccountId, setSelectedCashAccountId] = useState('')
   const [selectedInvestmentAccountId, setSelectedInvestmentAccountId] = useState('')
+  const inflationDefaultsRef = useRef<InflationDefault[]>([])
 
   const defaultValues = useMemo(() => {
     const bundle = createDefaultScenarioBundle()
@@ -380,20 +405,37 @@ const ScenarioDetailPage = () => {
     defaultValues,
   })
 
+  useUnsavedChangesWarning(isDirty)
+
   const selectedSpendingStrategyId = watch('spendingStrategy.id')
   const inflationAssumptions = watch('scenario.inflationAssumptions')
   const personStrategyIds = watch('scenario.personStrategyIds')
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
   const investmentAccountIds = watch('scenario.investmentAccountIds')
-  const glidepathTargets = useFieldArray({
+  const {
+    fields: glidepathTargetFields,
+    append: appendGlidepathTarget,
+    remove: removeGlidepathTarget,
+    replace: replaceGlidepathTargets,
+  } = useFieldArray({
     control,
     name: 'scenario.strategies.glidepath.targets',
   })
-  const eventFields = useFieldArray({
+  const {
+    fields: eventRows,
+    append: appendEvent,
+    remove: removeEvent,
+    replace: replaceEvents,
+  } = useFieldArray({
     control,
     name: 'scenario.strategies.events',
   })
-  const pensionFields = useFieldArray({
+  const {
+    fields: pensionRows,
+    append: appendPension,
+    remove: removePension,
+    replace: replacePensions,
+  } = useFieldArray({
     control,
     name: 'scenario.strategies.pensions',
   })
@@ -675,7 +717,9 @@ const ScenarioDetailPage = () => {
       setValue('personStrategy', personStrategy, { shouldDirty: true })
       setValue('socialSecurityStrategy', normalizedSocial, { shouldDirty: true })
       setValue('futureWorkStrategy', futureWorkStrategy, { shouldDirty: true })
-      setValue('futureWorkPeriod', futureWorkPeriods[0], { shouldDirty: true })
+      setValue('futureWorkPeriod', normalizeFutureWorkPeriod(futureWorkPeriods[0]), {
+        shouldDirty: true,
+      })
       setSelectionError(null)
     },
     [
@@ -753,7 +797,10 @@ const ScenarioDetailPage = () => {
 
     const normalizedSocial = normalizeSocialSecurityStrategy(socialSecurityStrategy, person)
 
-    const inflationAssumptions = buildInflationMap(inflationDefaults, data.inflationAssumptions)
+    const inflationAssumptions = buildInflationMap(
+      inflationDefaultsRef.current,
+      data.inflationAssumptions,
+    )
     const normalizedScenario = {
       ...data,
       inflationAssumptions,
@@ -764,7 +811,7 @@ const ScenarioDetailPage = () => {
       person,
       socialSecurityStrategy: normalizedSocial,
       futureWorkStrategy,
-      futureWorkPeriod: futureWorkPeriods[0],
+      futureWorkPeriod: normalizeFutureWorkPeriod(futureWorkPeriods[0]),
       spendingStrategy,
       spendingLineItem: normalizeSpendingLineItem(spendingLineItems[0]),
       nonInvestmentAccount,
@@ -775,10 +822,13 @@ const ScenarioDetailPage = () => {
 
     setScenario(normalizedScenario)
     reset(bundle)
+    replaceGlidepathTargets(normalizedScenario.strategies.glidepath.targets)
+    replaceEvents(normalizedScenario.strategies.events)
+    replacePensions(normalizedScenario.strategies.pensions)
     setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
     setSelectionError(null)
     setIsLoading(false)
-  }, [id, inflationDefaults, reset, storage])
+  }, [id, replaceEvents, replaceGlidepathTargets, replacePensions, reset, storage])
 
   const loadRuns = useCallback(
     async (scenarioId: string) => {
@@ -791,6 +841,10 @@ const ScenarioDetailPage = () => {
   useEffect(() => {
     void loadReferenceData()
   }, [loadReferenceData])
+
+  useEffect(() => {
+    inflationDefaultsRef.current = inflationDefaults
+  }, [inflationDefaults])
 
   useEffect(() => {
     void loadScenario()
@@ -1091,8 +1145,28 @@ const ScenarioDetailPage = () => {
   }
 
 
+  const onInvalid: SubmitErrorHandler<ScenarioEditorValues> = (formErrors) => {
+    console.warn('[Scenario] Save blocked by validation errors.', formErrors)
+  }
+
   const onSubmit = async (values: ScenarioEditorValues) => {
-    await persistBundle(values, storage, setScenario, reset)
+    console.info('[Scenario] Save requested.', {
+      id: values.scenario.id,
+      name: values.scenario.name,
+      eventCount: values.scenario.strategies.events.length,
+      pensionCount: values.scenario.strategies.pensions.length,
+      isDirty,
+    })
+    try {
+      const saved = await persistBundle(values, storage, setScenario, reset)
+      console.info('[Scenario] Save complete.', {
+        id: saved.scenario.id,
+        updatedAt: saved.scenario.updatedAt,
+      })
+    } catch (error) {
+      console.error('[Scenario] Save failed.', error)
+      throw error
+    }
   }
 
   const onRun = async (values: ScenarioEditorValues) => {
@@ -1158,7 +1232,7 @@ const ScenarioDetailPage = () => {
         </div>
       ) : null}
 
-      <form className="card stack" onSubmit={handleSubmit(onSubmit)}>
+      <form className="card stack" onSubmit={handleSubmit(onSubmit, onInvalid)}>
         <input type="hidden" {...register('scenario.id')} />
         <input type="hidden" {...register('scenario.createdAt', { valueAsNumber: true })} />
         <input type="hidden" {...register('scenario.updatedAt', { valueAsNumber: true })} />
@@ -1216,7 +1290,24 @@ const ScenarioDetailPage = () => {
         />
         <input type="hidden" {...register('futureWorkPeriod.id')} />
         <input type="hidden" {...register('futureWorkPeriod.futureWorkStrategyId')} />
-        <input type="hidden" {...register('futureWorkPeriod.401kInvestmentAccountHoldingId')} />
+        <input
+          type="hidden"
+          {...register('futureWorkPeriod.startDate', {
+            setValueAs: (value) => (value === '' ? null : value),
+          })}
+        />
+        <input
+          type="hidden"
+          {...register('futureWorkPeriod.endDate', {
+            setValueAs: (value) => (value === '' ? null : value),
+          })}
+        />
+        <input
+          type="hidden"
+          {...register('futureWorkPeriod.401kInvestmentAccountHoldingId', {
+            setValueAs: (value) => (value === '' ? undefined : value),
+          })}
+        />
         <input
           type="hidden"
           {...register('futureWorkPeriod.createdAt', { valueAsNumber: true })}
@@ -1236,7 +1327,12 @@ const ScenarioDetailPage = () => {
         />
         <input type="hidden" {...register('spendingLineItem.id')} />
         <input type="hidden" {...register('spendingLineItem.spendingStrategyId')} />
-        <input type="hidden" {...register('spendingLineItem.targetInvestmentAccountHoldingId')} />
+        <input
+          type="hidden"
+          {...register('spendingLineItem.targetInvestmentAccountHoldingId', {
+            setValueAs: (value) => (value === '' ? null : value),
+          })}
+        />
         <input type="hidden" {...register('spendingLineItem.inflationType')} />
         <input
           type="hidden"
@@ -1706,7 +1802,7 @@ const ScenarioDetailPage = () => {
                   className="button secondary"
                   type="button"
                   onClick={() =>
-                    glidepathTargets.append({
+                    appendGlidepathTarget({
                       age: 65,
                       equity: 0.6,
                       bonds: 0.3,
@@ -1719,7 +1815,7 @@ const ScenarioDetailPage = () => {
                   Add target
                 </button>
               </div>
-              {glidepathTargets.fields.length === 0 ? (
+              {glidepathTargetFields.length === 0 ? (
                 <p className="muted">No glidepath targets yet.</p>
               ) : (
                 <table className="table">
@@ -1735,11 +1831,12 @@ const ScenarioDetailPage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {glidepathTargets.fields.map((field, index) => (
+                    {glidepathTargetFields.map((field, index) => (
                       <tr key={field.id}>
                         <td>
                           <input
                             type="number"
+                            defaultValue={field.age}
                             {...register(
                               `scenario.strategies.glidepath.targets.${index}.age`,
                               { valueAsNumber: true },
@@ -1750,6 +1847,7 @@ const ScenarioDetailPage = () => {
                           <input
                             type="number"
                             step="0.01"
+                            defaultValue={field.equity}
                             {...register(
                               `scenario.strategies.glidepath.targets.${index}.equity`,
                               { valueAsNumber: true },
@@ -1760,6 +1858,7 @@ const ScenarioDetailPage = () => {
                           <input
                             type="number"
                             step="0.01"
+                            defaultValue={field.bonds}
                             {...register(
                               `scenario.strategies.glidepath.targets.${index}.bonds`,
                               { valueAsNumber: true },
@@ -1770,6 +1869,7 @@ const ScenarioDetailPage = () => {
                           <input
                             type="number"
                             step="0.01"
+                            defaultValue={field.cash}
                             {...register(
                               `scenario.strategies.glidepath.targets.${index}.cash`,
                               { valueAsNumber: true },
@@ -1780,6 +1880,7 @@ const ScenarioDetailPage = () => {
                           <input
                             type="number"
                             step="0.01"
+                            defaultValue={field.realEstate}
                             {...register(
                               `scenario.strategies.glidepath.targets.${index}.realEstate`,
                               { valueAsNumber: true },
@@ -1790,6 +1891,7 @@ const ScenarioDetailPage = () => {
                           <input
                             type="number"
                             step="0.01"
+                            defaultValue={field.other}
                             {...register(
                               `scenario.strategies.glidepath.targets.${index}.other`,
                               { valueAsNumber: true },
@@ -1800,8 +1902,8 @@ const ScenarioDetailPage = () => {
                           <button
                             className="link-button"
                             type="button"
-                            disabled={glidepathTargets.fields.length <= 1}
-                            onClick={() => glidepathTargets.remove(index)}
+                            disabled={glidepathTargetFields.length <= 1}
+                            onClick={() => removeGlidepathTarget(index)}
                           >
                             Remove
                           </button>
@@ -2334,7 +2436,7 @@ const ScenarioDetailPage = () => {
                 type="button"
                 onClick={() => {
                   const today = new Date().toISOString().slice(0, 10)
-                  eventFields.append({
+                  appendEvent({
                     id: createUuid(),
                     name: 'Event',
                     date: today,
@@ -2346,7 +2448,7 @@ const ScenarioDetailPage = () => {
                 Add event
               </button>
             </div>
-            {eventFields.fields.length === 0 ? (
+            {eventRows.length === 0 ? (
               <p className="muted">No events yet.</p>
             ) : (
               <table className="table">
@@ -2360,28 +2462,39 @@ const ScenarioDetailPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {eventFields.fields.map((field, index) => (
+                  {eventRows.map((field, index) => (
                     <tr key={field.id}>
                       <td>
                         <input
                           type="hidden"
                           {...register(`scenario.strategies.events.${index}.id`)}
                         />
-                        <input {...register(`scenario.strategies.events.${index}.name`)} />
+                        <input
+                          defaultValue={field.name}
+                          {...register(`scenario.strategies.events.${index}.name`)}
+                        />
                       </td>
                       <td>
-                        <input type="date" {...register(`scenario.strategies.events.${index}.date`)} />
+                        <input
+                          type="date"
+                          defaultValue={field.date}
+                          {...register(`scenario.strategies.events.${index}.date`)}
+                        />
                       </td>
                       <td>
                         <input
                           type="number"
+                          defaultValue={field.amount}
                           {...register(`scenario.strategies.events.${index}.amount`, {
                             valueAsNumber: true,
                           })}
                         />
                       </td>
                       <td>
-                        <select {...register(`scenario.strategies.events.${index}.taxTreatment`)}>
+                        <select
+                          defaultValue={field.taxTreatment}
+                          {...register(`scenario.strategies.events.${index}.taxTreatment`)}
+                        >
                           {taxTreatmentSchema.options.map((option) => (
                             <option key={option} value={option}>
                               {option}
@@ -2393,7 +2506,7 @@ const ScenarioDetailPage = () => {
                         <button
                           className="link-button"
                           type="button"
-                          onClick={() => eventFields.remove(index)}
+                          onClick={() => removeEvent(index)}
                         >
                           Remove
                         </button>
@@ -2413,7 +2526,7 @@ const ScenarioDetailPage = () => {
                 type="button"
                 onClick={() => {
                   const today = new Date().toISOString().slice(0, 10)
-                  pensionFields.append({
+                  appendPension({
                     id: createUuid(),
                     name: 'Pension',
                     startDate: today,
@@ -2427,7 +2540,7 @@ const ScenarioDetailPage = () => {
                 Add pension
               </button>
             </div>
-            {pensionFields.fields.length === 0 ? (
+            {pensionRows.length === 0 ? (
               <p className="muted">No pensions yet.</p>
             ) : (
               <table className="table">
@@ -2443,31 +2556,46 @@ const ScenarioDetailPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pensionFields.fields.map((field, index) => (
+                  {pensionRows.map((field, index) => (
                     <tr key={field.id}>
                       <td>
                         <input
                           type="hidden"
                           {...register(`scenario.strategies.pensions.${index}.id`)}
                         />
-                        <input {...register(`scenario.strategies.pensions.${index}.name`)} />
+                        <input
+                          defaultValue={field.name}
+                          {...register(`scenario.strategies.pensions.${index}.name`)}
+                        />
                       </td>
                       <td>
-                        <input type="date" {...register(`scenario.strategies.pensions.${index}.startDate`)} />
+                        <input
+                          type="date"
+                          defaultValue={field.startDate}
+                          {...register(`scenario.strategies.pensions.${index}.startDate`)}
+                        />
                       </td>
                       <td>
-                        <input type="date" {...register(`scenario.strategies.pensions.${index}.endDate`)} />
+                        <input
+                          type="date"
+                          defaultValue={field.endDate ?? ''}
+                          {...register(`scenario.strategies.pensions.${index}.endDate`)}
+                        />
                       </td>
                       <td>
                         <input
                           type="number"
+                          defaultValue={field.monthlyAmount}
                           {...register(`scenario.strategies.pensions.${index}.monthlyAmount`, {
                             valueAsNumber: true,
                           })}
                         />
                       </td>
                       <td>
-                        <select {...register(`scenario.strategies.pensions.${index}.inflationType`)}>
+                        <select
+                          defaultValue={field.inflationType}
+                          {...register(`scenario.strategies.pensions.${index}.inflationType`)}
+                        >
                           {inflationTypeSchema.options.map((option) => (
                             <option key={option} value={option}>
                               {option}
@@ -2476,7 +2604,10 @@ const ScenarioDetailPage = () => {
                         </select>
                       </td>
                       <td>
-                        <select {...register(`scenario.strategies.pensions.${index}.taxTreatment`)}>
+                        <select
+                          defaultValue={field.taxTreatment}
+                          {...register(`scenario.strategies.pensions.${index}.taxTreatment`)}
+                        >
                           {taxTreatmentSchema.options.map((option) => (
                             <option key={option} value={option}>
                               {option}
@@ -2488,7 +2619,7 @@ const ScenarioDetailPage = () => {
                         <button
                           className="link-button"
                           type="button"
-                          onClick={() => pensionFields.remove(index)}
+                          onClick={() => removePension(index)}
                         >
                           Remove
                         </button>

@@ -6,6 +6,7 @@ import { nonInvestmentAccountSchema, type NonInvestmentAccount } from '../../cor
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { now } from '../../core/utils/time'
+import useUnsavedChangesWarning from '../../hooks/useUnsavedChangesWarning'
 
 const NonInvestmentAccountDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -36,6 +37,8 @@ const NonInvestmentAccountDetailPage = () => {
     resolver: zodResolver(nonInvestmentAccountSchema),
     defaultValues,
   })
+
+  useUnsavedChangesWarning(isDirty)
 
   const loadAccount = useCallback(async () => {
     if (!id) {

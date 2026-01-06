@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { HashRouter, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import ScenarioDetailPage from './ScenarioDetailPage'
 import type { StorageClient } from '../../core/storage/types'
@@ -470,12 +470,25 @@ const renderScenario = (scenarioId: string) => {
   )
 }
 
+const renderScenarioWithNav = (scenarioId: string) => {
+  window.location.hash = `#/scenarios/${scenarioId}`
+  render(
+    <HashRouter>
+      <Routes>
+        <Route path="/scenarios/:id" element={<ScenarioDetailPage />} />
+        <Route path="/scenarios" element={<div>Scenario List</div>} />
+      </Routes>
+    </HashRouter>,
+  )
+}
+
 beforeEach(() => {
   uuidCounter = 0
 })
 
 afterEach(() => {
   cleanup()
+  window.location.hash = ''
 })
 
 test('renders scenario detail with linked data', async () => {
@@ -514,7 +527,7 @@ test('saving persists name and spending strategy changes', async () => {
   const nameInput = screen.getByLabelText('Scenario name')
   fireEvent.change(nameInput, { target: { value: 'Updated plan' } })
 
-  const spendingSelect = screen.getByLabelText('Spending strategy')
+  const spendingSelect = screen.getByLabelText('Strategy')
   fireEvent.change(spendingSelect, { target: { value: spendingStrategyTwo.id } })
 
   const saveButton = screen.getByRole('button', { name: /save scenario/i })
@@ -528,6 +541,126 @@ test('saving persists name and spending strategy changes', async () => {
     (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
   expect(lastCall?.name).toBe('Updated plan')
   expect(lastCall?.spendingStrategyId).toBe(spendingStrategyTwo.id)
+})
+
+test('saving persists strategy scalars, events, and pensions', async () => {
+  const { seed, scenario } = buildSeed()
+  const storage = createStorageFixture(seed)
+  mockStore.storage = storage
+
+  renderScenario(scenario.id)
+
+  await screen.findByText('Edit scenario')
+
+  fireEvent.change(screen.getByLabelText('Volatility scale'), { target: { value: '0.75' } })
+
+  fireEvent.click(screen.getByRole('button', { name: /add event/i }))
+  const eventsHeading = screen.getByRole('heading', { name: 'Events' })
+  const eventsSection = eventsHeading.parentElement?.parentElement
+  if (!eventsSection) {
+    throw new Error('Missing events section')
+  }
+  const eventsTable = within(eventsSection).getByRole('table')
+  const eventRow = within(eventsTable).getAllByRole('row')[1]
+  const eventNameInput = eventRow.querySelector('input:not([type])')
+  const eventDateInput = eventRow.querySelector('input[type=\"date\"]')
+  const eventAmountInput = eventRow.querySelector('input[type=\"number\"]')
+  const eventTaxSelect = eventRow.querySelector('select')
+  if (!eventNameInput || !eventDateInput || !eventAmountInput || !eventTaxSelect) {
+    throw new Error('Missing event row inputs')
+  }
+  fireEvent.change(eventNameInput, { target: { value: 'Windfall' } })
+  fireEvent.change(eventDateInput, { target: { value: '2032-05-01' } })
+  fireEvent.change(eventAmountInput, { target: { value: '5000' } })
+  fireEvent.change(eventTaxSelect, { target: { value: 'ordinary' } })
+
+  fireEvent.click(screen.getByRole('button', { name: /add pension/i }))
+  const pensionsHeading = screen.getByRole('heading', { name: 'Pensions' })
+  const pensionsSection = pensionsHeading.parentElement?.parentElement
+  if (!pensionsSection) {
+    throw new Error('Missing pensions section')
+  }
+  const pensionsTable = within(pensionsSection).getByRole('table')
+  const pensionRow = within(pensionsTable).getAllByRole('row')[1]
+  const pensionNameInput = pensionRow.querySelector('input:not([type])')
+  const pensionDateInputs = pensionRow.querySelectorAll('input[type=\"date\"]')
+  const pensionAmountInput = pensionRow.querySelector('input[type=\"number\"]')
+  const pensionSelects = pensionRow.querySelectorAll('select')
+  if (
+    !pensionNameInput ||
+    pensionDateInputs.length < 2 ||
+    !pensionAmountInput ||
+    pensionSelects.length < 2
+  ) {
+    throw new Error('Missing pension row inputs')
+  }
+  fireEvent.change(pensionNameInput, { target: { value: 'Company pension' } })
+  fireEvent.change(pensionDateInputs[0], { target: { value: '2030-01-01' } })
+  fireEvent.change(pensionDateInputs[1], { target: { value: '2050-01-01' } })
+  fireEvent.change(pensionAmountInput, { target: { value: '1800' } })
+  fireEvent.change(pensionSelects[0], { target: { value: 'medical' } })
+  fireEvent.change(pensionSelects[1], { target: { value: 'tax_exempt' } })
+
+  const saveButton = screen.getByRole('button', { name: /save scenario/i })
+  fireEvent.click(saveButton)
+
+  await waitFor(() => {
+    expect(storage.scenarioRepo.upsert).toHaveBeenCalled()
+  })
+
+  const lastCall =
+    (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
+  expect(lastCall?.strategies.returnModel.volatilityScale).toBe(0.75)
+  expect(lastCall?.strategies.events).toHaveLength(1)
+  expect(lastCall?.strategies.events[0]?.name).toBe('Windfall')
+  expect(lastCall?.strategies.events[0]?.amount).toBe(5000)
+  expect(lastCall?.strategies.events[0]?.taxTreatment).toBe('ordinary')
+  expect(lastCall?.strategies.pensions).toHaveLength(1)
+  expect(lastCall?.strategies.pensions[0]?.name).toBe('Company pension')
+  expect(lastCall?.strategies.pensions[0]?.monthlyAmount).toBe(1800)
+  expect(lastCall?.strategies.pensions[0]?.inflationType).toBe('medical')
+  expect(lastCall?.strategies.pensions[0]?.taxTreatment).toBe('tax_exempt')
+})
+
+test('prompts before navigating away with unsaved changes', async () => {
+  const { seed, scenario } = buildSeed()
+  const storage = createStorageFixture(seed)
+  mockStore.storage = storage
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+  renderScenarioWithNav(scenario.id)
+
+  await screen.findByText('Edit scenario')
+
+  fireEvent.change(screen.getByLabelText('Scenario name'), { target: { value: 'Dirty plan' } })
+  fireEvent.click(screen.getByText('Back'))
+
+  await waitFor(() => {
+    expect(confirmSpy).toHaveBeenCalled()
+  })
+  expect(screen.getByText('Edit scenario')).toBeTruthy()
+  expect(screen.queryByText('Scenario List')).toBeNull()
+  confirmSpy.mockRestore()
+})
+
+test('allows navigation when confirming unsaved changes', async () => {
+  const { seed, scenario } = buildSeed()
+  const storage = createStorageFixture(seed)
+  mockStore.storage = storage
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+  renderScenarioWithNav(scenario.id)
+
+  await screen.findByText('Edit scenario')
+
+  fireEvent.change(screen.getByLabelText('Scenario name'), { target: { value: 'Dirty plan' } })
+  fireEvent.click(screen.getByText('Back'))
+
+  await waitFor(() => {
+    expect(confirmSpy).toHaveBeenCalled()
+  })
+  expect(await screen.findByText('Scenario List')).toBeTruthy()
+  confirmSpy.mockRestore()
 })
 
 test('saving persists added person strategy, cash account, and investment account', async () => {

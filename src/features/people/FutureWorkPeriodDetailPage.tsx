@@ -34,7 +34,10 @@ const FutureWorkPeriodDetailPage = () => {
     void loadPeriod()
   }, [loadPeriod])
 
-  const handleChange = (field: keyof FutureWorkPeriod, value: string | number | boolean) => {
+  const handleChange = (
+    field: keyof FutureWorkPeriod,
+    value: string | number | boolean | null,
+  ) => {
     setPeriod((current) => (current ? { ...current, [field]: value } : current))
   }
 
@@ -86,8 +89,10 @@ const FutureWorkPeriodDetailPage = () => {
             <span>Start date</span>
             <input
               type="date"
-              value={period.startDate}
-              onChange={(event) => handleChange('startDate', event.target.value)}
+              value={period.startDate ?? ''}
+              onChange={(event) =>
+                handleChange('startDate', event.target.value || null)
+              }
             />
           </label>
 
@@ -95,8 +100,8 @@ const FutureWorkPeriodDetailPage = () => {
             <span>End date</span>
             <input
               type="date"
-              value={period.endDate}
-              onChange={(event) => handleChange('endDate', event.target.value)}
+              value={period.endDate ?? ''}
+              onChange={(event) => handleChange('endDate', event.target.value || null)}
             />
           </label>
         </div>

@@ -18,7 +18,7 @@ export const spendingLineItemSchema = baseEntitySchema.extend({
   isPreTax: z.boolean(),
   isCharitable: z.boolean(),
   isWork: z.boolean(),
-  targetInvestmentAccountHoldingId: z.string().uuid().optional(),
+  targetInvestmentAccountHoldingId: z.union([z.string().uuid(), z.null()]).optional(),
   inflationType: inflationTypeSchema,
 })
 

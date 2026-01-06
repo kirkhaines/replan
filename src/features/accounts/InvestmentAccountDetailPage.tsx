@@ -11,6 +11,7 @@ import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { createUuid } from '../../core/utils/uuid'
 import { now } from '../../core/utils/time'
+import useUnsavedChangesWarning from '../../hooks/useUnsavedChangesWarning'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -60,6 +61,8 @@ const InvestmentAccountDetailPage = () => {
     resolver: zodResolver(investmentAccountSchema),
     defaultValues,
   })
+
+  useUnsavedChangesWarning(isDirty)
 
   const loadAccount = useCallback(async () => {
     if (!id) {

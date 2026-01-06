@@ -13,6 +13,7 @@ import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { now } from '../../core/utils/time'
 import { holdingTypeDefaultsSeed } from '../../core/defaults/defaultData'
+import useUnsavedChangesWarning from '../../hooks/useUnsavedChangesWarning'
 
 const formatStdDevRange = (returnRate: number, returnStdDev: number) =>
   `(${(returnRate - returnStdDev).toFixed(2)} - ${(returnRate + returnStdDev).toFixed(2)})`
@@ -55,6 +56,8 @@ const HoldingDetailPage = () => {
     resolver: zodResolver(investmentAccountHoldingSchema),
     defaultValues,
   })
+
+  useUnsavedChangesWarning(isDirty)
 
   const selectedHoldingType = watch('holdingType')
   const returnRate = watch('returnRate')

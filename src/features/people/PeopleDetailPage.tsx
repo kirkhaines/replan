@@ -7,6 +7,7 @@ import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { now } from '../../core/utils/time'
 import { createUuid } from '../../core/utils/uuid'
+import useUnsavedChangesWarning from '../../hooks/useUnsavedChangesWarning'
 
 const PeopleDetailPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -45,6 +46,8 @@ const PeopleDetailPage = () => {
     resolver: zodResolver(personSchema),
     defaultValues,
   })
+
+  useUnsavedChangesWarning(isDirty)
 
   const loadPerson = useCallback(async () => {
     if (!id) {
