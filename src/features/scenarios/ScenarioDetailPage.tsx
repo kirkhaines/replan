@@ -5,16 +5,6 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   scenarioSchema,
-  personSchema,
-  socialSecurityStrategySchema,
-  futureWorkStrategySchema,
-  futureWorkPeriodSchema,
-  spendingStrategySchema,
-  spendingLineItemSchema,
-  nonInvestmentAccountSchema,
-  investmentAccountSchema,
-  investmentAccountHoldingSchema,
-  personStrategySchema,
   inflationTypeSchema,
   taxTypeSchema,
   taxTreatmentSchema,
@@ -26,7 +16,6 @@ import {
   type Person,
   type SocialSecurityStrategy,
   type FutureWorkStrategy,
-  type FutureWorkPeriod,
   type SpendingStrategy,
   type SpendingLineItem,
   type NonInvestmentAccount,
@@ -86,33 +75,11 @@ const normalizeSocialSecurityStrategy = (
 
 type ScenarioEditorValues = {
   scenario: Scenario
-  person: Person
-  socialSecurityStrategy: SocialSecurityStrategy
-  futureWorkStrategy: FutureWorkStrategy
-  futureWorkPeriod: FutureWorkPeriod
-  spendingStrategy: SpendingStrategy
-  spendingLineItem: SpendingLineItem
-  nonInvestmentAccount: NonInvestmentAccount
-  investmentAccount: InvestmentAccount
-  investmentAccountHolding: InvestmentAccountHolding
-  personStrategy: PersonStrategy
 }
 
 const editorSchema = z.object({
   scenario: scenarioSchema,
-  person: personSchema,
-  socialSecurityStrategy: socialSecurityStrategySchema,
-  futureWorkStrategy: futureWorkStrategySchema,
-  futureWorkPeriod: futureWorkPeriodSchema,
-  spendingStrategy: spendingStrategySchema,
-  spendingLineItem: spendingLineItemSchema,
-  nonInvestmentAccount: nonInvestmentAccountSchema,
-  investmentAccount: investmentAccountSchema,
-  investmentAccountHolding: investmentAccountHoldingSchema,
-  personStrategy: personStrategySchema,
 })
-
-const toEditorValues = (bundle: ScenarioEditorValues): ScenarioEditorValues => bundle
 
 const isDefined = <T,>(value: T | undefined): value is T => Boolean(value)
 
@@ -245,26 +212,6 @@ const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountH
     holding.returnStdDev ?? (holding as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
 })
 
-const toIsoDateString = (value?: string | null) => {
-  if (!value) {
-    return null
-  }
-  const matches = /^\d{4}-\d{2}-\d{2}$/.test(value)
-  if (!matches) {
-    return null
-  }
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-  return value
-}
-
-const normalizeFutureWorkPeriod = (period: FutureWorkPeriod): FutureWorkPeriod => ({
-  ...period,
-  startDate: toIsoDateString(period.startDate),
-  endDate: toIsoDateString(period.endDate),
-})
 
 const buildInflationMap = (
   defaults: InflationDefault[],
@@ -279,59 +226,13 @@ const buildInflationMap = (
   ) as Scenario['inflationAssumptions']
 }
 
-const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => {
-  const scenario = {
+const normalizeValues = (values: ScenarioEditorValues, now: number): ScenarioEditorValues => ({
+  scenario: {
     ...values.scenario,
     updatedAt: now,
-    spendingStrategyId: values.spendingStrategy.id,
     strategies: normalizeScenarioStrategies(values.scenario.strategies),
-  }
-  const { startAge: _startAge, ...socialStrategy } = values.socialSecurityStrategy as SocialSecurityStrategy & {
-    startAge?: number
-  }
-
-  return {
-    scenario,
-    person: { ...values.person, updatedAt: now },
-    socialSecurityStrategy: {
-      ...socialStrategy,
-      updatedAt: now,
-      personId: values.person.id,
-    },
-    futureWorkStrategy: {
-      ...values.futureWorkStrategy,
-      updatedAt: now,
-      personId: values.person.id,
-    },
-    futureWorkPeriod: {
-      ...values.futureWorkPeriod,
-      updatedAt: now,
-      futureWorkStrategyId: values.futureWorkStrategy.id,
-      '401kInvestmentAccountHoldingId': values.investmentAccountHolding.id,
-    },
-    spendingStrategy: { ...values.spendingStrategy, updatedAt: now },
-    spendingLineItem: {
-      ...values.spendingLineItem,
-      updatedAt: now,
-      spendingStrategyId: values.spendingStrategy.id,
-      targetInvestmentAccountHoldingId: values.investmentAccountHolding.id,
-    },
-    nonInvestmentAccount: { ...values.nonInvestmentAccount, updatedAt: now },
-    investmentAccount: { ...values.investmentAccount, updatedAt: now },
-    investmentAccountHolding: {
-      ...values.investmentAccountHolding,
-      updatedAt: now,
-      investmentAccountId: values.investmentAccount.id,
-    },
-    personStrategy: {
-      ...values.personStrategy,
-      updatedAt: now,
-      personId: values.person.id,
-      futureWorkStrategyId: values.futureWorkStrategy.id,
-      socialSecurityStrategyId: values.socialSecurityStrategy.id,
-    },
-  }
-}
+  },
+})
 
 const persistBundle = async (
   values: ScenarioEditorValues,
@@ -342,16 +243,6 @@ const persistBundle = async (
   const now = Date.now()
   const normalized = normalizeValues(values, now)
 
-  await storage.personRepo.upsert(normalized.person)
-  await storage.socialSecurityStrategyRepo.upsert(normalized.socialSecurityStrategy)
-  await storage.futureWorkStrategyRepo.upsert(normalized.futureWorkStrategy)
-  await storage.futureWorkPeriodRepo.upsert(normalized.futureWorkPeriod)
-  await storage.spendingStrategyRepo.upsert(normalized.spendingStrategy)
-  await storage.spendingLineItemRepo.upsert(normalized.spendingLineItem)
-  await storage.nonInvestmentAccountRepo.upsert(normalized.nonInvestmentAccount)
-  await storage.investmentAccountRepo.upsert(normalized.investmentAccount)
-  await storage.investmentAccountHoldingRepo.upsert(normalized.investmentAccountHolding)
-  await storage.personStrategyRepo.upsert(normalized.personStrategy)
   await storage.scenarioRepo.upsert(normalized.scenario)
 
   setScenario(normalized.scenario)
@@ -389,7 +280,7 @@ const ScenarioDetailPage = () => {
 
   const defaultValues = useMemo(() => {
     const bundle = createDefaultScenarioBundle()
-    return toEditorValues(bundle)
+    return { scenario: bundle.scenario }
   }, [])
 
   const {
@@ -407,7 +298,7 @@ const ScenarioDetailPage = () => {
 
   useUnsavedChangesWarning(isDirty)
 
-  const selectedSpendingStrategyId = watch('spendingStrategy.id')
+  const selectedSpendingStrategyId = watch('scenario.spendingStrategyId')
   const inflationAssumptions = watch('scenario.inflationAssumptions')
   const personStrategyIds = watch('scenario.personStrategyIds')
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
@@ -655,81 +546,17 @@ const ScenarioDetailPage = () => {
     [scenario, setScenario, setValue, storage],
   )
 
-  const applyHoldingSelection = useCallback(
-    (holding: InvestmentAccountHolding) => {
-      setValue('investmentAccountHolding', holding, { shouldDirty: true })
-      setValue('futureWorkPeriod.401kInvestmentAccountHoldingId', holding.id, {
-        shouldDirty: true,
-      })
-      setValue('spendingLineItem.targetInvestmentAccountHoldingId', holding.id, {
-        shouldDirty: true,
-      })
-    },
-    [setValue],
-  )
-
-  const applyInvestmentAccountSelection = useCallback(
-    async (account: InvestmentAccount) => {
-      setValue('investmentAccount', account, { shouldDirty: true })
-      const list = await loadHoldingsForAccount(account.id)
+  const ensureInvestmentAccountHoldings = useCallback(
+    async (accountId: string) => {
+      const list = await loadHoldingsForAccount(accountId)
       if (list.length > 0) {
-        applyHoldingSelection(list[0])
         setSelectionError(null)
-      } else {
-        setSelectionError('Selected investment account has no holdings.')
+        return true
       }
+      setSelectionError('Selected investment account has no holdings.')
+      return false
     },
-    [applyHoldingSelection, loadHoldingsForAccount, setSelectionError, setValue],
-  )
-
-  const applyCashAccountSelection = useCallback(
-    (account: NonInvestmentAccount) => {
-      setValue('nonInvestmentAccount', account, { shouldDirty: true })
-    },
-    [setValue],
-  )
-
-  const applyPersonStrategySelection = useCallback(
-    async (personStrategy: PersonStrategy) => {
-      const person = people.find((item) => item.id === personStrategy.personId)
-      const socialSecurityStrategy = socialSecurityStrategies.find(
-        (item) => item.id === personStrategy.socialSecurityStrategyId,
-      )
-      const futureWorkStrategy = futureWorkStrategies.find(
-        (item) => item.id === personStrategy.futureWorkStrategyId,
-      )
-      const futureWorkPeriods = await storage.futureWorkPeriodRepo.listForStrategy(
-        personStrategy.futureWorkStrategyId,
-      )
-
-      if (
-        !person ||
-        !socialSecurityStrategy ||
-        !futureWorkStrategy ||
-        futureWorkPeriods.length === 0
-      ) {
-        setSelectionError('Selected person strategy is missing linked data.')
-        return
-      }
-
-      const normalizedSocial = normalizeSocialSecurityStrategy(socialSecurityStrategy, person)
-      setValue('person', person, { shouldDirty: true })
-      setValue('personStrategy', personStrategy, { shouldDirty: true })
-      setValue('socialSecurityStrategy', normalizedSocial, { shouldDirty: true })
-      setValue('futureWorkStrategy', futureWorkStrategy, { shouldDirty: true })
-      setValue('futureWorkPeriod', normalizeFutureWorkPeriod(futureWorkPeriods[0]), {
-        shouldDirty: true,
-      })
-      setSelectionError(null)
-    },
-    [
-      futureWorkStrategies,
-      people,
-      setSelectionError,
-      setValue,
-      socialSecurityStrategies,
-      storage,
-    ],
+    [loadHoldingsForAccount],
   )
 
   const loadScenario = useCallback(async () => {
@@ -795,8 +622,6 @@ const ScenarioDetailPage = () => {
       return
     }
 
-    const normalizedSocial = normalizeSocialSecurityStrategy(socialSecurityStrategy, person)
-
     const inflationAssumptions = buildInflationMap(
       inflationDefaultsRef.current,
       data.inflationAssumptions,
@@ -806,22 +631,8 @@ const ScenarioDetailPage = () => {
       inflationAssumptions,
       strategies: normalizeScenarioStrategies(data.strategies),
     }
-    const bundle: ScenarioEditorValues = {
-      scenario: normalizedScenario,
-      person,
-      socialSecurityStrategy: normalizedSocial,
-      futureWorkStrategy,
-      futureWorkPeriod: normalizeFutureWorkPeriod(futureWorkPeriods[0]),
-      spendingStrategy,
-      spendingLineItem: normalizeSpendingLineItem(spendingLineItems[0]),
-      nonInvestmentAccount,
-      investmentAccount,
-      investmentAccountHolding: investmentAccountHoldings[0],
-      personStrategy,
-    }
-
     setScenario(normalizedScenario)
-    reset(bundle)
+    reset({ scenario: normalizedScenario })
     replaceGlidepathTargets(normalizedScenario.strategies.glidepath.targets)
     replaceEvents(normalizedScenario.strategies.events)
     replacePensions(normalizedScenario.strategies.pensions)
@@ -883,12 +694,10 @@ const ScenarioDetailPage = () => {
     if (!strategy) {
       return
     }
-    setValue('spendingStrategy', strategy, { shouldDirty: true })
     setValue('scenario.spendingStrategyId', strategy.id, { shouldDirty: true })
     const items = await loadSpendingLineItemsForStrategy(strategy.id)
     setSpendingLineItems(items.map(normalizeSpendingLineItem))
     if (items.length > 0) {
-      setValue('spendingLineItem', normalizeSpendingLineItem(items[0]), { shouldDirty: true })
       setSelectionError(null)
     } else {
       setSelectionError('Selected spending strategy has no line items.')
@@ -989,7 +798,7 @@ const ScenarioDetailPage = () => {
     const data = await loadReferenceData()
     const newStrategy = data?.personStrategyData.find((item) => item.id === personStrategyId)
     if (newStrategy) {
-      await applyPersonStrategySelection(newStrategy)
+      setSelectionError(null)
     }
     navigate(`/person-strategies/${personStrategyId}`, {
       state: { from: location.pathname, scenarioId: scenario?.id ?? id },
@@ -1017,7 +826,7 @@ const ScenarioDetailPage = () => {
     const data = await loadReferenceData()
     const next = data?.personStrategyData[0]
     if (next) {
-      await applyPersonStrategySelection(next)
+      setSelectionError(null)
     }
   }
 
@@ -1044,11 +853,7 @@ const ScenarioDetailPage = () => {
       }),
       { persist: true },
     )
-    const data = await loadReferenceData()
-    const next = data?.cashData.find((item) => item.id === account.id)
-    if (next) {
-      applyCashAccountSelection(next)
-    }
+    await loadReferenceData()
     setSelectionError(null)
   }
 
@@ -1109,7 +914,7 @@ const ScenarioDetailPage = () => {
     const data = await loadReferenceData()
     const next = data?.investmentData.find((item) => item.id === account.id)
     if (next) {
-      await applyInvestmentAccountSelection(next)
+      await ensureInvestmentAccountHoldings(next.id)
     }
     setSelectionError(null)
   }
@@ -1140,7 +945,7 @@ const ScenarioDetailPage = () => {
     const data = await loadReferenceData()
     const next = data?.investmentData[0]
     if (next) {
-      await applyInvestmentAccountSelection(next)
+      await ensureInvestmentAccountHoldings(next.id)
     }
   }
 
@@ -1261,156 +1066,6 @@ const ScenarioDetailPage = () => {
             {...register(`scenario.inflationAssumptions.${type}`, { valueAsNumber: true })}
           />
         ))}
-        <input type="hidden" {...register('person.id')} />
-        <input type="hidden" {...register('person.createdAt', { valueAsNumber: true })} />
-        <input type="hidden" {...register('person.updatedAt', { valueAsNumber: true })} />
-        <input type="hidden" {...register('person.name')} />
-        <input type="hidden" {...register('person.dateOfBirth')} />
-        <input type="hidden" {...register('person.lifeExpectancy', { valueAsNumber: true })} />
-        <input type="hidden" {...register('socialSecurityStrategy.id')} />
-        <input type="hidden" {...register('socialSecurityStrategy.personId')} />
-        <input type="hidden" {...register('socialSecurityStrategy.startDate')} />
-        <input
-          type="hidden"
-          {...register('socialSecurityStrategy.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('socialSecurityStrategy.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('futureWorkStrategy.id')} />
-        <input type="hidden" {...register('futureWorkStrategy.personId')} />
-        <input
-          type="hidden"
-          {...register('futureWorkStrategy.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('futureWorkStrategy.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('futureWorkPeriod.id')} />
-        <input type="hidden" {...register('futureWorkPeriod.futureWorkStrategyId')} />
-        <input
-          type="hidden"
-          {...register('futureWorkPeriod.startDate', {
-            setValueAs: (value) => (value === '' ? null : value),
-          })}
-        />
-        <input
-          type="hidden"
-          {...register('futureWorkPeriod.endDate', {
-            setValueAs: (value) => (value === '' ? null : value),
-          })}
-        />
-        <input
-          type="hidden"
-          {...register('futureWorkPeriod.401kInvestmentAccountHoldingId', {
-            setValueAs: (value) => (value === '' ? undefined : value),
-          })}
-        />
-        <input
-          type="hidden"
-          {...register('futureWorkPeriod.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('futureWorkPeriod.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('spendingStrategy.id')} />
-        <input
-          type="hidden"
-          {...register('spendingStrategy.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('spendingStrategy.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('spendingLineItem.id')} />
-        <input type="hidden" {...register('spendingLineItem.spendingStrategyId')} />
-        <input
-          type="hidden"
-          {...register('spendingLineItem.targetInvestmentAccountHoldingId', {
-            setValueAs: (value) => (value === '' ? null : value),
-          })}
-        />
-        <input type="hidden" {...register('spendingLineItem.inflationType')} />
-        <input
-          type="hidden"
-          {...register('spendingLineItem.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('spendingLineItem.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('nonInvestmentAccount.id')} />
-        <input
-          type="hidden"
-          {...register('nonInvestmentAccount.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('nonInvestmentAccount.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('nonInvestmentAccount.name')} />
-        <input
-          type="hidden"
-          {...register('nonInvestmentAccount.balance', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('nonInvestmentAccount.interestRate', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('investmentAccount.id')} />
-        <input
-          type="hidden"
-          {...register('investmentAccount.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('investmentAccount.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('investmentAccount.name')} />
-        <input type="hidden" {...register('investmentAccountHolding.id')} />
-        <input type="hidden" {...register('investmentAccountHolding.investmentAccountId')} />
-        <input
-          type="hidden"
-          {...register('investmentAccountHolding.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('investmentAccountHolding.updatedAt', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('investmentAccountHolding.name')} />
-        <input type="hidden" {...register('investmentAccountHolding.taxType')} />
-        <input
-          type="hidden"
-          {...register('investmentAccountHolding.balance', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('investmentAccountHolding.contributionBasis', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('investmentAccountHolding.holdingType')} />
-        <input
-          type="hidden"
-          {...register('investmentAccountHolding.returnRate', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('investmentAccountHolding.returnStdDev', { valueAsNumber: true })}
-        />
-        <input type="hidden" {...register('personStrategy.id')} />
-        <input type="hidden" {...register('personStrategy.personId')} />
-        <input type="hidden" {...register('personStrategy.futureWorkStrategyId')} />
-        <input type="hidden" {...register('personStrategy.socialSecurityStrategyId')} />
-        <input
-          type="hidden"
-          {...register('personStrategy.createdAt', { valueAsNumber: true })}
-        />
-        <input
-          type="hidden"
-          {...register('personStrategy.updatedAt', { valueAsNumber: true })}
-        />
 
         <div className="form-grid">
           <label className="field">
