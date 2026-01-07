@@ -76,6 +76,7 @@ const PeopleListPage = () => {
       createdAt: now,
       updatedAt: now,
     })
+    const placeholderHoldingId = createUuid()
     await storage.futureWorkPeriodRepo.upsert({
       id: futureWorkPeriodId,
       name: 'Primary job',
@@ -84,9 +85,17 @@ const PeopleListPage = () => {
       bonus: 5000,
       startDate: toIsoDate(today),
       endDate: toIsoDate(tenYears),
+      '401kContributionType': 'fixed',
+      '401kContributionAnnual': 0,
+      '401kContributionPct': 0,
       '401kMatchPctCap': 0.05,
       '401kMatchRatio': 1,
-      '401kInvestmentAccountHoldingId': createUuid(),
+      '401kInvestmentAccountHoldingId': placeholderHoldingId,
+      '401kEmployerMatchHoldingId': placeholderHoldingId,
+      'hsaContributionAnnual': 0,
+      'hsaEmployerContributionAnnual': 0,
+      'hsaUseMaxLimit': false,
+      'hsaInvestmentAccountHoldingId': null,
       includesHealthInsurance: true,
       createdAt: now,
       updatedAt: now,

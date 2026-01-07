@@ -43,6 +43,7 @@ export type {
   SsaBendPoint,
   SsaRetirementAdjustment,
   HoldingTypeDefault,
+  ContributionLimitDefault,
 } from './defaults'
 export {
   inflationDefaultSchema,
@@ -50,6 +51,8 @@ export {
   ssaBendPointSchema,
   ssaRetirementAdjustmentSchema,
   holdingTypeDefaultSchema,
+  contributionLimitDefaultSchema,
+  contributionLimitTypeSchema,
 } from './defaults'
 export {
   simulationRunSchema,

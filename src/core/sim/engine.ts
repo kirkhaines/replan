@@ -718,31 +718,72 @@ const buildModuleExplain = ({
       const activePeriods = periods.filter((period) =>
         isWithinRange(context.dateIso, period.startDate, period.endDate),
       )
-      const getMonthlyContribution = (period: (typeof periods)[number]) => {
-        const employeeMonthly = (period.salary * period['401kMatchPctCap']) / 12
-        const employerMonthly = employeeMonthly * period['401kMatchRatio']
-        return { employeeMonthly, employerMonthly }
+      const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+      const contributionLimits = snapshot.contributionLimits ?? []
+      const getContributionLimit = (type: '401k' | 'hsa') => {
+        if (contributionLimits.length === 0) {
+          return 0
+        }
+        const year = context.date.getFullYear()
+        const sorted = [...contributionLimits]
+          .filter((limit) => limit.type === type)
+          .sort((a, b) => b.year - a.year)
+        if (sorted.length === 0) {
+          return 0
+        }
+        const base = sorted.find((limit) => limit.year <= year) ?? sorted[0]
+        const baseIso = `${base.year}-01-01`
+        return inflateAmount(base.amount, baseIso, context.dateIso, cpiRate)
+      }
+      const max401k = getContributionLimit('401k')
+      const maxHsa = getContributionLimit('hsa')
+      const getEmployee401kAnnual = (period: (typeof periods)[number]) => {
+        let annual = 0
+        if (period['401kContributionType'] === 'max') {
+          annual = max401k
+        } else if (period['401kContributionType'] === 'fixed') {
+          annual = period['401kContributionAnnual']
+        } else if (period['401kContributionType'] === 'percent') {
+          annual = period.salary * period['401kContributionPct']
+        }
+        return annual
+      }
+      const getEmployeeHsaAnnual = (period: (typeof periods)[number]) => {
+        return period['hsaUseMaxLimit'] ? maxHsa : period['hsaContributionAnnual']
       }
       const monthlyIncomeTotal = activePeriods.reduce(
         (sum, period) => sum + period.salary / 12 + period.bonus / 12,
         0,
       )
       const employeeMonthlyTotal = activePeriods.reduce(
-        (sum, period) => sum + getMonthlyContribution(period).employeeMonthly,
+        (sum, period) => sum + getEmployee401kAnnual(period) / 12,
         0,
       )
-      const employerMonthlyTotal = activePeriods.reduce(
-        (sum, period) => sum + getMonthlyContribution(period).employerMonthly,
+      const employerMonthlyTotal = activePeriods.reduce((sum, period) => {
+        const employeeAnnual = getEmployee401kAnnual(period)
+        const matchBase = Math.min(employeeAnnual, period.salary * period['401kMatchPctCap'])
+        return sum + (matchBase * period['401kMatchRatio']) / 12
+      }, 0)
+      const hsaEmployeeMonthlyTotal = activePeriods.reduce(
+        (sum, period) => sum + getEmployeeHsaAnnual(period) / 12,
+        0,
+      )
+      const hsaEmployerMonthlyTotal = activePeriods.reduce(
+        (sum, period) => sum + period['hsaEmployerContributionAnnual'] / 12,
         0,
       )
       inputs.push(
         toMetric('Periods', periods.length),
         toMetric('Active periods', activePeriods.length),
+        toMetric('Max 401k', max401k),
+        toMetric('Max HSA', maxHsa),
       )
       checkpoints.push(
         toMetric('Monthly income', monthlyIncomeTotal),
-        toMetric('Employee deferral', employeeMonthlyTotal),
+        toMetric('Employee 401k', employeeMonthlyTotal),
         toMetric('Employer match', employerMonthlyTotal),
+        toMetric('Employee HSA', hsaEmployeeMonthlyTotal),
+        toMetric('Employer HSA', hsaEmployerMonthlyTotal),
       )
       break
     }

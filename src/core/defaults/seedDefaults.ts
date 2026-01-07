@@ -3,6 +3,7 @@ import type { LocalScenarioSeed } from './localSeedTypes'
 import {
   inflationDefaultsSeed,
   holdingTypeDefaultsSeed,
+  contributionLimitDefaultsSeed,
   ssaBendPointSeed,
   ssaRetirementAdjustmentSeed,
   ssaWageIndexSeed,
@@ -137,6 +138,22 @@ export const seedDefaults = async (storage: StorageClient) => {
           type: seed.type,
           returnRate: seed.returnRate,
           returnStdDev: seed.returnStdDev,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      ),
+    )
+  }
+
+  const existingContributionLimits = await storage.contributionLimitDefaultRepo.list()
+  if (existingContributionLimits.length === 0) {
+    await Promise.all(
+      contributionLimitDefaultsSeed.map((seed) =>
+        storage.contributionLimitDefaultRepo.upsert({
+          id: createUuid(),
+          type: seed.type,
+          year: seed.year,
+          amount: seed.amount,
           createdAt: timestamp,
           updatedAt: timestamp,
         }),

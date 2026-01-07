@@ -20,6 +20,9 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
         guardrailPct > 0 && totalBalance < state.initialBalance * (1 - guardrailPct)
       const guardrailFactor = guardrailActive ? 1 - guardrailPct : 1
       spendingItems.forEach((item) => {
+        if (item.isWork) {
+          return
+        }
         if (!isWithinRange(context.dateIso, item.startDate, item.endDate)) {
           return
         }

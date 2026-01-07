@@ -126,6 +126,19 @@ const RunResultsPage = () => {
     }
     return { cashById, investmentById, holdingById }
   }, [run?.snapshot])
+  const initialBalances = useMemo(() => {
+    const balances = new Map<string, number>()
+    if (!run?.snapshot) {
+      return balances
+    }
+    run.snapshot.nonInvestmentAccounts.forEach((account) => {
+      balances.set(`cash:${account.id}`, account.balance)
+    })
+    run.snapshot.investmentAccountHoldings.forEach((holding) => {
+      balances.set(`holding:${holding.id}`, holding.balance)
+    })
+    return balances
+  }, [run?.snapshot])
 
   useEffect(() => {
     const load = async () => {
@@ -664,7 +677,11 @@ const RunResultsPage = () => {
                                                           entry.id === account.id &&
                                                           entry.kind === account.kind,
                                                       )?.balance
-                                                    : undefined
+                                                    : month.monthIndex === 0
+                                                      ? initialBalances.get(
+                                                          `${account.kind}:${account.id}`,
+                                                        )
+                                                      : undefined
                                                   const delta =
                                                     priorBalance !== undefined
                                                       ? account.balance - priorBalance
@@ -674,8 +691,8 @@ const RunResultsPage = () => {
                                                       <td>{getAccountLabel(account)}</td>
                                                       <td>{formatSignedCurrency(account.balance)}</td>
                                                       <td>
-                                                        {priorExplanation
-                                                          ? formatSignedCurrency(priorBalance ?? 0)
+                                                        {priorBalance !== undefined
+                                                          ? formatSignedCurrency(priorBalance)
                                                           : '-'}
                                                       </td>
                                                       <td>

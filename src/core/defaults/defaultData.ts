@@ -1,6 +1,7 @@
 import type {
   InflationDefault,
   HoldingTypeDefault,
+  ContributionLimitDefault,
   SsaBendPoint,
   SsaRetirementAdjustment,
   SsaWageIndex,
@@ -28,6 +29,13 @@ export const holdingTypeDefaultsSeed: Array<
   { type: 'emerging_markets', returnRate: 0.1, returnStdDev: 0.22 },
   { type: 'real_estate', returnRate: 0.07, returnStdDev: 0.15 },
   { type: 'cash', returnRate: 0.02, returnStdDev: 0.01 },
+]
+
+export const contributionLimitDefaultsSeed: Array<
+  Pick<ContributionLimitDefault, 'type' | 'year' | 'amount'>
+> = [
+  { type: '401k', year: 2024, amount: 23000 },
+  { type: 'hsa', year: 2024, amount: 4150 },
 ]
 
 export const ssaWageIndexSeed: Array<Pick<SsaWageIndex, 'year' | 'index'>> = [

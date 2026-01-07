@@ -31,8 +31,17 @@ export const holdingTypeDefaultSchema = baseEntitySchema.extend({
   returnStdDev: z.number(),
 })
 
+export const contributionLimitTypeSchema = z.enum(['401k', 'hsa'])
+
+export const contributionLimitDefaultSchema = baseEntitySchema.extend({
+  type: contributionLimitTypeSchema,
+  year: z.number().int(),
+  amount: z.number().min(0),
+})
+
 export type InflationDefault = z.infer<typeof inflationDefaultSchema>
 export type SsaWageIndex = z.infer<typeof ssaWageIndexSchema>
 export type SsaBendPoint = z.infer<typeof ssaBendPointSchema>
 export type SsaRetirementAdjustment = z.infer<typeof ssaRetirementAdjustmentSchema>
 export type HoldingTypeDefault = z.infer<typeof holdingTypeDefaultSchema>
+export type ContributionLimitDefault = z.infer<typeof contributionLimitDefaultSchema>

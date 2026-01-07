@@ -13,9 +13,17 @@ export const futureWorkPeriodSchema = baseEntitySchema.extend({
   bonus: z.number().min(0),
   startDate: z.union([isoDateStringSchema, z.null()]),
   endDate: z.union([isoDateStringSchema, z.null()]),
+  '401kContributionType': z.enum(['fixed', 'percent', 'max']),
+  '401kContributionAnnual': z.number().min(0),
+  '401kContributionPct': z.number().min(0),
   '401kMatchPctCap': z.number(),
   '401kMatchRatio': z.number(),
   '401kInvestmentAccountHoldingId': z.string().uuid(),
+  '401kEmployerMatchHoldingId': z.string().uuid(),
+  'hsaContributionAnnual': z.number().min(0),
+  'hsaEmployerContributionAnnual': z.number().min(0),
+  'hsaUseMaxLimit': z.boolean(),
+  'hsaInvestmentAccountHoldingId': z.union([z.string().uuid(), z.null()]),
   includesHealthInsurance: z.boolean(),
 })
 

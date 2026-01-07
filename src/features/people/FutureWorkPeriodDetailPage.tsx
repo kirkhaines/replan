@@ -13,6 +13,27 @@ const FutureWorkPeriodDetailPage = () => {
   const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  const normalizePeriod = (value: FutureWorkPeriod): FutureWorkPeriod => {
+    const contributionType = value['401kContributionType']
+    const employerHoldingId = value['401kEmployerMatchHoldingId']
+    const hsaHoldingId = value['hsaInvestmentAccountHoldingId']
+    return {
+      ...value,
+      '401kContributionType': contributionType ? contributionType : 'fixed',
+      '401kContributionAnnual': value['401kContributionAnnual'] ?? 0,
+      '401kContributionPct': value['401kContributionPct'] ?? 0,
+      '401kMatchPctCap': value['401kMatchPctCap'] ?? 0,
+      '401kMatchRatio': value['401kMatchRatio'] ?? 0,
+      '401kEmployerMatchHoldingId': employerHoldingId
+        ? employerHoldingId
+        : value['401kInvestmentAccountHoldingId'],
+      'hsaContributionAnnual': value['hsaContributionAnnual'] ?? 0,
+      'hsaEmployerContributionAnnual': value['hsaEmployerContributionAnnual'] ?? 0,
+      'hsaUseMaxLimit': value['hsaUseMaxLimit'] ?? false,
+      'hsaInvestmentAccountHoldingId': hsaHoldingId ? hsaHoldingId : null,
+    }
+  }
+
   const loadPeriod = useCallback(async () => {
     if (!id) {
       setPeriod(null)
@@ -24,7 +45,7 @@ const FutureWorkPeriodDetailPage = () => {
       storage.futureWorkPeriodRepo.get(id),
       storage.investmentAccountHoldingRepo.list(),
     ])
-    setPeriod(data ?? null)
+    setPeriod(data ? normalizePeriod(data) : null)
     setHoldings(holdingsList)
     setIsLoading(false)
   }, [id, storage])
@@ -152,7 +173,7 @@ const FutureWorkPeriodDetailPage = () => {
           </label>
 
           <label className="field">
-            <span>401k holding</span>
+            <span>401k employee holding</span>
             <select
               value={period['401kInvestmentAccountHoldingId']}
               onChange={(event) =>
@@ -160,6 +181,115 @@ const FutureWorkPeriodDetailPage = () => {
               }
             >
               {holdings.length === 0 ? <option value="">No holdings available</option> : null}
+              {holdings.map((holding) => (
+                <option key={holding.id} value={holding.id}>
+                  {holding.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>401k employer match holding</span>
+            <select
+              value={period['401kEmployerMatchHoldingId']}
+              onChange={(event) =>
+                handleChange('401kEmployerMatchHoldingId', event.target.value)
+              }
+            >
+              {holdings.length === 0 ? <option value="">No holdings available</option> : null}
+              {holdings.map((holding) => (
+                <option key={holding.id} value={holding.id}>
+                  {holding.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="form-grid">
+          <label className="field">
+            <span>401k contribution type</span>
+            <select
+              value={period['401kContributionType']}
+              onChange={(event) =>
+                handleChange('401kContributionType', event.target.value)
+              }
+            >
+              <option value="fixed">Fixed annual</option>
+              <option value="percent">Percent of salary</option>
+              <option value="max">Max allowed</option>
+            </select>
+          </label>
+
+          <label className="field">
+            <span>401k contribution (annual)</span>
+            <input
+              type="number"
+              value={period['401kContributionAnnual']}
+              onChange={(event) =>
+                handleChange('401kContributionAnnual', Number(event.target.value))
+              }
+            />
+          </label>
+
+          <label className="field">
+            <span>401k contribution pct</span>
+            <input
+              type="number"
+              step="0.01"
+              value={period['401kContributionPct']}
+              onChange={(event) =>
+                handleChange('401kContributionPct', Number(event.target.value))
+              }
+            />
+          </label>
+
+        </div>
+
+        <div className="form-grid">
+          <label className="field">
+            <span>HSA employee contribution (annual)</span>
+            <input
+              type="number"
+              value={period['hsaContributionAnnual']}
+              onChange={(event) =>
+                handleChange('hsaContributionAnnual', Number(event.target.value))
+              }
+            />
+          </label>
+
+          <label className="field checkbox">
+            <input
+              type="checkbox"
+              checked={period['hsaUseMaxLimit']}
+              onChange={(event) =>
+                handleChange('hsaUseMaxLimit', event.target.checked)
+              }
+            />
+            <span>Use max HSA limit</span>
+          </label>
+
+          <label className="field">
+            <span>HSA employer credit (annual)</span>
+            <input
+              type="number"
+              value={period['hsaEmployerContributionAnnual']}
+              onChange={(event) =>
+                handleChange('hsaEmployerContributionAnnual', Number(event.target.value))
+              }
+            />
+          </label>
+
+          <label className="field">
+            <span>HSA holding</span>
+            <select
+              value={period['hsaInvestmentAccountHoldingId'] ?? ''}
+              onChange={(event) =>
+                handleChange('hsaInvestmentAccountHoldingId', event.target.value || null)
+              }
+            >
+              <option value="">None</option>
               {holdings.map((holding) => (
                 <option key={holding.id} value={holding.id}>
                   {holding.name}

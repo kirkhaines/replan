@@ -16,6 +16,7 @@ import {
   type Person,
   type SocialSecurityStrategy,
   type FutureWorkStrategy,
+  type FutureWorkPeriod,
   type SpendingStrategy,
   type SpendingLineItem,
   type NonInvestmentAccount,
@@ -160,11 +161,7 @@ const buildSimulationSnapshot = async (
       ),
     )
   ).flat()
-    .map((period) => ({
-      ...period,
-      startDate: toIsoDateString(period.startDate),
-      endDate: toIsoDateString(period.endDate),
-    }))
+    .map((period) => normalizeFutureWorkPeriod(period))
 
   const socialSecurityEarnings = (
     await Promise.all(
@@ -209,6 +206,7 @@ const buildSimulationSnapshot = async (
     storage.ssaBendPointRepo.list(),
     storage.ssaRetirementAdjustmentRepo.list(),
   ])
+  const contributionLimits = await storage.contributionLimitDefaultRepo.list()
 
   return {
     scenario: normalizedScenario,
@@ -226,6 +224,7 @@ const buildSimulationSnapshot = async (
     ssaWageIndex,
     ssaBendPoints,
     ssaRetirementAdjustments,
+    contributionLimits,
     taxPolicies: taxPolicySeed,
     irmaaTables: irmaaTableSeed,
     rmdTable: rmdTableSeed,
@@ -237,6 +236,30 @@ const normalizeSpendingLineItem = (item: SpendingLineItem): SpendingLineItem => 
   inflationType: item.inflationType ?? 'cpi',
   targetInvestmentAccountHoldingId: item.targetInvestmentAccountHoldingId ?? null,
 })
+
+const normalizeFutureWorkPeriod = (base: FutureWorkPeriod): FutureWorkPeriod => {
+  const contributionType = base['401kContributionType']
+  const employeeHoldingId = base['401kInvestmentAccountHoldingId']
+  const employerHoldingId = base['401kEmployerMatchHoldingId']
+  const hsaHoldingId = base['hsaInvestmentAccountHoldingId']
+  return {
+    ...base,
+    startDate: toIsoDateString(base.startDate),
+    endDate: toIsoDateString(base.endDate),
+    '401kContributionType': contributionType ? contributionType : 'fixed',
+    '401kContributionAnnual': base['401kContributionAnnual'] ?? 0,
+    '401kContributionPct': base['401kContributionPct'] ?? 0,
+    '401kMatchPctCap': base['401kMatchPctCap'] ?? 0,
+    '401kMatchRatio': base['401kMatchRatio'] ?? 0,
+    '401kInvestmentAccountHoldingId': employeeHoldingId,
+    '401kEmployerMatchHoldingId':
+      employerHoldingId ? employerHoldingId : employeeHoldingId,
+    'hsaContributionAnnual': base['hsaContributionAnnual'] ?? 0,
+    'hsaEmployerContributionAnnual': base['hsaEmployerContributionAnnual'] ?? 0,
+    'hsaUseMaxLimit': base['hsaUseMaxLimit'] ?? false,
+    'hsaInvestmentAccountHoldingId': hsaHoldingId ? hsaHoldingId : null,
+  }
+}
 
 const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountHolding => ({
   ...holding,
@@ -816,9 +839,17 @@ const ScenarioDetailPage = () => {
       bonus: 5000,
       startDate: toIsoDate(today),
       endDate: toIsoDate(tenYears),
+      '401kContributionType': 'fixed',
+      '401kContributionAnnual': 0,
+      '401kContributionPct': 0,
       '401kMatchPctCap': 0.05,
       '401kMatchRatio': 1,
       '401kInvestmentAccountHoldingId': holdingList[0].id,
+      '401kEmployerMatchHoldingId': holdingList[0].id,
+      'hsaContributionAnnual': 0,
+      'hsaEmployerContributionAnnual': 0,
+      'hsaUseMaxLimit': false,
+      'hsaInvestmentAccountHoldingId': null,
       includesHealthInsurance: true,
       createdAt: now,
       updatedAt: now,

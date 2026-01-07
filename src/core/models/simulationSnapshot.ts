@@ -17,6 +17,7 @@ import {
   ssaBendPointSchema,
   ssaRetirementAdjustmentSchema,
   ssaWageIndexSchema,
+  contributionLimitDefaultSchema,
 } from './defaults'
 import { irmaaTableSchema, rmdTableSchema, taxPolicySchema } from './policies'
 
@@ -36,6 +37,7 @@ export const simulationSnapshotSchema = z.object({
   ssaWageIndex: z.array(ssaWageIndexSchema),
   ssaBendPoints: z.array(ssaBendPointSchema),
   ssaRetirementAdjustments: z.array(ssaRetirementAdjustmentSchema),
+  contributionLimits: z.array(contributionLimitDefaultSchema),
   taxPolicies: z.array(taxPolicySchema),
   irmaaTables: z.array(irmaaTableSchema),
   rmdTable: z.array(rmdTableSchema),
