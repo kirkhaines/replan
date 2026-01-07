@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   LineChart,
@@ -46,6 +46,18 @@ const RunResultsPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [run, setRun] = useState<SimulationRun | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
+
+  const monthlyTimeline = run?.result.monthlyTimeline ?? []
+  const monthlyByYear = useMemo(() => {
+    return monthlyTimeline.reduce<Map<number, typeof monthlyTimeline>>((acc, entry) => {
+      const yearIndex = Math.floor(entry.monthIndex / 12)
+      const list = acc.get(yearIndex) ?? []
+      list.push(entry)
+      acc.set(yearIndex, list)
+      return acc
+    }, new Map())
+  }, [monthlyTimeline])
 
   useEffect(() => {
     const load = async () => {
@@ -76,8 +88,6 @@ const RunResultsPage = () => {
       </section>
     )
   }
-
-  const monthlyTimeline = run.result.monthlyTimeline ?? []
   const yearOrdinaryIncome = monthlyTimeline.reduce<Map<number, number>>((acc, entry) => {
     const yearIndex = Math.floor(entry.monthIndex / 12)
     acc.set(yearIndex, (acc.get(yearIndex) ?? 0) + entry.ordinaryIncome)
@@ -205,15 +215,49 @@ const RunResultsPage = () => {
             </tr>
           </thead>
           <tbody>
-            {run.result.timeline.map((point) => (
-              <tr key={point.yearIndex}>
-                <td>{point.date ? addMonths(point.date, -11) ?? '-' : '-'}</td>
-                <td>{point.age}</td>
-                <td>{formatCurrency(point.balance)}</td>
-                <td>{formatCurrency(point.contribution)}</td>
-                <td>{formatCurrency(point.spending)}</td>
-              </tr>
-            ))}
+            {run.result.timeline.map((point) => {
+              const isExpanded = expandedYears.has(point.yearIndex)
+              const monthRows = monthlyByYear.get(point.yearIndex) ?? []
+              return (
+                <Fragment key={point.yearIndex}>
+                  <tr
+                    onClick={() =>
+                      setExpandedYears((current) => {
+                        const next = new Set(current)
+                        if (next.has(point.yearIndex)) {
+                          next.delete(point.yearIndex)
+                        } else {
+                          next.add(point.yearIndex)
+                        }
+                        return next
+                      })
+                    }
+                  >
+                    <td>
+                      <span className="muted" aria-hidden="true">
+                        {isExpanded ? '▾' : '▸'}
+                      </span>{' '}
+                      {point.date ? addMonths(point.date, -11) ?? '-' : '-'}
+                    </td>
+                    <td>{point.age}</td>
+                    <td>{formatCurrency(point.balance)}</td>
+                    <td>{formatCurrency(point.contribution)}</td>
+                    <td>{formatCurrency(point.spending)}</td>
+                  </tr>
+                  {isExpanded
+                    ? monthRows.map((month) => (
+                        <tr key={`${point.yearIndex}-${month.monthIndex}`}>
+                          <td className="muted">{month.date}</td>
+                          <td className="muted">{month.age}</td>
+                          <td className="muted">{formatCurrency(month.totalBalance)}</td>
+                          <td className="muted">{formatCurrency(month.contributions)}</td>
+                          <td className="muted">{formatCurrency(month.spending)}</td>
+                        </tr>
+                      ))
+                    : null}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>

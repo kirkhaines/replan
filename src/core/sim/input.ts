@@ -62,12 +62,20 @@ export const buildSimulationInputFromRequest = (
     return null
   }
 
-  const oldestPerson = people.reduce(
-    (current, person) =>
-      person.lifeExpectancy > current.lifeExpectancy ? person : current,
-    people[0],
+  const expectedDeathDates = people.map((person) =>
+    addYears(person.dateOfBirth, person.lifeExpectancy),
   )
-  const endDate = addYears(oldestPerson.dateOfBirth, oldestPerson.lifeExpectancy)
+  const endDate = expectedDeathDates.reduce((latest, candidate) => {
+    const latestDate = new Date(latest)
+    const candidateDate = new Date(candidate)
+    if (Number.isNaN(latestDate.getTime())) {
+      return candidate
+    }
+    if (Number.isNaN(candidateDate.getTime())) {
+      return latest
+    }
+    return candidateDate > latestDate ? candidate : latest
+  }, expectedDeathDates[0])
   const months = Math.max(1, monthsBetween(startDate, endDate))
 
   return {
