@@ -199,7 +199,7 @@ const RunResultsPage = () => {
       totalsByYear.set(yearIndex, totals)
     })
 
-    const bracketLines: Array<{ key: string; label: string }> = []
+    const bracketLines: Array<{ key: string; label: string; rate: number }> = []
     const bracketCount = run.snapshot.taxPolicies.reduce((max, policy) => {
       return Math.max(max, policy.ordinaryBrackets.filter((entry) => entry.upTo !== null).length)
     }, 0)
@@ -213,6 +213,7 @@ const RunResultsPage = () => {
       bracketLines.push({
         key: `bracket_${index}`,
         label: rate !== undefined ? `${Math.round(rate * 100)}% bracket` : `Bracket ${index + 1}`,
+        rate: rate ?? 0,
       })
     }
 
@@ -268,7 +269,7 @@ const RunResultsPage = () => {
 
     return { data, bracketLines, maxValue }
   }, [explanations, run?.finishedAt, run?.result.timeline, run?.snapshot])
-  
+
   useEffect(() => {
     const load = async () => {
       if (!id) {
@@ -347,7 +348,16 @@ const RunResultsPage = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="age" />
               <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
-              <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              <Tooltip
+                formatter={(value) => formatCurrency(Number(value))}
+                contentStyle={{
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                }}
+                wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
+              />
               <Line type="monotone" dataKey="balance" stroke="var(--accent)" />
             </LineChart>
           </ResponsiveContainer>
@@ -367,7 +377,16 @@ const RunResultsPage = () => {
                   width={70}
                   domain={[0, ordinaryIncomeChart.maxValue]}
                 />
-                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Tooltip
+                  formatter={(value) => formatCurrency(Number(value))}
+                  contentStyle={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                  }}
+                  wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
+                />
                 <Legend />
                 <Area
                   type="monotone"
@@ -409,17 +428,23 @@ const RunResultsPage = () => {
                   stroke="#f39c3d"
                   fill="color-mix(in srgb, #f39c3d 45%, transparent)"
                 />
-                {ordinaryIncomeChart.bracketLines.map((line) => (
-                  <Line
-                    key={line.key}
-                    type="monotone"
-                    dataKey={line.key}
-                    name={line.label}
-                    stroke="var(--muted)"
-                    strokeDasharray="4 4"
-                    dot={false}
-                  />
-                ))}
+                {ordinaryIncomeChart.bracketLines.map((line) => {
+                  const rateRatio = Math.min(Math.max(line.rate / 0.5, 0), 1)
+                  const hue = 120 - 120 * rateRatio
+                  const stroke = `hsl(${hue} 70% 45%)`
+                  return (
+                    <Line
+                      key={line.key}
+                      type="monotone"
+                      dataKey={line.key}
+                      name={line.label}
+                      stroke={stroke}
+                      strokeDasharray="4 4"
+                      strokeWidth={0.75}
+                      dot={false}
+                    />
+                  )
+                })}
               </AreaChart>
             </ResponsiveContainer>
           </div>
