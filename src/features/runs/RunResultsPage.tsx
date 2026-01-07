@@ -10,7 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  ReferenceLine,
+  Legend,
 } from 'recharts'
 import type { SimulationRun } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
@@ -140,6 +140,135 @@ const RunResultsPage = () => {
     return balances
   }, [run?.snapshot])
 
+  const ordinaryIncomeChart = useMemo(() => {
+    if (!run?.snapshot) {
+      return { data: [], bracketLines: [], maxValue: 0 }
+    }
+    const inflationRate = run.snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+    const holdingTaxType = new Map(
+      run.snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
+    )
+    const totalsByYear = new Map<
+      number,
+      {
+        salary: number
+        investment: number
+        socialSecurity: number
+        pension: number
+        taxDeferred: number
+      }
+    >()
+    explanations.forEach((month) => {
+      const yearIndex = Math.floor(month.monthIndex / 12)
+      const totals = totalsByYear.get(yearIndex) ?? {
+        salary: 0,
+        investment: 0,
+        socialSecurity: 0,
+        pension: 0,
+        taxDeferred: 0,
+      }
+      month.modules.forEach((module) => {
+        module.cashflows.forEach((flow) => {
+          const amount = flow.ordinaryIncome ?? 0
+          if (!amount) {
+            return
+          }
+          if (flow.category === 'work') {
+            totals.salary += amount
+          } else if (flow.category === 'social_security') {
+            totals.socialSecurity += amount
+          } else if (flow.category === 'pension') {
+            totals.pension += amount
+          } else if (flow.category === 'event' || flow.category === 'other') {
+            totals.investment += amount
+          }
+        })
+        module.actions.forEach((action) => {
+          if (action.kind !== 'withdraw' && action.kind !== 'convert') {
+            return
+          }
+          let isOrdinary = action.taxTreatment === 'ordinary' || action.kind === 'convert'
+          if (!isOrdinary && !action.taxTreatment && action.sourceHoldingId) {
+            isOrdinary = holdingTaxType.get(action.sourceHoldingId) === 'traditional'
+          }
+          if (isOrdinary) {
+            totals.taxDeferred += action.resolvedAmount
+          }
+        })
+      })
+      totalsByYear.set(yearIndex, totals)
+    })
+
+    const bracketLines: Array<{ key: string; label: string }> = []
+    const bracketCount = run.snapshot.taxPolicies.reduce((max, policy) => {
+      return Math.max(max, policy.ordinaryBrackets.filter((entry) => entry.upTo !== null).length)
+    }, 0)
+    for (let index = 0; index < bracketCount; index += 1) {
+      const samplePolicy = selectTaxPolicy(
+        run.snapshot.taxPolicies,
+        run.snapshot.scenario.strategies.tax.policyYear || new Date(run.finishedAt).getFullYear(),
+        run.snapshot.scenario.strategies.tax.filingStatus,
+      )
+      const rate = samplePolicy?.ordinaryBrackets[index]?.rate
+      bracketLines.push({
+        key: `bracket_${index}`,
+        label: rate !== undefined ? `${Math.round(rate * 100)}% bracket` : `Bracket ${index + 1}`,
+      })
+    }
+
+    const data = run.result.timeline.map((point) => {
+      const totals = totalsByYear.get(point.yearIndex) ?? {
+        salary: 0,
+        investment: 0,
+        socialSecurity: 0,
+        pension: 0,
+        taxDeferred: 0,
+      }
+      const pointYear = point.date ? new Date(point.date).getFullYear() : new Date(run.finishedAt).getFullYear()
+      const policy = selectTaxPolicy(
+        run.snapshot.taxPolicies,
+        pointYear,
+        run.snapshot.scenario.strategies.tax.filingStatus,
+      )
+      const bracketValues: Record<string, number> = {}
+      if (policy) {
+        const yearDelta = pointYear - policy.year
+        const inflationMultiplier =
+          inflationRate !== 0 ? Math.pow(1 + inflationRate, yearDelta) : 1
+        policy.ordinaryBrackets.forEach((bracket, index) => {
+          if (bracket.upTo === null) {
+            return
+          }
+          bracketValues[`bracket_${index}`] = bracket.upTo * inflationMultiplier
+        })
+      }
+      return {
+        age: point.age,
+        yearIndex: point.yearIndex,
+        salaryIncome: totals.salary,
+        investmentIncome: totals.investment,
+        socialSecurityIncome: totals.socialSecurity,
+        pensionIncome: totals.pension,
+        taxDeferredIncome: totals.taxDeferred,
+        ...bracketValues,
+      }
+    })
+    const maxValue = data.reduce((max, entry) => {
+      const totals =
+        entry.salaryIncome +
+        entry.investmentIncome +
+        entry.socialSecurityIncome +
+        entry.pensionIncome +
+        entry.taxDeferredIncome
+      const bracketMax = Object.keys(entry)
+        .filter((key) => key.startsWith('bracket_'))
+        .reduce((innerMax, key) => Math.max(innerMax, Number(entry[key]) || 0), 0)
+      return Math.max(max, totals, bracketMax)
+    }, 0)
+
+    return { data, bracketLines, maxValue }
+  }, [explanations, run?.finishedAt, run?.result.timeline, run?.snapshot])
+  
   useEffect(() => {
     const load = async () => {
       if (!id) {
@@ -169,27 +298,6 @@ const RunResultsPage = () => {
       </section>
     )
   }
-  const yearOrdinaryIncome = monthlyTimeline.reduce<Map<number, number>>((acc, entry) => {
-    const yearIndex = Math.floor(entry.monthIndex / 12)
-    acc.set(yearIndex, (acc.get(yearIndex) ?? 0) + entry.ordinaryIncome)
-    return acc
-  }, new Map())
-
-  const ordinaryIncomeSeries = run.result.timeline.map((point) => ({
-    age: point.age,
-    yearIndex: point.yearIndex,
-    ordinaryIncome: yearOrdinaryIncome.get(point.yearIndex) ?? 0,
-  }))
-
-  const taxPolicy =
-    run.snapshot && run.snapshot.taxPolicies.length > 0
-      ? selectTaxPolicy(
-          run.snapshot.taxPolicies,
-          run.snapshot.scenario.strategies.tax.policyYear || new Date(run.finishedAt).getFullYear(),
-          run.snapshot.scenario.strategies.tax.filingStatus,
-        )
-      : null
-  const ordinaryBracketLines = taxPolicy?.ordinaryBrackets ?? []
 
   const getHoldingLabel = (holdingId: string) => {
     const holding = accountLookup.holdingById.get(holdingId)
@@ -246,37 +354,72 @@ const RunResultsPage = () => {
         </div>
       </div>
 
-      {ordinaryIncomeSeries.length > 0 && taxPolicy ? (
+      {ordinaryIncomeChart.data.length > 0 ? (
         <div className="card stack">
           <h2>Ordinary income tax bracket</h2>
           <div className="chart">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={ordinaryIncomeSeries}>
+              <AreaChart data={ordinaryIncomeChart.data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="age" />
-                <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
+                <YAxis
+                  tickFormatter={(value) => formatAxisValue(Number(value))}
+                  width={70}
+                  domain={[0, ordinaryIncomeChart.maxValue]}
+                />
                 <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Legend />
                 <Area
                   type="monotone"
-                  dataKey="ordinaryIncome"
-                  stroke="var(--accent)"
-                  fill="color-mix(in srgb, var(--accent) 35%, transparent)"
+                  dataKey="salaryIncome"
+                  stackId="ordinary"
+                  name="Salary and other income"
+                  stroke="#4f63ff"
+                  fill="color-mix(in srgb, #4f63ff 45%, transparent)"
                 />
-                {ordinaryBracketLines.map((bracket) =>
-                  bracket.upTo === null ? null : (
-                    <ReferenceLine
-                      key={`ordinary-${bracket.upTo}`}
-                      y={bracket.upTo}
-                      stroke="var(--muted)"
-                      strokeDasharray="3 3"
-                      label={{
-                        position: 'right',
-                        value: `${Math.round(bracket.rate * 100)}%`,
-                        fill: 'var(--muted)',
-                      }}
-                    />
-                  ),
-                )}
+                <Area
+                  type="monotone"
+                  dataKey="investmentIncome"
+                  stackId="ordinary"
+                  name="Investment income"
+                  stroke="#3da5ff"
+                  fill="color-mix(in srgb, #3da5ff 45%, transparent)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="socialSecurityIncome"
+                  stackId="ordinary"
+                  name="Taxable social security"
+                  stroke="#7ecf7a"
+                  fill="color-mix(in srgb, #7ecf7a 45%, transparent)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="pensionIncome"
+                  stackId="ordinary"
+                  name="Taxable pension and annuity"
+                  stroke="#7d6bff"
+                  fill="color-mix(in srgb, #7d6bff 45%, transparent)"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="taxDeferredIncome"
+                  stackId="ordinary"
+                  name="Withdrawal from tax deferred"
+                  stroke="#f39c3d"
+                  fill="color-mix(in srgb, #f39c3d 45%, transparent)"
+                />
+                {ordinaryIncomeChart.bracketLines.map((line) => (
+                  <Line
+                    key={line.key}
+                    type="monotone"
+                    dataKey={line.key}
+                    name={line.label}
+                    stroke="var(--muted)"
+                    strokeDasharray="4 4"
+                    dot={false}
+                  />
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>

@@ -28,7 +28,7 @@ export const createSimulationModules = (
     createWorkModule(snapshot),
     createSocialSecurityModule(snapshot),
     createCashBufferModule(snapshot),
-    createRebalancingModule(snapshot),
+    // createRebalancingModule(snapshot),
     createConversionModule(snapshot),
     createRmdModule(snapshot),
     createTaxModule(snapshot),
