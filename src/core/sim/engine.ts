@@ -888,7 +888,19 @@ const buildModuleExplain = ({
       }
       let conversionCandidate = 0
       if (rothConversion.enabled && isAgeInRange(age, rothConversion.startAge, rothConversion.endAge)) {
-        conversionCandidate = rothConversion.targetOrdinaryIncome
+        if (rothConversion.targetOrdinaryBracketRate > 0) {
+          const policy = selectTaxPolicy(
+            snapshot.taxPolicies,
+            context.date.getFullYear(),
+            tax.filingStatus,
+          )
+          const bracket = policy?.ordinaryBrackets.find(
+            (entry) => entry.rate === rothConversion.targetOrdinaryBracketRate,
+          )
+          if (bracket?.upTo !== null && bracket?.upTo !== undefined) {
+            conversionCandidate = Math.max(0, bracket.upTo - state.yearLedger.ordinaryIncome)
+          }
+        }
         if (rothConversion.respectIrmaa) {
           const table = selectIrmaaTable(
             snapshot.irmaaTables,
@@ -916,6 +928,7 @@ const buildModuleExplain = ({
         toMetric('Roth ladder', rothLadder.enabled),
         toMetric('Roth conversion', rothConversion.enabled),
         toMetric('Age', age),
+        toMetric('Target bracket rate', rothConversion.targetOrdinaryBracketRate),
         toMetric('Respect IRMAA', rothConversion.respectIrmaa),
         toMetric('Min conversion', rothConversion.minConversion),
         toMetric('Max conversion', rothConversion.maxConversion),

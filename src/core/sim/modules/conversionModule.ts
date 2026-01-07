@@ -1,5 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
-import { selectIrmaaTable } from '../tax'
+import { selectIrmaaTable, selectTaxPolicy } from '../tax'
 import type { ActionIntent, SimulationModule } from '../types'
 
 export const createConversionModule = (snapshot: SimulationSnapshot): SimulationModule => {
@@ -41,7 +41,20 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
       }
 
       if (rothConversion.enabled && isAgeInRange(age, rothConversion.startAge, rothConversion.endAge)) {
-        let candidate = rothConversion.targetOrdinaryIncome
+        let candidate = 0
+        if (rothConversion.targetOrdinaryBracketRate > 0) {
+          const policy = selectTaxPolicy(
+            snapshot.taxPolicies,
+            context.date.getFullYear(),
+            tax.filingStatus,
+          )
+          const bracket = policy?.ordinaryBrackets.find(
+            (entry) => entry.rate === rothConversion.targetOrdinaryBracketRate,
+          )
+          if (bracket?.upTo !== null && bracket?.upTo !== undefined) {
+            candidate = Math.max(0, bracket.upTo - state.yearLedger.ordinaryIncome)
+          }
+        }
         if (rothConversion.respectIrmaa) {
           const table = selectIrmaaTable(
             snapshot.irmaaTables,

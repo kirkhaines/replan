@@ -37,6 +37,7 @@ import {
   irmaaTableSeed,
   rmdTableSeed,
 } from '../../core/defaults/defaultData'
+import { selectTaxPolicy } from '../../core/sim/tax'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -361,6 +362,21 @@ const ScenarioDetailPage = () => {
   const personStrategyIds = watch('scenario.personStrategyIds')
   const nonInvestmentAccountIds = watch('scenario.nonInvestmentAccountIds')
   const investmentAccountIds = watch('scenario.investmentAccountIds')
+  const taxPolicyYear = watch('scenario.strategies.tax.policyYear')
+  const taxFilingStatus = watch('scenario.strategies.tax.filingStatus')
+  const ladderLeadTimeYears = watch('scenario.strategies.rothLadder.leadTimeYears')
+  const ladderStartAge = watch('scenario.strategies.rothLadder.startAge')
+  const ladderEndAge = watch('scenario.strategies.rothLadder.endAge')
+  const rothConversionBrackets = useMemo(() => {
+    const policy = selectTaxPolicy(
+      taxPolicySeed,
+      taxPolicyYear || new Date().getFullYear(),
+      taxFilingStatus,
+    )
+    return policy?.ordinaryBrackets ?? []
+  }, [taxFilingStatus, taxPolicyYear])
+  const ladderConversionStart = Math.max(0, ladderStartAge - ladderLeadTimeYears)
+  const ladderConversionEnd = Math.max(0, ladderEndAge - ladderLeadTimeYears)
   const {
     fields: glidepathTargetFields,
     append: appendGlidepathTarget,
@@ -1918,13 +1934,21 @@ const ScenarioDetailPage = () => {
                   />
                 </label>
                 <label className="field">
-                  <span>Target ordinary income</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothConversion.targetOrdinaryIncome', {
+                  <span>Target tax bracket</span>
+                  <select
+                    {...register('scenario.strategies.rothConversion.targetOrdinaryBracketRate', {
                       valueAsNumber: true,
                     })}
-                  />
+                  >
+                    <option value={0}>None</option>
+                    {rothConversionBrackets.map((bracket) => (
+                      <option key={`${bracket.rate}-${bracket.upTo ?? 'top'}`} value={bracket.rate}>
+                        {`${Math.round(bracket.rate * 100)}% bracket${
+                          bracket.upTo ? ` (up to ${formatCurrency(bracket.upTo)})` : ''
+                        }`}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="field">
                   <span>Min conversion</span>
@@ -1974,7 +1998,7 @@ const ScenarioDetailPage = () => {
                   />
                 </label>
                 <label className="field">
-                  <span>Ladder start age</span>
+                  <span>Availability start age (after lead time)</span>
                   <input
                     type="number"
                     {...register('scenario.strategies.rothLadder.startAge', {
@@ -1983,7 +2007,7 @@ const ScenarioDetailPage = () => {
                   />
                 </label>
                 <label className="field">
-                  <span>Ladder end age</span>
+                  <span>Availability end age (after lead time)</span>
                   <input
                     type="number"
                     {...register('scenario.strategies.rothLadder.endAge', {
@@ -1991,6 +2015,9 @@ const ScenarioDetailPage = () => {
                     })}
                   />
                 </label>
+                <div className="muted">
+                  Conversion window: {ladderConversionStart.toFixed(1)}–{ladderConversionEnd.toFixed(1)}
+                </div>
                 <label className="field">
                   <span>Target after-tax spending</span>
                   <input
