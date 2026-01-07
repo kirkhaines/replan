@@ -5,7 +5,7 @@ export const socialSecurityEarningsSchema = baseEntitySchema.extend({
   personId: z.string().uuid(),
   year: z.number().int(),
   amount: z.number().min(0),
-  months: z.number().int().min(1).max(12),
+  months: z.number().int().min(0).max(12),
 })
 
 export const socialSecurityStrategySchema = baseEntitySchema.extend({

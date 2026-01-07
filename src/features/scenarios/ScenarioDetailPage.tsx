@@ -83,6 +83,21 @@ const editorSchema = z.object({
 
 const isDefined = <T,>(value: T | undefined): value is T => Boolean(value)
 
+const toIsoDateString = (value?: string | null) => {
+  if (!value) {
+    return null
+  }
+  const matches = /^\d{4}-\d{2}-\d{2}$/.test(value)
+  if (!matches) {
+    return null
+  }
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+  return value
+}
+
 const buildSimulationSnapshot = async (
   scenario: Scenario,
   storage: StorageClient,
@@ -145,6 +160,11 @@ const buildSimulationSnapshot = async (
       ),
     )
   ).flat()
+    .map((period) => ({
+      ...period,
+      startDate: toIsoDateString(period.startDate),
+      endDate: toIsoDateString(period.endDate),
+    }))
 
   const socialSecurityEarnings = (
     await Promise.all(
