@@ -156,8 +156,8 @@ const SpendingLineItemDetailPage = () => {
     setItem({
       ...item,
       futureWorkPeriodId: periodId,
-      startDate: period.startDate,
-      endDate: period.endDate,
+      startDate: period.startDate ?? '',
+      endDate: period.endDate ?? '',
     })
   }
 

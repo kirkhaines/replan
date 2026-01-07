@@ -144,10 +144,15 @@ const RunResultsPage = () => {
     if (!run?.snapshot) {
       return { data: [], bracketLines: [], maxValue: 0 }
     }
-    const inflationRate = run.snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+    const snapshot = run.snapshot
+    const finishedAt = run.finishedAt
+    const timeline = run.result.timeline
+    const inflationRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
     const holdingTaxType = new Map(
-      run.snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
+      snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
     )
+    const policyYear =
+      snapshot.scenario.strategies.tax.policyYear || new Date(finishedAt).getFullYear()
     const totalsByYear = new Map<
       number,
       {
@@ -200,14 +205,14 @@ const RunResultsPage = () => {
     })
 
     const bracketLines: Array<{ key: string; label: string; rate: number }> = []
-    const bracketCount = run.snapshot.taxPolicies.reduce((max, policy) => {
+    const bracketCount = snapshot.taxPolicies.reduce((max, policy) => {
       return Math.max(max, policy.ordinaryBrackets.filter((entry) => entry.upTo !== null).length)
     }, 0)
     for (let index = 0; index < bracketCount; index += 1) {
       const samplePolicy = selectTaxPolicy(
-        run.snapshot.taxPolicies,
-        run.snapshot.scenario.strategies.tax.policyYear || new Date(run.finishedAt).getFullYear(),
-        run.snapshot.scenario.strategies.tax.filingStatus,
+        snapshot.taxPolicies,
+        policyYear,
+        snapshot.scenario.strategies.tax.filingStatus,
       )
       const rate = samplePolicy?.ordinaryBrackets[index]?.rate
       bracketLines.push({
@@ -217,7 +222,17 @@ const RunResultsPage = () => {
       })
     }
 
-    const data = run.result.timeline.map((point) => {
+    type OrdinaryIncomeChartEntry = {
+      age: number
+      yearIndex: number
+      salaryIncome: number
+      investmentIncome: number
+      socialSecurityIncome: number
+      pensionIncome: number
+      taxDeferredIncome: number
+    } & Record<string, number>
+
+    const data = timeline.map((point) => {
       const totals = totalsByYear.get(point.yearIndex) ?? {
         salary: 0,
         investment: 0,
@@ -225,11 +240,13 @@ const RunResultsPage = () => {
         pension: 0,
         taxDeferred: 0,
       }
-      const pointYear = point.date ? new Date(point.date).getFullYear() : new Date(run.finishedAt).getFullYear()
+      const pointYear = point.date
+        ? new Date(point.date).getFullYear()
+        : new Date(finishedAt).getFullYear()
       const policy = selectTaxPolicy(
-        run.snapshot.taxPolicies,
+        snapshot.taxPolicies,
         pointYear,
-        run.snapshot.scenario.strategies.tax.filingStatus,
+        snapshot.scenario.strategies.tax.filingStatus,
       )
       const bracketValues: Record<string, number> = {}
       if (policy) {
@@ -252,7 +269,7 @@ const RunResultsPage = () => {
         pensionIncome: totals.pension,
         taxDeferredIncome: totals.taxDeferred,
         ...bracketValues,
-      }
+      } as OrdinaryIncomeChartEntry
     })
     const maxValue = data.reduce((max, entry) => {
       const totals =
@@ -261,9 +278,10 @@ const RunResultsPage = () => {
         entry.socialSecurityIncome +
         entry.pensionIncome +
         entry.taxDeferredIncome
-      const bracketMax = Object.keys(entry)
-        .filter((key) => key.startsWith('bracket_'))
-        .reduce((innerMax, key) => Math.max(innerMax, Number(entry[key]) || 0), 0)
+      const bracketMax = bracketLines.reduce(
+        (innerMax, line) => Math.max(innerMax, entry[line.key] ?? 0),
+        0,
+      )
       return Math.max(max, totals, bracketMax)
     }, 0)
 

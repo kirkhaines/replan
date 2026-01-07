@@ -274,8 +274,8 @@ export const buildSsaEstimate = ({
   const monthsWorkedByYear = new Map<number, number>()
 
   futureWorkPeriods.forEach((period) => {
-    const startYear = getYearFromIsoDate(period.startDate)
-    const endYear = getYearFromIsoDate(period.endDate)
+    const startYear = getYearFromIsoDate(period.startDate ?? undefined)
+    const endYear = getYearFromIsoDate(period.endDate ?? undefined)
     if (endYear === null) {
       return
     }

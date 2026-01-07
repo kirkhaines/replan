@@ -272,7 +272,7 @@ const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountH
 
 
 const buildInflationMap = (
-  defaults: InflationDefault[],
+  defaults: Array<Pick<InflationDefault, 'type' | 'rate'>>,
   current?: Scenario['strategies']['returnModel']['inflationAssumptions'],
 ): Scenario['strategies']['returnModel']['inflationAssumptions'] => {
   const fallback = defaults.length > 0 ? defaults : inflationDefaultsSeed
