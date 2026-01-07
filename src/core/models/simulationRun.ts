@@ -2,6 +2,113 @@ import { z } from 'zod'
 import { isoDateStringSchema } from './common'
 import { simulationSnapshotSchema } from './simulationSnapshot'
 
+const cashflowCategorySchema = z.enum([
+  'work',
+  'spending_need',
+  'spending_want',
+  'social_security',
+  'pension',
+  'healthcare',
+  'event',
+  'charitable',
+  'tax',
+  'other',
+])
+
+const cashflowItemSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  category: cashflowCategorySchema,
+  cash: z.number(),
+  ordinaryIncome: z.number().optional(),
+  capitalGains: z.number().optional(),
+  deductions: z.number().optional(),
+  taxExemptIncome: z.number().optional(),
+})
+
+const actionKindSchema = z.enum(['withdraw', 'deposit', 'convert', 'rebalance', 'rmd'])
+
+const actionRecordSchema = z.object({
+  id: z.string(),
+  kind: actionKindSchema,
+  amount: z.number(),
+  resolvedAmount: z.number(),
+  sourceHoldingId: z.string().optional(),
+  targetHoldingId: z.string().optional(),
+  fromCash: z.boolean().optional(),
+  priority: z.number().optional(),
+  label: z.string().optional(),
+  taxTreatment: z.enum(['ordinary', 'capital_gains', 'tax_exempt']).optional(),
+  skipPenalty: z.boolean().optional(),
+})
+
+const explainValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()])
+
+const explainMetricSchema = z.object({
+  label: z.string(),
+  value: explainValueSchema,
+})
+
+const cashflowTotalsSchema = z.object({
+  cash: z.number(),
+  ordinaryIncome: z.number(),
+  capitalGains: z.number(),
+  deductions: z.number(),
+  taxExemptIncome: z.number(),
+})
+
+const actionTotalsSchema = z.object({
+  deposit: z.number(),
+  withdraw: z.number(),
+  convert: z.number(),
+})
+
+const marketTotalsSchema = z.object({
+  cash: z.number(),
+  holdings: z.number(),
+  total: z.number(),
+})
+
+const marketReturnSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['cash', 'holding']),
+  balanceStart: z.number(),
+  balanceEnd: z.number(),
+  amount: z.number(),
+  rate: z.number(),
+  investmentAccountId: z.string().optional(),
+  holdingType: z.string().optional(),
+  taxType: z.string().optional(),
+})
+
+const accountBalanceSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['cash', 'holding']),
+  balance: z.number(),
+  investmentAccountId: z.string().optional(),
+})
+
+const moduleRunSchema = z.object({
+  moduleId: z.string(),
+  cashflows: z.array(cashflowItemSchema),
+  actions: z.array(actionRecordSchema),
+  marketReturns: z.array(marketReturnSchema).optional(),
+  totals: z.object({
+    cashflows: cashflowTotalsSchema,
+    actions: actionTotalsSchema,
+    market: marketTotalsSchema.optional(),
+  }),
+  inputs: z.array(explainMetricSchema).optional(),
+  checkpoints: z.array(explainMetricSchema).optional(),
+})
+
+const monthExplanationSchema = z.object({
+  monthIndex: z.number().int().min(0),
+  date: isoDateStringSchema,
+  modules: z.array(moduleRunSchema),
+  accounts: z.array(accountBalanceSchema),
+})
+
 export const timelinePointSchema = z.object({
   yearIndex: z.number().int().min(0),
   age: z.number(),
@@ -36,6 +143,7 @@ export const monthlyTimelinePointSchema = z.object({
 export const simulationResultSchema = z.object({
   timeline: z.array(timelinePointSchema),
   monthlyTimeline: z.array(monthlyTimelinePointSchema).optional(),
+  explanations: z.array(monthExplanationSchema).optional(),
   summary: z.object({
     endingBalance: z.number(),
     minBalance: z.number(),
@@ -56,3 +164,10 @@ export const simulationRunSchema = z.object({
 
 export type SimulationResult = z.infer<typeof simulationResultSchema>
 export type SimulationRun = z.infer<typeof simulationRunSchema>
+export type CashflowItem = z.infer<typeof cashflowItemSchema>
+export type ActionRecord = z.infer<typeof actionRecordSchema>
+export type ExplainMetric = z.infer<typeof explainMetricSchema>
+export type MarketReturn = z.infer<typeof marketReturnSchema>
+export type AccountBalanceSnapshot = z.infer<typeof accountBalanceSchema>
+export type ModuleRunExplanation = z.infer<typeof moduleRunSchema>
+export type MonthExplanation = z.infer<typeof monthExplanationSchema>

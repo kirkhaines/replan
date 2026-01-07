@@ -146,6 +146,8 @@ describe('runSimulation', () => {
     expect(result.summary.minBalance).toBe(300)
     expect(result.summary.maxBalance).toBe(300)
     expect(result.monthlyTimeline).toHaveLength(12)
+    expect(result.explanations).toHaveLength(12)
+    expect(result.explanations?.[0]?.modules.length ?? 0).toBeGreaterThan(0)
   })
 
   it('runs with freshly created default scenario data', () => {
@@ -218,6 +220,7 @@ describe('runSimulation', () => {
       const result = runSimulation(input as SimulationInput)
       expect(result.timeline.length).toBeGreaterThan(0)
       expect(result.monthlyTimeline?.length ?? 0).toBeGreaterThan(0)
+      expect(result.explanations?.length ?? 0).toBeGreaterThan(0)
     } finally {
       vi.useRealTimers()
     }

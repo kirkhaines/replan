@@ -20,6 +20,28 @@ import { selectTaxPolicy } from '../../core/sim/tax'
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 0 })
 
+const formatSignedCurrency = (value: number) => {
+  if (Math.abs(value) < 0.005) {
+    return formatCurrency(0)
+  }
+  return formatCurrency(value)
+}
+
+const formatRate = (value: number) => `${(value * 100).toFixed(2)}%`
+
+const formatMetricValue = (value: unknown) => {
+  if (typeof value === 'number') {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No'
+  }
+  if (value === null || value === undefined) {
+    return '-'
+  }
+  return String(value)
+}
+
 const formatAxisValue = (value: number) => {
   const abs = Math.abs(value)
   if (abs >= 1_000_000) {
@@ -40,6 +62,23 @@ const addMonths = (isoDate: string, months: number) => {
   return date.toISOString().slice(0, 10)
 }
 
+const moduleLabels: Record<string, string> = {
+  spending: 'Spending',
+  events: 'Events',
+  pensions: 'Pensions',
+  healthcare: 'Healthcare',
+  charitable: 'Charitable',
+  'future-work': 'Work',
+  'social-security': 'Social Security',
+  'cash-buffer': 'Cash buffer',
+  rebalancing: 'Rebalancing',
+  conversions: 'Conversions',
+  rmd: 'RMD',
+  taxes: 'Taxes',
+  'funding-core': 'Funding',
+  'returns-core': 'Market returns',
+}
+
 const RunResultsPage = () => {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
@@ -47,8 +86,11 @@ const RunResultsPage = () => {
   const [run, setRun] = useState<SimulationRun | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
+  const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set())
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
 
   const monthlyTimeline = run?.result.monthlyTimeline ?? []
+  const explanations = run?.result.explanations ?? []
   const monthlyByYear = useMemo(() => {
     return monthlyTimeline.reduce<Map<number, typeof monthlyTimeline>>((acc, entry) => {
       const yearIndex = Math.floor(entry.monthIndex / 12)
@@ -58,6 +100,32 @@ const RunResultsPage = () => {
       return acc
     }, new Map())
   }, [monthlyTimeline])
+  const explanationsByMonth = useMemo(() => {
+    return explanations.reduce<Map<number, (typeof explanations)[number]>>((acc, entry) => {
+      acc.set(entry.monthIndex, entry)
+      return acc
+    }, new Map())
+  }, [explanations])
+  const accountLookup = useMemo(() => {
+    const cashById = new Map<string, string>()
+    const investmentById = new Map<string, string>()
+    const holdingById = new Map<string, { name: string; investmentAccountId?: string }>()
+    if (run?.snapshot) {
+      run.snapshot.nonInvestmentAccounts.forEach((account) => {
+        cashById.set(account.id, account.name)
+      })
+      run.snapshot.investmentAccounts.forEach((account) => {
+        investmentById.set(account.id, account.name)
+      })
+      run.snapshot.investmentAccountHoldings.forEach((holding) => {
+        holdingById.set(holding.id, {
+          name: holding.name,
+          investmentAccountId: holding.investmentAccountId,
+        })
+      })
+    }
+    return { cashById, investmentById, holdingById }
+  }, [run?.snapshot])
 
   useEffect(() => {
     const load = async () => {
@@ -109,6 +177,24 @@ const RunResultsPage = () => {
         )
       : null
   const ordinaryBracketLines = taxPolicy?.ordinaryBrackets ?? []
+
+  const getHoldingLabel = (holdingId: string) => {
+    const holding = accountLookup.holdingById.get(holdingId)
+    if (!holding) {
+      return holdingId
+    }
+    const accountName = holding.investmentAccountId
+      ? accountLookup.investmentById.get(holding.investmentAccountId)
+      : null
+    return accountName ? `${holding.name} (${accountName})` : holding.name
+  }
+
+  const getAccountLabel = (entry: { id: string; kind: 'cash' | 'holding' }) => {
+    if (entry.kind === 'cash') {
+      return accountLookup.cashById.get(entry.id) ?? entry.id
+    }
+    return getHoldingLabel(entry.id)
+  }
 
   return (
     <section className="stack">
@@ -204,7 +290,7 @@ const RunResultsPage = () => {
 
       <div className="card stack">
         <h2>Timeline</h2>
-        <table className="table">
+        <table className="table selectable">
           <thead>
             <tr>
               <th>Start date</th>
@@ -245,15 +331,374 @@ const RunResultsPage = () => {
                     <td>{formatCurrency(point.spending)}</td>
                   </tr>
                   {isExpanded
-                    ? monthRows.map((month) => (
-                        <tr key={`${point.yearIndex}-${month.monthIndex}`}>
-                          <td className="muted">{month.date}</td>
-                          <td className="muted">{month.age}</td>
-                          <td className="muted">{formatCurrency(month.totalBalance)}</td>
-                          <td className="muted">{formatCurrency(month.contributions)}</td>
-                          <td className="muted">{formatCurrency(month.spending)}</td>
-                        </tr>
-                      ))
+                    ? monthRows.map((month) => {
+                        const monthExpanded = expandedMonths.has(month.monthIndex)
+                        const explanation = explanationsByMonth.get(month.monthIndex)
+                        const priorExplanation =
+                          month.monthIndex > 0
+                            ? explanationsByMonth.get(month.monthIndex - 1)
+                            : undefined
+                        return (
+                          <Fragment key={`${point.yearIndex}-${month.monthIndex}`}>
+                            <tr
+                              onClick={() =>
+                                setExpandedMonths((current) => {
+                                  const next = new Set(current)
+                                  if (next.has(month.monthIndex)) {
+                                    next.delete(month.monthIndex)
+                                  } else {
+                                    next.add(month.monthIndex)
+                                  }
+                                  return next
+                                })
+                              }
+                            >
+                              <td className="muted">
+                                <span className="muted" aria-hidden="true">
+                                  {monthExpanded ? '▾' : '▸'}
+                                </span>{' '}
+                                {month.date}
+                              </td>
+                              <td className="muted">{month.age}</td>
+                              <td className="muted">{formatCurrency(month.totalBalance)}</td>
+                              <td className="muted">{formatCurrency(month.contributions)}</td>
+                              <td className="muted">{formatCurrency(month.spending)}</td>
+                            </tr>
+                            {monthExpanded ? (
+                              <tr className="table-row-highlight">
+                                <td colSpan={5} className="expansion">
+                                  <div className="stack">
+                                    {explanation ? (
+                                      <>
+                                        <div className="stack">
+                                          <strong>Module activity</strong>
+                                          <div className="table-wrap">
+                                            <table className="table compact selectable">
+                                              <thead>
+                                                <tr>
+                                                  <th>Module</th>
+                                                  <th>Cash</th>
+                                                  <th>Ord inc</th>
+                                                  <th>Cap gains</th>
+                                                  <th>Deductions</th>
+                                                  <th>Tax exempt</th>
+                                                  <th>Deposit</th>
+                                                  <th>Withdraw</th>
+                                                  <th>Convert</th>
+                                                  <th>Market</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {explanation.modules
+                                                  .filter((module) => {
+                                                    const totals = module.totals
+                                                    const cashflows = totals.cashflows
+                                                    const actions = totals.actions
+                                                    const marketTotal = totals.market?.total ?? 0
+                                                    return (
+                                                      cashflows.cash !== 0 ||
+                                                      cashflows.ordinaryIncome !== 0 ||
+                                                      cashflows.capitalGains !== 0 ||
+                                                      cashflows.deductions !== 0 ||
+                                                      cashflows.taxExemptIncome !== 0 ||
+                                                      actions.deposit !== 0 ||
+                                                      actions.withdraw !== 0 ||
+                                                      actions.convert !== 0 ||
+                                                      marketTotal !== 0
+                                                    )
+                                                  })
+                                                  .map((module) => {
+                                                  const moduleKey = `${month.monthIndex}:${module.moduleId}`
+                                                  const moduleExpanded = expandedModules.has(moduleKey)
+                                                  return (
+                                                    <Fragment key={moduleKey}>
+                                                      <tr
+                                                        onClick={() =>
+                                                          setExpandedModules((current) => {
+                                                            const next = new Set(current)
+                                                            if (next.has(moduleKey)) {
+                                                              next.delete(moduleKey)
+                                                            } else {
+                                                              next.add(moduleKey)
+                                                            }
+                                                            return next
+                                                          })
+                                                        }
+                                                      >
+                                                        <td>
+                                                          <span className="muted" aria-hidden="true">
+                                                            {moduleExpanded ? '▾' : '▸'}
+                                                          </span>{' '}
+                                                          {moduleLabels[module.moduleId] ?? module.moduleId}
+                                                        </td>
+                                                        <td>{formatSignedCurrency(module.totals.cashflows.cash)}</td>
+                                                        <td>
+                                                          {formatSignedCurrency(
+                                                            module.totals.cashflows.ordinaryIncome,
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          {formatSignedCurrency(
+                                                            module.totals.cashflows.capitalGains,
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          {formatSignedCurrency(
+                                                            module.totals.cashflows.deductions,
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          {formatSignedCurrency(
+                                                            module.totals.cashflows.taxExemptIncome,
+                                                          )}
+                                                        </td>
+                                                        <td>{formatSignedCurrency(module.totals.actions.deposit)}</td>
+                                                        <td>{formatSignedCurrency(module.totals.actions.withdraw)}</td>
+                                                        <td>{formatSignedCurrency(module.totals.actions.convert)}</td>
+                                                        <td>
+                                                          {module.totals.market
+                                                            ? formatSignedCurrency(module.totals.market.total)
+                                                            : '-'}
+                                                        </td>
+                                                      </tr>
+                                                      {moduleExpanded ? (
+                                                        <tr>
+                                                          <td colSpan={10} className="expansion">
+                                                            <div className="stack">
+                                                              {module.inputs ? (
+                                                                <div className="stack">
+                                                                  <strong className="muted">Inputs</strong>
+                                                                  <table className="table compact">
+                                                                    <tbody>
+                                                                      {module.inputs.map((input) => (
+                                                                        <tr key={input.label}>
+                                                                          <td className="muted">{input.label}</td>
+                                                                          <td>{formatMetricValue(input.value)}</td>
+                                                                        </tr>
+                                                                      ))}
+                                                                    </tbody>
+                                                                  </table>
+                                                                </div>
+                                                              ) : null}
+                                                              {module.checkpoints ? (
+                                                                <div className="stack">
+                                                                  <strong className="muted">Checkpoints</strong>
+                                                                  <table className="table compact">
+                                                                    <tbody>
+                                                                      {module.checkpoints.map((checkpoint) => (
+                                                                        <tr key={checkpoint.label}>
+                                                                          <td className="muted">{checkpoint.label}</td>
+                                                                          <td>
+                                                                            {formatMetricValue(checkpoint.value)}
+                                                                          </td>
+                                                                        </tr>
+                                                                      ))}
+                                                                    </tbody>
+                                                                  </table>
+                                                                </div>
+                                                              ) : null}
+                                                              {module.cashflows.length > 0 ? (
+                                                                <div className="stack">
+                                                                  <strong className="muted">Cashflows</strong>
+                                                                  <div className="table-wrap">
+                                                                    <table className="table compact">
+                                                                      <thead>
+                                                                        <tr>
+                                                                          <th>Label</th>
+                                                                          <th>Category</th>
+                                                                          <th>Cash</th>
+                                                                          <th>Ord inc</th>
+                                                                          <th>Cap gains</th>
+                                                                          <th>Deductions</th>
+                                                                          <th>Tax exempt</th>
+                                                                        </tr>
+                                                                      </thead>
+                                                                      <tbody>
+                                                                        {module.cashflows.map((flow) => (
+                                                                          <tr key={flow.id}>
+                                                                            <td>{flow.label}</td>
+                                                                            <td className="muted">{flow.category}</td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(flow.cash)}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(
+                                                                                flow.ordinaryIncome ?? 0,
+                                                                              )}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(
+                                                                                flow.capitalGains ?? 0,
+                                                                              )}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(
+                                                                                flow.deductions ?? 0,
+                                                                              )}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(
+                                                                                flow.taxExemptIncome ?? 0,
+                                                                              )}
+                                                                            </td>
+                                                                          </tr>
+                                                                        ))}
+                                                                      </tbody>
+                                                                    </table>
+                                                                  </div>
+                                                                </div>
+                                                              ) : null}
+                                                              {module.actions.length > 0 ? (
+                                                                <div className="stack">
+                                                                  <strong className="muted">Actions</strong>
+                                                                  <div className="table-wrap">
+                                                                    <table className="table compact">
+                                                                      <thead>
+                                                                        <tr>
+                                                                          <th>Label</th>
+                                                                          <th>Kind</th>
+                                                                          <th>Amount</th>
+                                                                          <th>Resolved</th>
+                                                                          <th>Source</th>
+                                                                          <th>Target</th>
+                                                                        </tr>
+                                                                      </thead>
+                                                                      <tbody>
+                                                                        {module.actions.map((action) => (
+                                                                          <tr key={action.id}>
+                                                                            <td>{action.label ?? action.id}</td>
+                                                                            <td className="muted">{action.kind}</td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(action.amount)}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(
+                                                                                action.resolvedAmount,
+                                                                              )}
+                                                                            </td>
+                                                                            <td className="muted">
+                                                                              {action.sourceHoldingId
+                                                                                ? getHoldingLabel(action.sourceHoldingId)
+                                                                                : '-'}
+                                                                            </td>
+                                                                            <td className="muted">
+                                                                              {action.targetHoldingId
+                                                                                ? getHoldingLabel(action.targetHoldingId)
+                                                                                : '-'}
+                                                                            </td>
+                                                                          </tr>
+                                                                        ))}
+                                                                      </tbody>
+                                                                    </table>
+                                                                  </div>
+                                                                </div>
+                                                              ) : null}
+                                                              {module.marketReturns?.length ? (
+                                                                <div className="stack">
+                                                                  <strong className="muted">Market returns</strong>
+                                                                  <div className="table-wrap">
+                                                                    <table className="table compact">
+                                                                      <thead>
+                                                                        <tr>
+                                                                          <th>Account</th>
+                                                                          <th>Start</th>
+                                                                          <th>End</th>
+                                                                          <th>Change</th>
+                                                                          <th>Rate</th>
+                                                                        </tr>
+                                                                      </thead>
+                                                                      <tbody>
+                                                                        {module.marketReturns.map((entry) => (
+                                                                          <tr key={`${entry.kind}-${entry.id}`}>
+                                                                            <td>
+                                                                              {entry.kind === 'cash'
+                                                                                ? accountLookup.cashById.get(entry.id) ??
+                                                                                  entry.id
+                                                                                : getHoldingLabel(entry.id)}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(entry.balanceStart)}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(entry.balanceEnd)}
+                                                                            </td>
+                                                                            <td>
+                                                                              {formatSignedCurrency(entry.amount)}
+                                                                            </td>
+                                                                            <td>{formatRate(entry.rate)}</td>
+                                                                          </tr>
+                                                                        ))}
+                                                                      </tbody>
+                                                                    </table>
+                                                                  </div>
+                                                                </div>
+                                                              ) : null}
+                                                            </div>
+                                                          </td>
+                                                        </tr>
+                                                      ) : null}
+                                                    </Fragment>
+                                                  )
+                                                })}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
+                                        <div className="stack">
+                                          <strong>Account balances</strong>
+                                          <div className="table-wrap">
+                                            <table className="table compact">
+                                              <thead>
+                                                <tr>
+                                                  <th>Account</th>
+                                                  <th>Current</th>
+                                                  <th>Prior</th>
+                                                  <th>Change</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {explanation.accounts.map((account) => {
+                                                  const priorBalance = priorExplanation
+                                                    ? priorExplanation.accounts.find(
+                                                        (entry) =>
+                                                          entry.id === account.id &&
+                                                          entry.kind === account.kind,
+                                                      )?.balance
+                                                    : undefined
+                                                  const delta =
+                                                    priorBalance !== undefined
+                                                      ? account.balance - priorBalance
+                                                      : null
+                                                  return (
+                                                    <tr key={`${account.kind}-${account.id}`}>
+                                                      <td>{getAccountLabel(account)}</td>
+                                                      <td>{formatSignedCurrency(account.balance)}</td>
+                                                      <td>
+                                                        {priorExplanation
+                                                          ? formatSignedCurrency(priorBalance ?? 0)
+                                                          : '-'}
+                                                      </td>
+                                                      <td>
+                                                        {delta === null ? '-' : formatSignedCurrency(delta)}
+                                                      </td>
+                                                    </tr>
+                                                  )
+                                                })}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <p className="muted">No explanation data available.</p>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        )
+                      })
                     : null}
                 </Fragment>
               )

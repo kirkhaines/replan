@@ -56,7 +56,15 @@ export {
   simulationResultSchema,
   timelinePointSchema,
 } from './simulationRun'
-export type { SimulationRun, SimulationResult } from './simulationRun'
+export type {
+  SimulationRun,
+  SimulationResult,
+  ModuleRunExplanation,
+  MonthExplanation,
+  MarketReturn,
+  AccountBalanceSnapshot,
+  ExplainMetric,
+} from './simulationRun'
 export { simulationSnapshotSchema } from './simulationSnapshot'
 export type { SimulationSnapshot } from './simulationSnapshot'
 export {

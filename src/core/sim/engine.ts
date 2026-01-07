@@ -1,6 +1,15 @@
-import type { Person, SimulationResult } from '../models'
+import type {
+  AccountBalanceSnapshot,
+  ExplainMetric,
+  MarketReturn,
+  ModuleRunExplanation,
+  MonthExplanation,
+  Person,
+  SimulationResult,
+} from '../models'
 import type { SimulationInput } from './input'
 import { createSimulationModules } from './modules'
+import { computeIrmaaSurcharge, computeTax, selectIrmaaTable, selectTaxPolicy } from './tax'
 import type {
   ActionIntent,
   ActionRecord,
@@ -10,6 +19,12 @@ import type {
   SimulationState,
   YearRecord,
 } from './types'
+import {
+  inflateAmount,
+  interpolateTargets,
+  isWithinRange,
+  sumMonthlySpending,
+} from './modules/utils'
 
 type MonthTotals = {
   income: number
@@ -21,6 +36,9 @@ type MonthTotals = {
   capitalGains: number
   deductions: number
 }
+
+type ActionIntentWithModule = ActionIntent & { moduleId: string }
+type ActionRecordWithModule = ActionRecord & { moduleId: string }
 
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
 
@@ -52,6 +70,130 @@ const createEmptyTotals = (): MonthTotals => ({
   capitalGains: 0,
   deductions: 0,
 })
+
+const createEmptyCashflowTotals = () => ({
+  cash: 0,
+  ordinaryIncome: 0,
+  capitalGains: 0,
+  deductions: 0,
+  taxExemptIncome: 0,
+})
+
+const createEmptyActionTotals = () => ({
+  deposit: 0,
+  withdraw: 0,
+  convert: 0,
+})
+
+const createEmptyMarketTotals = () => ({
+  cash: 0,
+  holdings: 0,
+  total: 0,
+})
+
+const sumCashflowTotals = (cashflows: CashflowItem[]) => {
+  const totals = createEmptyCashflowTotals()
+  cashflows.forEach((flow) => {
+    totals.cash += flow.cash
+    totals.ordinaryIncome += flow.ordinaryIncome ?? 0
+    totals.capitalGains += flow.capitalGains ?? 0
+    totals.deductions += flow.deductions ?? 0
+    totals.taxExemptIncome += flow.taxExemptIncome ?? 0
+  })
+  return totals
+}
+
+const sumActionTotals = (actions: ActionRecord[]) => {
+  const totals = createEmptyActionTotals()
+  actions.forEach((action) => {
+    if (action.kind === 'deposit') {
+      totals.deposit += action.resolvedAmount
+    } else if (action.kind === 'withdraw') {
+      totals.withdraw += action.resolvedAmount
+    } else if (action.kind === 'convert') {
+      totals.convert += action.resolvedAmount
+    }
+  })
+  return totals
+}
+
+const sumMarketTotals = (marketReturns: MarketReturn[]) => {
+  const totals = createEmptyMarketTotals()
+  marketReturns.forEach((entry) => {
+    if (entry.kind === 'cash') {
+      totals.cash += entry.amount
+    } else {
+      totals.holdings += entry.amount
+    }
+    totals.total += entry.amount
+  })
+  return totals
+}
+
+const buildAccountBalances = (state: SimulationState): AccountBalanceSnapshot[] => [
+  ...state.cashAccounts.map((account) => ({
+    id: account.id,
+    kind: 'cash' as const,
+    balance: account.balance,
+  })),
+  ...state.holdings.map((holding) => ({
+    id: holding.id,
+    kind: 'holding' as const,
+    balance: holding.balance,
+    investmentAccountId: holding.investmentAccountId,
+  })),
+]
+
+const toMetric = (label: string, value: ExplainMetric['value']): ExplainMetric => ({
+  label,
+  value,
+})
+
+const buildMarketReturns = (
+  state: SimulationState,
+  beforeCash: Map<string, number>,
+  beforeHoldings: Map<string, number>,
+): MarketReturn[] => {
+  const returns: MarketReturn[] = []
+  state.cashAccounts.forEach((account) => {
+    const start = beforeCash.get(account.id) ?? 0
+    const end = account.balance
+    const amount = end - start
+    returns.push({
+      id: account.id,
+      kind: 'cash',
+      balanceStart: start,
+      balanceEnd: end,
+      amount,
+      rate: start > 0 ? amount / start : 0,
+    })
+  })
+  state.holdings.forEach((holding) => {
+    const start = beforeHoldings.get(holding.id) ?? 0
+    const end = holding.balance
+    const amount = end - start
+    returns.push({
+      id: holding.id,
+      kind: 'holding',
+      balanceStart: start,
+      balanceEnd: end,
+      amount,
+      rate: start > 0 ? amount / start : 0,
+      investmentAccountId: holding.investmentAccountId,
+      holdingType: holding.holdingType,
+      taxType: holding.taxType,
+    })
+  })
+  return returns
+}
+
+const sumCashflowCategory = (cashflows: CashflowItem[], category: CashflowItem['category']) =>
+  cashflows.reduce((sum, flow) => (flow.category === category ? sum + flow.cash : sum), 0)
+
+const sumCashflowField = (
+  cashflows: CashflowItem[],
+  field: 'ordinaryIncome' | 'capitalGains' | 'deductions' | 'taxExemptIncome',
+) => cashflows.reduce((sum, flow) => sum + (flow[field] ?? 0), 0)
 
 const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationState => {
   const cashAccounts = snapshot.nonInvestmentAccounts.map((account) => ({
@@ -87,6 +229,27 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     initialBalance,
   }
 }
+
+const cloneState = (state: SimulationState): SimulationState => ({
+  cashAccounts: state.cashAccounts.map((account) => ({
+    id: account.id,
+    balance: account.balance,
+    interestRate: account.interestRate,
+  })),
+  holdings: state.holdings.map((holding) => ({
+    id: holding.id,
+    investmentAccountId: holding.investmentAccountId,
+    taxType: holding.taxType,
+    holdingType: holding.holdingType,
+    balance: holding.balance,
+    contributionBasis: holding.contributionBasis,
+    returnRate: holding.returnRate,
+    returnStdDev: holding.returnStdDev,
+  })),
+  yearLedger: { ...state.yearLedger },
+  magiHistory: { ...state.magiHistory },
+  initialBalance: state.initialBalance,
+})
 
 const getPrimaryPerson = (snapshot: SimulationInput['snapshot']): Person | null => {
   const primaryStrategyId = snapshot.scenario.personStrategyIds[0]
@@ -247,9 +410,9 @@ const withdrawProRata = (
 }
 
 const resolveIntents = (
-  intents: ActionIntent[],
+  intents: ActionIntentWithModule[],
   state: SimulationState,
-): ActionRecord[] => {
+): ActionRecordWithModule[] => {
   const sorted = [...intents].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
   return sorted.map((intent) => {
     if (intent.kind === 'withdraw') {
@@ -262,7 +425,7 @@ const resolveIntents = (
 
 const applyActions = (
   state: SimulationState,
-  actions: ActionRecord[],
+  actions: ActionRecordWithModule[],
   totals: MonthTotals,
   context: SimulationContext,
 ) => {
@@ -391,6 +554,460 @@ const buildYearRecord = (
   }
 }
 
+const formatTargetWeights = (target: ReturnType<typeof interpolateTargets> | null) => {
+  if (!target) {
+    return 'none'
+  }
+  return [
+    `equity ${(target.equity * 100).toFixed(1)}%`,
+    `bonds ${(target.bonds * 100).toFixed(1)}%`,
+    `cash ${(target.cash * 100).toFixed(1)}%`,
+    `realEstate ${(target.realEstate * 100).toFixed(1)}%`,
+    `other ${(target.other * 100).toFixed(1)}%`,
+  ].join(', ')
+}
+
+const buildModuleExplain = ({
+  moduleId,
+  snapshot,
+  state,
+  context,
+  cashflows,
+  actions,
+  cashflowTotals,
+  marketTotals,
+}: {
+  moduleId: string
+  snapshot: SimulationInput['snapshot']
+  state: SimulationState
+  context: SimulationContext
+  cashflows: CashflowItem[]
+  actions: ActionRecord[]
+  cashflowTotals: ReturnType<typeof sumCashflowTotals>
+  marketTotals?: ReturnType<typeof sumMarketTotals>
+}): { inputs?: ExplainMetric[]; checkpoints?: ExplainMetric[] } => {
+  const inputs: ExplainMetric[] = []
+  const checkpoints: ExplainMetric[] = []
+  const scenario = snapshot.scenario
+
+  switch (moduleId) {
+    case 'spending': {
+      const spendingItems = snapshot.spendingLineItems.filter(
+        (item) => item.spendingStrategyId === scenario.spendingStrategyId,
+      )
+      const guardrailPct = scenario.strategies.withdrawal.guardrailPct
+      const totalBalance = sumCash(state) + sumHoldings(state)
+      const guardrailActive =
+        guardrailPct > 0 && totalBalance < state.initialBalance * (1 - guardrailPct)
+      const guardrailFactor = guardrailActive ? 1 - guardrailPct : 1
+      inputs.push(
+        toMetric('Line items', spendingItems.length),
+        toMetric('Guardrail pct', guardrailPct),
+        toMetric('Guardrail active', guardrailActive),
+        toMetric('Guardrail factor', guardrailFactor),
+      )
+      checkpoints.push(
+        toMetric('Need total', Math.abs(sumCashflowCategory(cashflows, 'spending_need'))),
+        toMetric('Want total', Math.abs(sumCashflowCategory(cashflows, 'spending_want'))),
+        toMetric('Deductions', sumCashflowField(cashflows, 'deductions')),
+      )
+      break
+    }
+    case 'events': {
+      inputs.push(toMetric('Events', scenario.strategies.events.length))
+      checkpoints.push(
+        toMetric('Triggered events', cashflows.length),
+        toMetric('Net cash', cashflowTotals.cash),
+      )
+      break
+    }
+    case 'pensions': {
+      inputs.push(toMetric('Pensions', scenario.strategies.pensions.length))
+      checkpoints.push(
+        toMetric('Total payout', cashflowTotals.cash),
+        toMetric('Ordinary income', cashflowTotals.ordinaryIncome),
+      )
+      break
+    }
+    case 'healthcare': {
+      const strategy = scenario.strategies.healthcare
+      const taxStrategy = scenario.strategies.tax
+      const isMedicare = context.age >= 65
+      const baseMonthly = isMedicare
+        ? strategy.medicarePartBMonthly + strategy.medicarePartDMonthly + strategy.medigapMonthly
+        : strategy.preMedicareMonthly
+      const inflationRate =
+        scenario.strategies.returnModel.inflationAssumptions[strategy.inflationType] ?? 0
+      const inflatedBase = inflateAmount(
+        baseMonthly,
+        context.settings.startDate,
+        context.dateIso,
+        inflationRate,
+      )
+      let irmaaSurcharge = 0
+      let magiLookback: number | null = null
+      let magi = 0
+      if (isMedicare && strategy.applyIrmaa) {
+        const table = selectIrmaaTable(
+          snapshot.irmaaTables,
+          context.date.getFullYear(),
+          taxStrategy.filingStatus,
+        )
+        magiLookback = table?.lookbackYears ?? 0
+        magi = state.magiHistory[context.yearIndex - (magiLookback ?? 0)] ?? 0
+        const surcharge = computeIrmaaSurcharge(table, magi)
+        irmaaSurcharge = surcharge.partBMonthly + surcharge.partDMonthly
+      }
+      inputs.push(
+        toMetric('Is Medicare', isMedicare),
+        toMetric('Inflation type', strategy.inflationType),
+        toMetric('Apply IRMAA', strategy.applyIrmaa),
+        toMetric('Base monthly', baseMonthly),
+      )
+      if (magiLookback !== null) {
+        inputs.push(toMetric('IRMAA lookback years', magiLookback))
+      }
+      checkpoints.push(
+        toMetric('Inflated base', inflatedBase),
+        toMetric('IRMAA surcharge', irmaaSurcharge),
+        toMetric('Total', inflatedBase + irmaaSurcharge),
+      )
+      if (strategy.applyIrmaa) {
+        checkpoints.push(toMetric('MAGI', magi))
+      }
+      break
+    }
+    case 'charitable': {
+      const strategy = scenario.strategies.charitable
+      const monthlyGiving = strategy.annualGiving / 12
+      const qcdAnnual = strategy.useQcd
+        ? strategy.qcdAnnualAmount > 0
+          ? Math.min(strategy.annualGiving, strategy.qcdAnnualAmount)
+          : strategy.annualGiving
+        : 0
+      const qcdMonthly = strategy.useQcd ? qcdAnnual / 12 : 0
+      const deduction =
+        strategy.useQcd && context.age >= 70.5
+          ? Math.max(0, monthlyGiving - qcdMonthly)
+          : monthlyGiving
+      inputs.push(
+        toMetric('Annual giving', strategy.annualGiving),
+        toMetric('Use QCD', strategy.useQcd),
+        toMetric('QCD annual', strategy.qcdAnnualAmount),
+        toMetric('Start age', strategy.startAge),
+        toMetric('End age', strategy.endAge),
+      )
+      checkpoints.push(
+        toMetric('Monthly giving', monthlyGiving),
+        toMetric('QCD monthly', qcdMonthly),
+        toMetric('Deduction', deduction),
+      )
+      break
+    }
+    case 'future-work': {
+      const activeStrategyIds = new Set(scenario.personStrategyIds)
+      const activePersonStrategies = snapshot.personStrategies.filter((strategy) =>
+        activeStrategyIds.has(strategy.id),
+      )
+      const futureWorkStrategyIds = new Set(
+        activePersonStrategies.map((strategy) => strategy.futureWorkStrategyId),
+      )
+      const periods = snapshot.futureWorkPeriods.filter((period) =>
+        futureWorkStrategyIds.has(period.futureWorkStrategyId),
+      )
+      const activePeriods = periods.filter((period) =>
+        isWithinRange(context.dateIso, period.startDate, period.endDate),
+      )
+      const getMonthlyContribution = (period: (typeof periods)[number]) => {
+        const employeeMonthly = (period.salary * period['401kMatchPctCap']) / 12
+        const employerMonthly = employeeMonthly * period['401kMatchRatio']
+        return { employeeMonthly, employerMonthly }
+      }
+      const monthlyIncomeTotal = activePeriods.reduce(
+        (sum, period) => sum + period.salary / 12 + period.bonus / 12,
+        0,
+      )
+      const employeeMonthlyTotal = activePeriods.reduce(
+        (sum, period) => sum + getMonthlyContribution(period).employeeMonthly,
+        0,
+      )
+      const employerMonthlyTotal = activePeriods.reduce(
+        (sum, period) => sum + getMonthlyContribution(period).employerMonthly,
+        0,
+      )
+      inputs.push(
+        toMetric('Periods', periods.length),
+        toMetric('Active periods', activePeriods.length),
+      )
+      checkpoints.push(
+        toMetric('Monthly income', monthlyIncomeTotal),
+        toMetric('Employee deferral', employeeMonthlyTotal),
+        toMetric('Employer match', employerMonthlyTotal),
+      )
+      break
+    }
+    case 'social-security': {
+      const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+      inputs.push(
+        toMetric('Strategy count', snapshot.socialSecurityStrategies.length),
+        toMetric('CPI rate', cpiRate),
+      )
+      checkpoints.push(
+        toMetric('Benefit count', cashflows.length),
+        toMetric('Benefit total', cashflowTotals.cash),
+      )
+      break
+    }
+    case 'cash-buffer': {
+      const strategy = scenario.strategies.cashBuffer
+      const withdrawal = scenario.strategies.withdrawal
+      const early = scenario.strategies.earlyRetirement
+      const spendingItems = snapshot.spendingLineItems.filter(
+        (item) => item.spendingStrategyId === scenario.spendingStrategyId,
+      )
+      const monthlySpending = sumMonthlySpending(spendingItems, scenario, context.dateIso)
+      const cashBalance = sumCash(state)
+      const bridgeMonths = Math.max(0, early.bridgeCashYears) * 12
+      const targetMonths = Math.max(strategy.targetMonths, bridgeMonths)
+      const minMonths = withdrawal.useCashFirst ? strategy.minMonths : targetMonths
+      const maxMonths = Math.max(strategy.maxMonths, targetMonths)
+      const target = monthlySpending * targetMonths
+      const min = monthlySpending * minMonths
+      const max = monthlySpending * maxMonths
+      const refillNeeded = cashBalance < min ? Math.max(0, target - cashBalance) : 0
+      const investExcess = cashBalance > max ? Math.max(0, cashBalance - target) : 0
+      inputs.push(
+        toMetric('Monthly spending', monthlySpending),
+        toMetric('Cash balance', cashBalance),
+        toMetric('Target months', targetMonths),
+        toMetric('Min months', minMonths),
+        toMetric('Max months', maxMonths),
+      )
+      checkpoints.push(
+        toMetric('Target', target),
+        toMetric('Min', min),
+        toMetric('Max', max),
+        toMetric('Refill needed', refillNeeded),
+        toMetric('Invest excess', investExcess),
+      )
+      break
+    }
+    case 'rebalancing': {
+      const { glidepath, rebalancing } = scenario.strategies
+      const shouldRebalance =
+        rebalancing.frequency === 'monthly'
+          ? true
+          : rebalancing.frequency === 'quarterly'
+            ? context.monthIndex % 3 === 2
+            : rebalancing.frequency === 'annual'
+              ? context.isEndOfYear
+              : true
+      const key = glidepath.mode === 'year' ? context.yearIndex : context.age
+      const target = interpolateTargets(glidepath.targets, key)
+      inputs.push(
+        toMetric('Frequency', rebalancing.frequency),
+        toMetric('Tax aware', rebalancing.taxAware),
+        toMetric('Use contributions', rebalancing.useContributions),
+        toMetric('Drift threshold', rebalancing.driftThreshold),
+        toMetric('Min trade', rebalancing.minTradeAmount),
+      )
+      checkpoints.push(
+        toMetric('Should rebalance', shouldRebalance),
+        toMetric('Target weights', formatTargetWeights(target)),
+        toMetric('Trades', actions.length),
+      )
+      break
+    }
+    case 'conversions': {
+      const { rothConversion, rothLadder, tax } = scenario.strategies
+      const age = context.age
+      const isAgeInRange = (value: number, startAge: number, endAge: number) => {
+        if (startAge > 0 && value < startAge) {
+          return false
+        }
+        if (endAge > 0 && value > endAge) {
+          return false
+        }
+        return true
+      }
+      const ladderStartAge =
+        rothLadder.startAge > 0
+          ? Math.max(0, rothLadder.startAge - rothLadder.leadTimeYears)
+          : 0
+      const ladderEndAge =
+        rothLadder.endAge > 0
+          ? Math.max(0, rothLadder.endAge - rothLadder.leadTimeYears)
+          : 0
+      let ladderAmount = 0
+      if (rothLadder.enabled && isAgeInRange(age, ladderStartAge, ladderEndAge)) {
+        ladderAmount =
+          rothLadder.annualConversion > 0
+            ? rothLadder.annualConversion
+            : rothLadder.targetAfterTaxSpending
+      }
+      let conversionCandidate = 0
+      if (rothConversion.enabled && isAgeInRange(age, rothConversion.startAge, rothConversion.endAge)) {
+        conversionCandidate = rothConversion.targetOrdinaryIncome
+        if (rothConversion.respectIrmaa) {
+          const table = selectIrmaaTable(
+            snapshot.irmaaTables,
+            context.date.getFullYear(),
+            tax.filingStatus,
+          )
+          const baseTier = table?.tiers[0]?.maxMagi ?? 0
+          const currentMagi =
+            state.yearLedger.ordinaryIncome +
+            state.yearLedger.capitalGains +
+            state.yearLedger.taxExemptIncome
+          if (baseTier > 0) {
+            conversionCandidate = Math.min(conversionCandidate, Math.max(0, baseTier - currentMagi))
+          }
+        }
+        if (rothConversion.minConversion > 0) {
+          conversionCandidate = Math.max(conversionCandidate, rothConversion.minConversion)
+        }
+        if (rothConversion.maxConversion > 0) {
+          conversionCandidate = Math.min(conversionCandidate, rothConversion.maxConversion)
+        }
+      }
+      const conversionAmount = ladderAmount + conversionCandidate
+      inputs.push(
+        toMetric('Roth ladder', rothLadder.enabled),
+        toMetric('Roth conversion', rothConversion.enabled),
+        toMetric('Age', age),
+        toMetric('Respect IRMAA', rothConversion.respectIrmaa),
+        toMetric('Min conversion', rothConversion.minConversion),
+        toMetric('Max conversion', rothConversion.maxConversion),
+      )
+      checkpoints.push(
+        toMetric('Ladder amount', ladderAmount),
+        toMetric('Conversion candidate', conversionCandidate),
+        toMetric('Conversion total', conversionAmount),
+      )
+      break
+    }
+    case 'rmd': {
+      const strategy = scenario.strategies.rmd
+      const isEligible = strategy.enabled && context.isStartOfYear && context.age >= strategy.startAge
+      let divisor = 0
+      let eligibleBalance = 0
+      let totalRmd = 0
+      if (isEligible) {
+        const ageKey = Math.floor(context.age)
+        divisor =
+          snapshot.rmdTable.find((entry) => entry.age === ageKey)?.divisor ??
+          snapshot.rmdTable[snapshot.rmdTable.length - 1]?.divisor ??
+          1
+        const eligibleHoldings = state.holdings.filter((holding) =>
+          strategy.accountTypes.includes(holding.taxType),
+        )
+        eligibleBalance = eligibleHoldings.reduce((sum, holding) => sum + holding.balance, 0)
+        if (eligibleBalance > 0 && divisor > 0) {
+          totalRmd = eligibleBalance / divisor
+        }
+      }
+      inputs.push(
+        toMetric('Enabled', strategy.enabled),
+        toMetric('Start age', strategy.startAge),
+        toMetric('Account types', strategy.accountTypes.join(', ')),
+        toMetric('Withholding rate', strategy.withholdingRate),
+        toMetric('Excess handling', strategy.excessHandling),
+      )
+      checkpoints.push(
+        toMetric('Eligible balance', eligibleBalance),
+        toMetric('Divisor', divisor),
+        toMetric('Total RMD', totalRmd),
+      )
+      break
+    }
+    case 'taxes': {
+      const taxStrategy = scenario.strategies.tax
+      const policyYear = taxStrategy.policyYear || context.date.getFullYear()
+      const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, taxStrategy.filingStatus)
+      inputs.push(
+        toMetric('Policy year', policyYear),
+        toMetric('Filing status', taxStrategy.filingStatus),
+        toMetric('State tax rate', taxStrategy.stateTaxRate),
+        toMetric('Use standard deduction', taxStrategy.useStandardDeduction),
+        toMetric('Apply cap gains rates', taxStrategy.applyCapitalGainsRates),
+      )
+      if (context.isEndOfYear && policy) {
+        const taxResult = computeTax({
+          ordinaryIncome: state.yearLedger.ordinaryIncome,
+          capitalGains: state.yearLedger.capitalGains,
+          deductions: state.yearLedger.deductions,
+          taxExemptIncome: state.yearLedger.taxExemptIncome,
+          stateTaxRate: taxStrategy.stateTaxRate,
+          policy,
+          useStandardDeduction: taxStrategy.useStandardDeduction,
+          applyCapitalGainsRates: taxStrategy.applyCapitalGainsRates,
+        })
+        const totalTax = taxResult.taxOwed + state.yearLedger.penalties
+        checkpoints.push(
+          toMetric('Ordinary income', state.yearLedger.ordinaryIncome),
+          toMetric('Capital gains', state.yearLedger.capitalGains),
+          toMetric('Deductions', state.yearLedger.deductions),
+          toMetric('Tax exempt', state.yearLedger.taxExemptIncome),
+          toMetric('Tax owed', taxResult.taxOwed),
+          toMetric('Penalties', state.yearLedger.penalties),
+          toMetric('Total tax', totalTax),
+          toMetric('MAGI', taxResult.magi),
+          toMetric('Taxable ordinary', taxResult.taxableOrdinaryIncome),
+          toMetric('Taxable cap gains', taxResult.taxableCapitalGains),
+          toMetric('Std deduction', taxResult.standardDeductionApplied),
+        )
+      } else {
+        checkpoints.push(toMetric('Taxes applied', false))
+      }
+      break
+    }
+    case 'funding-core': {
+      const withdrawal = scenario.strategies.withdrawal
+      const early = scenario.strategies.earlyRetirement
+      const cashBalance = sumCash(state)
+      const deficit = cashBalance < 0 ? Math.abs(cashBalance) : 0
+      inputs.push(
+        toMetric('Order', withdrawal.order.join(', ')),
+        toMetric('Avoid penalty', withdrawal.avoidEarlyPenalty),
+        toMetric('Allow penalty', early.allowPenalty),
+        toMetric('Age', context.age),
+      )
+      checkpoints.push(
+        toMetric('Cash balance', cashBalance),
+        toMetric('Cash deficit', deficit),
+        toMetric('Withdraw intents', actions.length),
+      )
+      break
+    }
+    case 'returns-core': {
+      const returnModel = scenario.strategies.returnModel
+      inputs.push(
+        toMetric('Mode', returnModel.mode),
+        toMetric('Sequence model', returnModel.sequenceModel),
+        toMetric('Correlation model', returnModel.correlationModel),
+        toMetric('Volatility scale', returnModel.volatilityScale),
+        toMetric('Cash yield rate', returnModel.cashYieldRate),
+      )
+      if (marketTotals) {
+        checkpoints.push(
+          toMetric('Cash return', marketTotals.cash),
+          toMetric('Holding return', marketTotals.holdings),
+          toMetric('Total return', marketTotals.total),
+        )
+      }
+      break
+    }
+    default: {
+      break
+    }
+  }
+
+  return {
+    inputs: inputs.length > 0 ? inputs : undefined,
+    checkpoints: checkpoints.length > 0 ? checkpoints : undefined,
+  }
+}
+
 export const runSimulation = (input: SimulationInput): SimulationResult => {
   const { snapshot, settings } = input
   const modules = createSimulationModules(snapshot, settings)
@@ -399,6 +1016,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
   const state = createInitialState(snapshot)
   const monthlyTimeline: MonthlyRecord[] = []
   const timeline: YearRecord[] = []
+  const explanations: MonthExplanation[] = []
 
   const primaryPerson = getPrimaryPerson(snapshot)
   const start = new Date(settings.startDate)
@@ -448,14 +1066,99 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
     modules.forEach((module) => module.onStartOfMonth?.(state, context))
 
     const monthTotals = createEmptyTotals()
-    const cashflows = modules.flatMap((module) => module.getCashflows?.(state, context) ?? [])
+    const stateBeforeCashflows = cloneState(state)
+    const cashflowsByModule = modules.map((module) => ({
+      moduleId: module.id,
+      cashflows: module.getCashflows?.(state, context) ?? [],
+    }))
+    const cashflows = cashflowsByModule.flatMap((entry) => entry.cashflows)
     applyCashflows(state, cashflows, monthTotals)
+    const stateAfterCashflows = cloneState(state)
 
-    const intents = modules.flatMap((module) => module.getActionIntents?.(state, context) ?? [])
+    const intentsByModule = modules.map((module) => ({
+      moduleId: module.id,
+      intents: (module.getActionIntents?.(state, context) ?? []).map((intent) => ({
+        ...intent,
+        moduleId: module.id,
+      })),
+    }))
+    const intents = intentsByModule.flatMap((entry) => entry.intents)
     const actions = resolveIntents(intents, state)
     applyActions(state, actions, monthTotals, context)
 
-    modules.forEach((module) => module.onEndOfMonth?.(state, context))
+    const cashflowsByModuleId = new Map<string, CashflowItem[]>()
+    cashflowsByModule.forEach((entry) => {
+      cashflowsByModuleId.set(entry.moduleId, entry.cashflows)
+    })
+
+    const actionsByModuleId = new Map<string, ActionRecordWithModule[]>()
+    actions.forEach((action) => {
+      const list = actionsByModuleId.get(action.moduleId) ?? []
+      list.push(action)
+      actionsByModuleId.set(action.moduleId, list)
+    })
+
+    const marketReturnsByModuleId = new Map<string, MarketReturn[]>()
+    modules.forEach((module) => {
+      if (!module.onEndOfMonth) {
+        return
+      }
+      if (module.id === 'returns-core') {
+        const beforeCash = new Map(
+          state.cashAccounts.map((account) => [account.id, account.balance]),
+        )
+        const beforeHoldings = new Map(
+          state.holdings.map((holding) => [holding.id, holding.balance]),
+        )
+        module.onEndOfMonth(state, context)
+        const marketReturns = buildMarketReturns(state, beforeCash, beforeHoldings)
+        marketReturnsByModuleId.set(module.id, marketReturns)
+        return
+      }
+      module.onEndOfMonth(state, context)
+    })
+
+    const moduleRuns: ModuleRunExplanation[] = modules.map((module) => {
+      const moduleCashflows = cashflowsByModuleId.get(module.id) ?? []
+      const moduleActionsWithModule = actionsByModuleId.get(module.id) ?? []
+      const moduleActions = moduleActionsWithModule.map(({ moduleId: _moduleId, ...action }) => action)
+      const moduleMarketReturns = marketReturnsByModuleId.get(module.id) ?? []
+      const cashflowTotals = sumCashflowTotals(moduleCashflows)
+      const actionTotals = sumActionTotals(moduleActions)
+      const marketTotals =
+        moduleMarketReturns.length > 0 ? sumMarketTotals(moduleMarketReturns) : undefined
+      const stateForExplain = module.id === 'spending' ? stateBeforeCashflows : stateAfterCashflows
+      const { inputs, checkpoints } = buildModuleExplain({
+        moduleId: module.id,
+        snapshot,
+        state: stateForExplain,
+        context,
+        cashflows: moduleCashflows,
+        actions: moduleActions,
+        cashflowTotals,
+        marketTotals,
+      })
+      return {
+        moduleId: module.id,
+        cashflows: moduleCashflows,
+        actions: moduleActions,
+        marketReturns: moduleMarketReturns.length > 0 ? moduleMarketReturns : undefined,
+        totals: {
+          cashflows: cashflowTotals,
+          actions: actionTotals,
+          market: marketTotals,
+        },
+        inputs,
+        checkpoints,
+      }
+    })
+
+    explanations.push({
+      monthIndex,
+      date: dateIso,
+      modules: moduleRuns,
+      accounts: buildAccountBalances(state),
+    })
 
     const monthRecord = buildMonthlyRecord(monthIndex, dateIso, age, monthTotals, state)
     monthlyTimeline.push(monthRecord)
@@ -500,6 +1203,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       date: point.date,
     })),
     monthlyTimeline,
+    explanations,
     summary: {
       endingBalance,
       minBalance: Number.isFinite(minBalance) ? minBalance : 0,
