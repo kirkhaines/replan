@@ -1,0 +1,57 @@
+import type { SimulationSnapshot } from '../../models'
+import type { CashflowItem, SimulationModule } from '../types'
+import { inflateAmount, isWithinRange } from './utils'
+
+export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationModule => {
+  const scenario = snapshot.scenario
+  const spendingItems = snapshot.spendingLineItems.filter(
+    (item) => item.spendingStrategyId === scenario.spendingStrategyId,
+  )
+
+  return {
+    id: 'spending',
+    getCashflows: (state, context) => {
+      const cashflows: CashflowItem[] = []
+      const guardrailPct = scenario.strategies.withdrawal.guardrailPct
+      const totalBalance =
+        state.cashAccounts.reduce((sum, account) => sum + account.balance, 0) +
+        state.holdings.reduce((sum, holding) => sum + holding.balance, 0)
+      const guardrailActive =
+        guardrailPct > 0 && totalBalance < state.initialBalance * (1 - guardrailPct)
+      const guardrailFactor = guardrailActive ? 1 - guardrailPct : 1
+      spendingItems.forEach((item) => {
+        if (!isWithinRange(context.dateIso, item.startDate, item.endDate)) {
+          return
+        }
+        const inflationRate =
+          scenario.strategies.returnModel.inflationAssumptions[item.inflationType] ?? 0
+        const startIso = item.startDate ? item.startDate : null
+        const needAmount = inflateAmount(item.needAmount, startIso, context.dateIso, inflationRate)
+        const wantAmount =
+          inflateAmount(item.wantAmount, startIso, context.dateIso, inflationRate) *
+          guardrailFactor
+        const deductionAmount = item.isPreTax || item.isCharitable ? 1 : 0
+
+        if (needAmount > 0) {
+          cashflows.push({
+            id: `${item.id}-${context.monthIndex}-need`,
+            label: item.name,
+            category: 'spending_need',
+            cash: -needAmount,
+            deductions: deductionAmount ? needAmount : undefined,
+          })
+        }
+        if (wantAmount > 0) {
+          cashflows.push({
+            id: `${item.id}-${context.monthIndex}-want`,
+            label: item.name,
+            category: 'spending_want',
+            cash: -wantAmount,
+            deductions: deductionAmount ? wantAmount : undefined,
+          })
+        }
+      })
+      return cashflows
+    },
+  }
+}

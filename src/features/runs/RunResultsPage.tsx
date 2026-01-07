@@ -16,6 +16,15 @@ import PageHeader from '../../components/PageHeader'
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 0 })
 
+const addMonths = (isoDate: string, months: number) => {
+  const date = new Date(isoDate)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  date.setMonth(date.getMonth() + months)
+  return date.toISOString().slice(0, 10)
+}
+
 const RunResultsPage = () => {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
@@ -113,8 +122,8 @@ const RunResultsPage = () => {
         <table className="table">
           <thead>
             <tr>
-              <th>Year</th>
-              <th>Age</th>
+              <th>Start date</th>
+              <th>Age (end of year)</th>
               <th>Balance</th>
               <th>Contribution</th>
               <th>Spending</th>
@@ -123,7 +132,7 @@ const RunResultsPage = () => {
           <tbody>
             {run.result.timeline.map((point) => (
               <tr key={point.yearIndex}>
-                <td>{point.yearIndex + 1}</td>
+                <td>{point.date ? addMonths(point.date, -11) ?? '-' : '-'}</td>
                 <td>{point.age}</td>
                 <td>{formatCurrency(point.balance)}</td>
                 <td>{formatCurrency(point.contribution)}</td>
