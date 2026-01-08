@@ -278,11 +278,7 @@ const RunResultsPage = () => {
         entry.socialSecurityIncome +
         entry.pensionIncome +
         entry.taxDeferredIncome
-      const bracketMax = bracketLines.reduce(
-        (innerMax, line) => Math.max(innerMax, entry[line.key] ?? 0),
-        0,
-      )
-      return Math.max(max, totals, bracketMax)
+      return Math.max(max, totals)
     }, 0)
 
     return { data, bracketLines, maxValue }
@@ -394,6 +390,7 @@ const RunResultsPage = () => {
                   tickFormatter={(value) => formatAxisValue(Number(value))}
                   width={70}
                   domain={[0, ordinaryIncomeChart.maxValue]}
+                  allowDataOverflow={true}
                 />
                 <Tooltip
                   formatter={(value) => formatCurrency(Number(value))}
