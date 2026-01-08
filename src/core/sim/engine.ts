@@ -806,7 +806,12 @@ const buildModuleExplain = ({
       const spendingItems = snapshot.spendingLineItems.filter(
         (item) => item.spendingStrategyId === scenario.spendingStrategyId,
       )
-      const monthlySpending = sumMonthlySpending(spendingItems, scenario, context.dateIso)
+      const monthlySpending = sumMonthlySpending(
+        spendingItems,
+        scenario,
+        context.dateIso,
+        context.settings.startDate,
+      )
       const cashBalance = sumCash(state)
       const bridgeMonths = Math.max(0, early.bridgeCashYears) * 12
       const targetMonths = Math.max(strategy.targetMonths, bridgeMonths)

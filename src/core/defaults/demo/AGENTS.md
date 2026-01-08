@@ -13,6 +13,9 @@
 - Most future work strategies should include a current job with a blank start date.
 - Unless demonstrating Roth features, Social Security starts when the last future work period ends.
 - Starting cash balances should be within the cash buffer target range and should not trigger cash buffer actions in the first month.
+- If there are HSA contributions (employee or employer), there must be an HSA holding (tax type `hsa`) assigned.
+- If there are employee 401k contributions, there must be an employee holding of tax type `traditional` or `roth`.
+- If there are employer 401k contributions, there must be an employer holding of tax type `traditional`.
 
 ## Descriptions
 - Each demo scenario must include a `scenario.description` explaining what it demonstrates.

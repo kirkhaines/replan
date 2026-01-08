@@ -533,7 +533,7 @@
       "hsaContributionAnnual": 3000,
       "hsaEmployerContributionAnnual": 1200,
       "hsaUseMaxLimit": false,
-      "hsaInvestmentAccountHoldingId": null,
+      "hsaInvestmentAccountHoldingId": "147eca45-7279-4dfa-ab36-6ffde90d1db9",
       "includesHealthInsurance": true,
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
@@ -594,6 +594,19 @@
       "holdingType": "sp500",
       "returnRate": 0.06,
       "returnStdDev": 0.12,
+      "investmentAccountId": "6d2df174-9200-46d1-8e29-ad66b699ae16",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "147eca45-7279-4dfa-ab36-6ffde90d1db9",
+      "name": "Demo HSA Holding",
+      "taxType": "hsa",
+      "balance": 5000,
+      "contributionBasis": 5000,
+      "holdingType": "cash",
+      "returnRate": 0.02,
+      "returnStdDev": 0.01,
       "investmentAccountId": "6d2df174-9200-46d1-8e29-ad66b699ae16",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000

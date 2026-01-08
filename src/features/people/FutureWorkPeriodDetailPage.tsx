@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import type { FutureWorkPeriod, InvestmentAccountHolding } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
@@ -41,12 +41,30 @@ const FutureWorkPeriodDetailPage = () => {
       return
     }
     setIsLoading(true)
-    const [data, holdingsList] = await Promise.all([
+    const [data, holdingsList, personStrategies] = await Promise.all([
       storage.futureWorkPeriodRepo.get(id),
       storage.investmentAccountHoldingRepo.list(),
+      storage.personStrategyRepo.list(),
     ])
     setPeriod(data ? normalizePeriod(data) : null)
-    setHoldings(holdingsList)
+    if (data) {
+      const personStrategy = personStrategies.find(
+        (strategy) => strategy.futureWorkStrategyId === data.futureWorkStrategyId,
+      )
+      const scenario = personStrategy
+        ? await storage.scenarioRepo.get(personStrategy.scenarioId)
+        : undefined
+      const scenarioAccountIds = scenario?.investmentAccountIds ?? []
+      const filteredHoldings =
+        scenarioAccountIds.length > 0
+          ? holdingsList.filter((holding) =>
+              scenarioAccountIds.includes(holding.investmentAccountId),
+            )
+          : []
+      setHoldings(filteredHoldings)
+    } else {
+      setHoldings([])
+    }
     setIsLoading(false)
   }, [id, storage])
 
@@ -63,7 +81,7 @@ const FutureWorkPeriodDetailPage = () => {
   }
 
   const handleSave = async () => {
-    if (!period) {
+    if (!period || validationErrors.length > 0) {
       return
     }
     const now = Date.now()
@@ -71,6 +89,63 @@ const FutureWorkPeriodDetailPage = () => {
     await storage.futureWorkPeriodRepo.upsert(next)
     setPeriod(next)
   }
+
+  const scenarioHoldingsById = useMemo(
+    () => new Map(holdings.map((holding) => [holding.id, holding])),
+    [holdings],
+  )
+  const validationErrors = useMemo(() => {
+    if (!period) {
+      return []
+    }
+    const errors: string[] = []
+    const employeeContribution =
+      period['401kContributionType'] === 'max' ||
+      period['401kContributionAnnual'] > 0 ||
+      period['401kContributionPct'] > 0
+    const employerContribution =
+      period['401kMatchRatio'] > 0 && period['401kMatchPctCap'] > 0
+    const hsaContribution =
+      period['hsaContributionAnnual'] > 0 ||
+      period['hsaEmployerContributionAnnual'] > 0 ||
+      period['hsaUseMaxLimit']
+
+    if (employeeContribution) {
+      const holding = scenarioHoldingsById.get(period['401kInvestmentAccountHoldingId'])
+      if (!period['401kInvestmentAccountHoldingId']) {
+        errors.push('Select a 401k employee holding for employee contributions.')
+      } else if (!holding) {
+        errors.push('401k employee holding must belong to the current scenario.')
+      } else if (holding.taxType !== 'traditional' && holding.taxType !== 'roth') {
+        errors.push('401k employee holding must be Traditional or Roth.')
+      }
+    }
+
+    if (employerContribution) {
+      const holding = scenarioHoldingsById.get(period['401kEmployerMatchHoldingId'])
+      if (!period['401kEmployerMatchHoldingId']) {
+        errors.push('Select a 401k employer holding for employer contributions.')
+      } else if (!holding) {
+        errors.push('401k employer holding must belong to the current scenario.')
+      } else if (holding.taxType !== 'traditional') {
+        errors.push('401k employer holding must be Traditional.')
+      }
+    }
+
+    if (hsaContribution) {
+      const holdingId = period['hsaInvestmentAccountHoldingId']
+      const holding = holdingId ? scenarioHoldingsById.get(holdingId) : undefined
+      if (!holdingId) {
+        errors.push('Select an HSA holding for HSA contributions.')
+      } else if (!holding) {
+        errors.push('HSA holding must belong to the current scenario.')
+      } else if (holding.taxType !== 'hsa') {
+        errors.push('HSA holding must use the HSA tax type.')
+      }
+    }
+
+    return errors
+  }, [period, scenarioHoldingsById])
 
   if (isLoading) {
     return <p className="muted">Loading future work period...</p>
@@ -181,7 +256,9 @@ const FutureWorkPeriodDetailPage = () => {
               }
             >
               {holdings.length === 0 ? <option value="">No holdings available</option> : null}
-              {holdings.map((holding) => (
+              {holdings
+                .filter((holding) => holding.taxType === 'traditional' || holding.taxType === 'roth')
+                .map((holding) => (
                 <option key={holding.id} value={holding.id}>
                   {holding.name}
                 </option>
@@ -198,7 +275,9 @@ const FutureWorkPeriodDetailPage = () => {
               }
             >
               {holdings.length === 0 ? <option value="">No holdings available</option> : null}
-              {holdings.map((holding) => (
+              {holdings
+                .filter((holding) => holding.taxType === 'traditional')
+                .map((holding) => (
                 <option key={holding.id} value={holding.id}>
                   {holding.name}
                 </option>
@@ -290,7 +369,9 @@ const FutureWorkPeriodDetailPage = () => {
               }
             >
               <option value="">None</option>
-              {holdings.map((holding) => (
+              {holdings
+                .filter((holding) => holding.taxType === 'hsa')
+                .map((holding) => (
                 <option key={holding.id} value={holding.id}>
                   {holding.name}
                 </option>
@@ -314,8 +395,24 @@ const FutureWorkPeriodDetailPage = () => {
           </label>
         </div>
 
+        {validationErrors.length > 0 ? (
+          <div className="stack">
+            <strong className="error">Fix before saving</strong>
+            <ul className="error">
+              {validationErrors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <div className="button-row">
-          <button className="button" type="button" onClick={handleSave}>
+          <button
+            className="button"
+            type="button"
+            onClick={handleSave}
+            disabled={validationErrors.length > 0}
+          >
             Save period
           </button>
         </div>

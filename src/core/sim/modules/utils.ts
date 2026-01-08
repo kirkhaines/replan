@@ -73,6 +73,7 @@ export const sumMonthlySpending = (
   items: SimulationSnapshot['spendingLineItems'],
   scenario: SimulationSnapshot['scenario'],
   dateIso: string,
+  defaultStartIso?: string,
 ) =>
   items.reduce((total, item) => {
     if (!isWithinRange(dateIso, item.startDate, item.endDate)) {
@@ -80,7 +81,8 @@ export const sumMonthlySpending = (
     }
     const inflationRate =
       scenario.strategies.returnModel.inflationAssumptions[item.inflationType] ?? 0
-    const startIso = item.startDate ? item.startDate : null
+    const startIso =
+      item.startDate && item.startDate !== '' ? item.startDate : defaultStartIso ?? null
     const monthly =
       inflateAmount(item.needAmount, startIso, dateIso, inflationRate) +
       inflateAmount(item.wantAmount, startIso, dateIso, inflationRate)

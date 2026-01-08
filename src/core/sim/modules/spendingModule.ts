@@ -28,7 +28,8 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
         }
         const inflationRate =
           scenario.strategies.returnModel.inflationAssumptions[item.inflationType] ?? 0
-        const startIso = item.startDate ? item.startDate : null
+        const startIso =
+          item.startDate && item.startDate !== '' ? item.startDate : context.settings.startDate
         const needAmount = inflateAmount(item.needAmount, startIso, context.dateIso, inflationRate)
         const wantAmount =
           inflateAmount(item.wantAmount, startIso, context.dateIso, inflationRate) *

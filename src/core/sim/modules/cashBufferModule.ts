@@ -24,7 +24,12 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   return {
     id: 'cash-buffer',
     getActionIntents: (state, context) => {
-      const monthlySpending = sumMonthlySpending(spendingItems, scenario, context.dateIso)
+      const monthlySpending = sumMonthlySpending(
+        spendingItems,
+        scenario,
+        context.dateIso,
+        context.settings.startDate,
+      )
       if (monthlySpending <= 0) {
         return []
       }
