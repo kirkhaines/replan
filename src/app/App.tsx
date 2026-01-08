@@ -18,6 +18,7 @@ import InvestmentAccountDetailPage from '../features/accounts/InvestmentAccountD
 import HoldingDetailPage from '../features/accounts/HoldingDetailPage'
 import AboutPage from '../features/about/AboutPage'
 import LicensePage from '../features/about/LicensePage'
+import HelpPage from '../features/about/HelpPage'
 import { useAppStore } from '../state/appStore'
 import { demoScenarios } from '../core/defaults/demo'
 import type { LocalScenarioSeed } from '../core/defaults/localSeedTypes'
@@ -139,6 +140,9 @@ const AppShell = () => {
             </button>
             {menuOpen ? (
               <div className="menu-panel" role="menu">
+                <Link to="/help" role="menuitem" onClick={() => setMenuOpen(false)}>
+                  Help
+                </Link>
                 <Link to="/about" role="menuitem" onClick={() => setMenuOpen(false)}>
                   About
                 </Link>
@@ -196,6 +200,7 @@ const AppShell = () => {
           <Route path="/accounts/investment/:id" element={<InvestmentAccountDetailPage />} />
           <Route path="/accounts/holding/:id" element={<HoldingDetailPage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/help" element={<HelpPage />} />
           <Route path="/license" element={<LicensePage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
