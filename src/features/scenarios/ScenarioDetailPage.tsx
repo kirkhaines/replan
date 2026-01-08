@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { useFieldArray, useForm, type SubmitErrorHandler } from 'react-hook-form'
+import { useFieldArray, useForm, type Resolver, type SubmitErrorHandler } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -351,7 +351,7 @@ const ScenarioDetailPage = () => {
     watch,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<ScenarioEditorValues>({
-    resolver: zodResolver(editorSchema),
+    resolver: zodResolver(editorSchema) as Resolver<ScenarioEditorValues>,
     defaultValues,
   })
 
