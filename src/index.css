@@ -80,6 +80,25 @@ h2 {
   font-weight: 500;
 }
 
+.menu-section {
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--border);
+}
+
+.menu-section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.menu-sublist {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .menu-item.danger {
   color: #b32020;
 }

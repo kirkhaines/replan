@@ -4,6 +4,7 @@ import { scenarioStrategiesSchema } from './scenarioStrategies'
 
 export const scenarioSchema = baseEntitySchema.extend({
   name: z.string().min(1),
+  description: z.string().optional(),
   personStrategyIds: z.array(z.string().uuid()).min(1),
   nonInvestmentAccountIds: z.array(z.string().uuid()).min(1),
   investmentAccountIds: z.array(z.string().uuid()).min(1),

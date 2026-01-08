@@ -1168,6 +1168,10 @@ const ScenarioDetailPage = () => {
             ) : null}
           </label>
         </div>
+        <label className="field">
+          <span>Description</span>
+          <textarea rows={3} {...register('scenario.description')} />
+        </label>
 
         <div className="stack">
           <div className="row">
@@ -1937,7 +1941,7 @@ const ScenarioDetailPage = () => {
                   <span>Target tax bracket</span>
                   <select
                     {...register('scenario.strategies.rothConversion.targetOrdinaryBracketRate', {
-                      valueAsNumber: true,
+                      setValueAs: (value) => (value === '' ? 0 : Number(value)),
                     })}
                   >
                     <option value={0}>None</option>

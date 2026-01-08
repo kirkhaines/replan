@@ -19,6 +19,8 @@ import HoldingDetailPage from '../features/accounts/HoldingDetailPage'
 import AboutPage from '../features/about/AboutPage'
 import LicensePage from '../features/about/LicensePage'
 import { useAppStore } from '../state/appStore'
+import { demoScenarios } from '../core/defaults/demo'
+import type { LocalScenarioSeed } from '../core/defaults/localSeedTypes'
 
 const NotFound = () => (
   <section className="stack">
@@ -47,6 +49,55 @@ const AppShell = () => {
     await seedDefaults(storage)
     setMenuOpen(false)
     navigate('/scenarios')
+  }
+
+  const importScenarioSeed = async (seed: LocalScenarioSeed) => {
+    await Promise.all(seed.people.map((record) => storage.personRepo.upsert(record)))
+    await Promise.all(
+      seed.socialSecurityEarnings.map((record) =>
+        storage.socialSecurityEarningsRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      seed.socialSecurityStrategies.map((record) =>
+        storage.socialSecurityStrategyRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      seed.futureWorkStrategies.map((record) =>
+        storage.futureWorkStrategyRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      seed.futureWorkPeriods.map((record) => storage.futureWorkPeriodRepo.upsert(record)),
+    )
+    await Promise.all(
+      seed.spendingStrategies.map((record) => storage.spendingStrategyRepo.upsert(record)),
+    )
+    await Promise.all(
+      seed.spendingLineItems.map((record) => storage.spendingLineItemRepo.upsert(record)),
+    )
+    await Promise.all(
+      seed.nonInvestmentAccounts.map((record) => storage.nonInvestmentAccountRepo.upsert(record)),
+    )
+    await Promise.all(
+      seed.investmentAccounts.map((record) => storage.investmentAccountRepo.upsert(record)),
+    )
+    await Promise.all(
+      seed.investmentAccountHoldings.map((record) =>
+        storage.investmentAccountHoldingRepo.upsert(record),
+      ),
+    )
+    await Promise.all(
+      seed.personStrategies.map((record) => storage.personStrategyRepo.upsert(record)),
+    )
+    await storage.scenarioRepo.upsert(seed.scenario)
+  }
+
+  const handleAddDemoScenario = async (seed: LocalScenarioSeed) => {
+    await importScenarioSeed(seed)
+    setMenuOpen(false)
+    navigate(`/scenarios/${seed.scenario.id}`)
   }
 
   return (
@@ -96,6 +147,22 @@ const AppShell = () => {
                 <Link to="/defaults" role="menuitem" onClick={() => setMenuOpen(false)}>
                   Defaults/Reference
                 </Link>
+                <div className="menu-section" role="presentation">
+                  <span className="menu-section-title">Demo scenarios</span>
+                  <div className="menu-sublist">
+                    {demoScenarios.map((demo) => (
+                      <button
+                        key={demo.id}
+                        className="menu-item"
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void handleAddDemoScenario(demo.seed)}
+                      >
+                        {demo.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <button
                   className="menu-item danger"
                   type="button"

@@ -74,7 +74,7 @@ export const rothConversionStrategySchema = z.object({
   enabled: z.boolean(),
   startAge: z.number().min(0),
   endAge: z.number().min(0),
-  targetOrdinaryBracketRate: z.number().min(0).max(1),
+  targetOrdinaryBracketRate: z.coerce.number().min(0).max(1),
   minConversion: z.number().min(0),
   maxConversion: z.number().min(0),
   respectIrmaa: z.boolean(),

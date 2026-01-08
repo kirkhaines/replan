@@ -1,0 +1,267 @@
+{
+  "scenario": {
+    "id": "51dd39ba-8ffd-4522-acde-6c07876030c1",
+    "createdAt": 1700000000000,
+    "updatedAt": 1700000000000,
+    "name": "Demo Work",
+    "personStrategyIds": [
+      "49c6f6b5-02d3-41a6-b146-8e7ef5ceaa49"
+    ],
+    "nonInvestmentAccountIds": [
+      "a8e074a1-362c-4256-b699-6173a77c99a3"
+    ],
+    "investmentAccountIds": [
+      "0703cd96-5c0f-4e63-bcd4-ee51b7a34b87"
+    ],
+    "spendingStrategyId": "07d996dc-54d5-4c6a-b117-cfd285a2ad0a",
+    "strategies": {
+      "returnModel": {
+        "mode": "deterministic",
+        "sequenceModel": "independent",
+        "volatilityScale": 1,
+        "correlationModel": "none",
+        "cashYieldRate": 0.02,
+        "inflationAssumptions": {
+          "none": 0,
+          "cpi": 0.02,
+          "medical": 0.03,
+          "housing": 0.025,
+          "education": 0.03
+        }
+      },
+      "glidepath": {
+        "mode": "age",
+        "scope": "global",
+        "targets": [
+          {
+            "age": 40,
+            "equity": 0.8,
+            "bonds": 0.15,
+            "cash": 0.03,
+            "realEstate": 0.02,
+            "other": 0
+          },
+          {
+            "age": 60,
+            "equity": 0.6,
+            "bonds": 0.3,
+            "cash": 0.05,
+            "realEstate": 0.05,
+            "other": 0
+          }
+        ]
+      },
+      "rebalancing": {
+        "frequency": "annual",
+        "driftThreshold": 0.05,
+        "useContributions": true,
+        "taxAware": false,
+        "minTradeAmount": 0
+      },
+      "cashBuffer": {
+        "targetMonths": 12,
+        "minMonths": 6,
+        "maxMonths": 24,
+        "refillPriority": "taxable_first"
+      },
+      "withdrawal": {
+        "order": [
+          "taxable",
+          "traditional",
+          "roth",
+          "hsa"
+        ],
+        "useCashFirst": true,
+        "guardrailPct": 0,
+        "avoidEarlyPenalty": true
+      },
+      "taxableLot": {
+        "costBasisMethod": "average",
+        "harvestLosses": false,
+        "gainRealizationTarget": 0
+      },
+      "earlyRetirement": {
+        "useRothBasisFirst": true,
+        "allowPenalty": false,
+        "penaltyRate": 0.1,
+        "use72t": false,
+        "bridgeCashYears": 0
+      },
+      "rothConversion": {
+        "enabled": false,
+        "startAge": 0,
+        "endAge": 0,
+        "targetOrdinaryBracketRate": 0,
+        "minConversion": 0,
+        "maxConversion": 0,
+        "respectIrmaa": true
+      },
+      "rothLadder": {
+        "enabled": false,
+        "leadTimeYears": 5,
+        "startAge": 0,
+        "endAge": 59.5,
+        "targetAfterTaxSpending": 0,
+        "annualConversion": 0
+      },
+      "rmd": {
+        "enabled": true,
+        "startAge": 73,
+        "accountTypes": [
+          "traditional"
+        ],
+        "excessHandling": "taxable",
+        "withholdingRate": 0
+      },
+      "charitable": {
+        "annualGiving": 0,
+        "startAge": 0,
+        "endAge": 0,
+        "useQcd": false,
+        "qcdAnnualAmount": 0
+      },
+      "healthcare": {
+        "preMedicareMonthly": 0,
+        "medicarePartBMonthly": 0,
+        "medicarePartDMonthly": 0,
+        "medigapMonthly": 0,
+        "inflationType": "medical",
+        "applyIrmaa": true
+      },
+      "tax": {
+        "filingStatus": "single",
+        "stateTaxRate": 0,
+        "useStandardDeduction": true,
+        "applyCapitalGainsRates": true,
+        "policyYear": 2024
+      },
+      "events": [],
+      "pensions": []
+    }
+  },
+  "people": [
+    {
+      "id": "af2c6806-4aff-48f1-a843-c50d3273f498",
+      "name": "Demo Person",
+      "dateOfBirth": "1985-01-01",
+      "lifeExpectancy": 90,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "personStrategies": [
+    {
+      "id": "49c6f6b5-02d3-41a6-b146-8e7ef5ceaa49",
+      "scenarioId": "51dd39ba-8ffd-4522-acde-6c07876030c1",
+      "personId": "af2c6806-4aff-48f1-a843-c50d3273f498",
+      "futureWorkStrategyId": "60e6c0cd-addb-4ee7-af9b-5d57326f1e2d",
+      "socialSecurityStrategyId": "7abca9ae-9c4d-4d96-9dfc-fd66444c0409",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "socialSecurityStrategies": [
+    {
+      "id": "7abca9ae-9c4d-4d96-9dfc-fd66444c0409",
+      "personId": "af2c6806-4aff-48f1-a843-c50d3273f498",
+      "startDate": "2045-01-01",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "socialSecurityEarnings": [],
+  "futureWorkStrategies": [
+    {
+      "id": "60e6c0cd-addb-4ee7-af9b-5d57326f1e2d",
+      "name": "Demo Work",
+      "personId": "af2c6806-4aff-48f1-a843-c50d3273f498",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "futureWorkPeriods": [
+    {
+      "id": "de0759f2-de26-45c3-8cc9-7e0494c88a76",
+      "name": "Demo Job",
+      "futureWorkStrategyId": "60e6c0cd-addb-4ee7-af9b-5d57326f1e2d",
+      "salary": 90000,
+      "bonus": 10000,
+      "startDate": "2020-01-01",
+      "endDate": "2030-01-01",
+      "401kContributionType": "fixed",
+      "401kContributionAnnual": 12000,
+      "401kContributionPct": 0,
+      "401kMatchPctCap": 0.05,
+      "401kMatchRatio": 1,
+      "401kInvestmentAccountHoldingId": "e3554786-3345-4431-ab83-7dd6612577d9",
+      "401kEmployerMatchHoldingId": "e3554786-3345-4431-ab83-7dd6612577d9",
+      "hsaContributionAnnual": 3000,
+      "hsaEmployerContributionAnnual": 1200,
+      "hsaUseMaxLimit": false,
+      "hsaInvestmentAccountHoldingId": null,
+      "includesHealthInsurance": true,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "spendingStrategies": [
+    {
+      "id": "07d996dc-54d5-4c6a-b117-cfd285a2ad0a",
+      "name": "Demo Spending",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "spendingLineItems": [
+    {
+      "id": "0ad71c09-0f40-4925-ae4d-201ada189a6b",
+      "name": "Demo Living",
+      "spendingStrategyId": "07d996dc-54d5-4c6a-b117-cfd285a2ad0a",
+      "category": "Living",
+      "needAmount": 3000,
+      "wantAmount": 1000,
+      "startDate": "2025-01-01",
+      "endDate": "2055-01-01",
+      "isPreTax": false,
+      "isCharitable": false,
+      "isWork": false,
+      "targetInvestmentAccountHoldingId": null,
+      "inflationType": "cpi",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "nonInvestmentAccounts": [
+    {
+      "id": "a8e074a1-362c-4256-b699-6173a77c99a3",
+      "name": "Demo Cash",
+      "balance": 20000,
+      "interestRate": 0.01,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "investmentAccounts": [
+    {
+      "id": "0703cd96-5c0f-4e63-bcd4-ee51b7a34b87",
+      "name": "Demo Brokerage",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "investmentAccountHoldings": [
+    {
+      "id": "e3554786-3345-4431-ab83-7dd6612577d9",
+      "name": "Demo S&P 500",
+      "taxType": "traditional",
+      "balance": 100000,
+      "contributionBasis": 100000,
+      "holdingType": "sp500",
+      "returnRate": 0.08,
+      "returnStdDev": 0.16,
+      "investmentAccountId": "0703cd96-5c0f-4e63-bcd4-ee51b7a34b87",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ]
+}

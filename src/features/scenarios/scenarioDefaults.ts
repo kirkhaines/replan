@@ -199,6 +199,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
   const scenario: Scenario = {
     id: scenarioId,
     name: 'New Scenario',
+    description: '',
     createdAt: now,
     updatedAt: now,
     personStrategyIds: [personStrategyId],

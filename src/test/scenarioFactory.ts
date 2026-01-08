@@ -10,6 +10,7 @@ export const buildScenario = (overrides: ScenarioOverrides = {}): Scenario => {
   return {
     id: '00000000-0000-4000-8000-000000000000',
     name: 'Test Scenario',
+    description: '',
     createdAt: now,
     updatedAt: now,
     personStrategyIds: ['00000000-0000-4000-8000-000000000001'],
