@@ -40,6 +40,15 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
     return inflateAmount(base.amount, baseIso, context.dateIso, cpiRate)
   }
 
+  const getInflatedAnnual = (
+    amount: number,
+    period: FutureWorkPeriod,
+    context: SimulationContext,
+  ) => {
+    const startIso = period.startDate ?? context.settings.startDate
+    return inflateAmount(amount, startIso, context.dateIso, cpiRate)
+  }
+
   const getEmployee401kAnnual = (period: FutureWorkPeriod, context: SimulationContext) => {
     const type = period['401kContributionType']
     const maxLimit = getContributionLimit('401k', context)
@@ -47,16 +56,19 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
     if (type === 'max') {
       annual = maxLimit
     } else if (type === 'fixed') {
-      annual = period['401kContributionAnnual']
+      annual = getInflatedAnnual(period['401kContributionAnnual'], period, context)
     } else if (type === 'percent') {
-      annual = period.salary * period['401kContributionPct']
+      annual =
+        getInflatedAnnual(period.salary, period, context) * period['401kContributionPct']
     }
     return annual
   }
 
   const getEmployeeHsaAnnual = (period: FutureWorkPeriod, context: SimulationContext) => {
     const maxLimit = getContributionLimit('hsa', context)
-    return period['hsaUseMaxLimit'] ? maxLimit : period['hsaContributionAnnual']
+    return period['hsaUseMaxLimit']
+      ? maxLimit
+      : getInflatedAnnual(period['hsaContributionAnnual'], period, context)
   }
 
   return {
@@ -64,7 +76,9 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
     getCashflows: (_state, context) => {
       const cashflows: CashflowItem[] = []
       getActivePeriods(context).forEach((period) => {
-        const monthlyIncome = period.salary / 12 + period.bonus / 12
+        const monthlyIncome =
+          getInflatedAnnual(period.salary, period, context) / 12 +
+          getInflatedAnnual(period.bonus, period, context) / 12
         if (monthlyIncome > 0) {
           cashflows.push({
             id: `${period.id}-${context.monthIndex}-income`,
@@ -116,7 +130,11 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
           ? getEmployee401kAnnual(period, context)
           : 0
         const employeeMonthly401k = employeeAnnual401k / 12
-        const matchBase = Math.min(employeeAnnual401k, period.salary * period['401kMatchPctCap'])
+        const inflatedSalary = getInflatedAnnual(period.salary, period, context)
+        const matchBase = Math.min(
+          employeeAnnual401k,
+          inflatedSalary * period['401kMatchPctCap'],
+        )
         const employerAnnual401k = matchBase * period['401kMatchRatio']
         const employerMonthly401k = employerAnnual401k / 12
 
@@ -160,7 +178,11 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
           })
         }
 
-        const employerAnnualHsa = period['hsaEmployerContributionAnnual']
+        const employerAnnualHsa = getInflatedAnnual(
+          period['hsaEmployerContributionAnnual'],
+          period,
+          context,
+        )
         const employerMonthlyHsa = employerAnnualHsa / 12
         if (employerMonthlyHsa > 0 && hsaHoldingValid) {
           intents.push({
