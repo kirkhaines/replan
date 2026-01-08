@@ -6,12 +6,6 @@ export type DemoScenario = {
   seed: LocalScenarioSeed
 }
 
-const toLabel = (value: string) =>
-  value
-    .split('-')
-    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
-    .join(' ')
-
 const modules = import.meta.glob('./*.json', { eager: true }) as Record<
   string,
   { default: LocalScenarioSeed }
@@ -23,7 +17,7 @@ export const demoScenarios: DemoScenario[] = Object.entries(modules)
     const id = file.replace(/\\.json$/i, '')
     return {
       id,
-      label: toLabel(id),
+      label: module.default.scenario.name,
       seed: module.default,
     }
   })

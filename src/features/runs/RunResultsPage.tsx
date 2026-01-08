@@ -847,8 +847,8 @@ const RunResultsPage = () => {
                                               <thead>
                                                 <tr>
                                                   <th>Account</th>
-                                                  <th>Current</th>
                                                   <th>Prior</th>
+                                                  <th>Current</th>
                                                   <th>Change</th>
                                                 </tr>
                                               </thead>
@@ -872,12 +872,12 @@ const RunResultsPage = () => {
                                                   return (
                                                     <tr key={`${account.kind}-${account.id}`}>
                                                       <td>{getAccountLabel(account)}</td>
-                                                      <td>{formatSignedCurrency(account.balance)}</td>
                                                       <td>
                                                         {priorBalance !== undefined
                                                           ? formatSignedCurrency(priorBalance)
                                                           : '-'}
                                                       </td>
+                                                      <td>{formatSignedCurrency(account.balance)}</td>
                                                       <td>
                                                         {delta === null ? '-' : formatSignedCurrency(delta)}
                                                       </td>
