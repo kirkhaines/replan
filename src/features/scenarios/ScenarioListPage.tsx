@@ -43,6 +43,16 @@ const ScenarioListPage = () => {
     void loadScenarios()
   }, [loadScenarios])
 
+  useEffect(() => {
+    const handleDemoAdded = () => {
+      void loadScenarios()
+    }
+    window.addEventListener('demo-scenario-added', handleDemoAdded)
+    return () => {
+      window.removeEventListener('demo-scenario-added', handleDemoAdded)
+    }
+  }, [loadScenarios])
+
   const handleRemove = async (scenarioId: string) => {
     const confirmed = window.confirm('Remove this scenario?')
     if (!confirmed) {

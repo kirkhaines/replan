@@ -97,7 +97,8 @@ const AppShell = () => {
   const handleAddDemoScenario = async (seed: LocalScenarioSeed) => {
     await importScenarioSeed(seed)
     setMenuOpen(false)
-    navigate(`/scenarios/${seed.scenario.id}`)
+    window.dispatchEvent(new Event('demo-scenario-added'))
+    navigate('/scenarios')
   }
 
   return (

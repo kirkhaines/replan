@@ -1,19 +1,20 @@
 {
   "scenario": {
-    "id": "51dd39ba-8ffd-4522-acde-6c07876030c1",
+    "id": "ab439a1f-135f-418e-9a3c-56080d321e32",
     "createdAt": 1700000000000,
     "updatedAt": 1700000000000,
     "name": "Demo Work",
+    "description": "Demonstrates salary, 401k deferrals, employer match, and HSA contributions. Run a simulation and review work cashflows and deposits.",
     "personStrategyIds": [
-      "49c6f6b5-02d3-41a6-b146-8e7ef5ceaa49"
+      "fe0fcd61-40fd-44c9-82a1-b86bd4791695"
     ],
     "nonInvestmentAccountIds": [
-      "a8e074a1-362c-4256-b699-6173a77c99a3"
+      "0ae35720-d9db-4f91-841b-e2edd73cd584"
     ],
     "investmentAccountIds": [
-      "0703cd96-5c0f-4e63-bcd4-ee51b7a34b87"
+      "90a95342-b15e-4c71-b96c-b8d74f83eddf"
     ],
-    "spendingStrategyId": "07d996dc-54d5-4c6a-b117-cfd285a2ad0a",
+    "spendingStrategyId": "6e888079-0a2c-40c0-ae85-b67450dd73cb",
     "strategies": {
       "returnModel": {
         "mode": "deterministic",
@@ -141,7 +142,7 @@
   },
   "people": [
     {
-      "id": "af2c6806-4aff-48f1-a843-c50d3273f498",
+      "id": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
       "name": "Demo Person",
       "dateOfBirth": "1985-01-01",
       "lifeExpectancy": 90,
@@ -151,50 +152,249 @@
   ],
   "personStrategies": [
     {
-      "id": "49c6f6b5-02d3-41a6-b146-8e7ef5ceaa49",
-      "scenarioId": "51dd39ba-8ffd-4522-acde-6c07876030c1",
-      "personId": "af2c6806-4aff-48f1-a843-c50d3273f498",
-      "futureWorkStrategyId": "60e6c0cd-addb-4ee7-af9b-5d57326f1e2d",
-      "socialSecurityStrategyId": "7abca9ae-9c4d-4d96-9dfc-fd66444c0409",
+      "id": "fe0fcd61-40fd-44c9-82a1-b86bd4791695",
+      "scenarioId": "ab439a1f-135f-418e-9a3c-56080d321e32",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "futureWorkStrategyId": "1358ad51-fa1a-4c4a-9ea5-812f88b67d02",
+      "socialSecurityStrategyId": "7cb4eced-69ee-4f09-9f56-38453adb0bc2",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
     }
   ],
   "socialSecurityStrategies": [
     {
-      "id": "7abca9ae-9c4d-4d96-9dfc-fd66444c0409",
-      "personId": "af2c6806-4aff-48f1-a843-c50d3273f498",
-      "startDate": "2045-01-01",
+      "id": "7cb4eced-69ee-4f09-9f56-38453adb0bc2",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "startDate": "2030-01-01",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
     }
   ],
-  "socialSecurityEarnings": [],
+  "socialSecurityEarnings": [
+    {
+      "id": "eb744501-60ac-4be2-b132-8a134d6e8940",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2004,
+      "amount": 40000,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "dbc344d6-3262-4bf4-a18d-a972c9e16455",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2005,
+      "amount": 41200,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "f4b33f42-f89b-4e7c-b35d-6da3b8312b9c",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2006,
+      "amount": 42436,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "ceded47f-d171-40dc-80e7-db1e98d10864",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2007,
+      "amount": 43709,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "7889f9da-6b1a-4652-9e10-354f5ab85e1f",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2008,
+      "amount": 45020,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "283e3c8f-fd12-4356-ab30-f1fcd309a03c",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2009,
+      "amount": 46371,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "92a8a20b-9fda-4025-ab9c-8eaf8b04bc59",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2010,
+      "amount": 47762,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "03f45540-0d5a-4c25-b3d8-7ae38ebe3e35",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2011,
+      "amount": 49195,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "9aa8755d-b618-475a-9121-9ce7e927aa80",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2012,
+      "amount": 50671,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "d261fc12-ccc8-4937-a9f2-2770452780df",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2013,
+      "amount": 52191,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "e1eed293-0ff2-458f-bf07-e009625f3709",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2014,
+      "amount": 53757,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "f3ddb546-fa5b-42c2-bbf2-fe59c985836f",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2015,
+      "amount": 55369,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "4b6ef414-9a95-44df-9151-b2e27b448cc7",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2016,
+      "amount": 57030,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "65d8fc0d-821c-4053-b725-a498ee787935",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2017,
+      "amount": 58741,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "fe8a4283-cb28-4fd2-b62f-78bb6f529700",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2018,
+      "amount": 60504,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "df171b59-92c4-4cad-a8e1-521f4b7a7700",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2019,
+      "amount": 62319,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "340e0fbe-43d2-4a3a-b229-383fb52bd0b9",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2020,
+      "amount": 64188,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "5776c0b5-05d0-47e6-a487-1e5ed282b960",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2021,
+      "amount": 66114,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "681ef6f6-371c-4247-90c0-2026c9f7ee3f",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2022,
+      "amount": 68097,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "da633593-f7f3-4027-b994-29809c91e1d0",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2023,
+      "amount": 70140,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "bf4b9da3-6d4c-4f53-a2ee-7dda65443123",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2024,
+      "amount": 72244,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    {
+      "id": "49447e4b-9961-437b-8ade-fe63334ab867",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
+      "year": 2025,
+      "amount": 74412,
+      "months": 12,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
   "futureWorkStrategies": [
     {
-      "id": "60e6c0cd-addb-4ee7-af9b-5d57326f1e2d",
+      "id": "1358ad51-fa1a-4c4a-9ea5-812f88b67d02",
       "name": "Demo Work",
-      "personId": "af2c6806-4aff-48f1-a843-c50d3273f498",
+      "personId": "87b57d8d-e436-47a9-b9d4-1f058abd3ac2",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
     }
   ],
   "futureWorkPeriods": [
     {
-      "id": "de0759f2-de26-45c3-8cc9-7e0494c88a76",
+      "id": "21099ae9-80dd-43e8-a2ae-14905ec8df78",
       "name": "Demo Job",
-      "futureWorkStrategyId": "60e6c0cd-addb-4ee7-af9b-5d57326f1e2d",
+      "futureWorkStrategyId": "1358ad51-fa1a-4c4a-9ea5-812f88b67d02",
       "salary": 90000,
       "bonus": 10000,
-      "startDate": "2020-01-01",
+      "startDate": null,
       "endDate": "2030-01-01",
       "401kContributionType": "fixed",
       "401kContributionAnnual": 12000,
       "401kContributionPct": 0,
       "401kMatchPctCap": 0.05,
       "401kMatchRatio": 1,
-      "401kInvestmentAccountHoldingId": "e3554786-3345-4431-ab83-7dd6612577d9",
-      "401kEmployerMatchHoldingId": "e3554786-3345-4431-ab83-7dd6612577d9",
+      "401kInvestmentAccountHoldingId": "7b1fe911-b423-44c9-a30b-256a77952c76",
+      "401kEmployerMatchHoldingId": "7b1fe911-b423-44c9-a30b-256a77952c76",
       "hsaContributionAnnual": 3000,
       "hsaEmployerContributionAnnual": 1200,
       "hsaUseMaxLimit": false,
@@ -206,7 +406,7 @@
   ],
   "spendingStrategies": [
     {
-      "id": "07d996dc-54d5-4c6a-b117-cfd285a2ad0a",
+      "id": "6e888079-0a2c-40c0-ae85-b67450dd73cb",
       "name": "Demo Spending",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
@@ -214,14 +414,14 @@
   ],
   "spendingLineItems": [
     {
-      "id": "0ad71c09-0f40-4925-ae4d-201ada189a6b",
+      "id": "77321e38-c9f8-4f01-983e-443c145b92dc",
       "name": "Demo Living",
-      "spendingStrategyId": "07d996dc-54d5-4c6a-b117-cfd285a2ad0a",
+      "spendingStrategyId": "6e888079-0a2c-40c0-ae85-b67450dd73cb",
       "category": "Living",
       "needAmount": 3000,
       "wantAmount": 1000,
-      "startDate": "2025-01-01",
-      "endDate": "2055-01-01",
+      "startDate": "",
+      "endDate": "",
       "isPreTax": false,
       "isCharitable": false,
       "isWork": false,
@@ -233,7 +433,7 @@
   ],
   "nonInvestmentAccounts": [
     {
-      "id": "a8e074a1-362c-4256-b699-6173a77c99a3",
+      "id": "0ae35720-d9db-4f91-841b-e2edd73cd584",
       "name": "Demo Cash",
       "balance": 20000,
       "interestRate": 0.01,
@@ -243,7 +443,7 @@
   ],
   "investmentAccounts": [
     {
-      "id": "0703cd96-5c0f-4e63-bcd4-ee51b7a34b87",
+      "id": "90a95342-b15e-4c71-b96c-b8d74f83eddf",
       "name": "Demo Brokerage",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
@@ -251,7 +451,7 @@
   ],
   "investmentAccountHoldings": [
     {
-      "id": "e3554786-3345-4431-ab83-7dd6612577d9",
+      "id": "7b1fe911-b423-44c9-a30b-256a77952c76",
       "name": "Demo S&P 500",
       "taxType": "traditional",
       "balance": 100000,
@@ -259,7 +459,7 @@
       "holdingType": "sp500",
       "returnRate": 0.08,
       "returnStdDev": 0.16,
-      "investmentAccountId": "0703cd96-5c0f-4e63-bcd4-ee51b7a34b87",
+      "investmentAccountId": "90a95342-b15e-4c71-b96c-b8d74f83eddf",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
     }
