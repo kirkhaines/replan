@@ -578,6 +578,17 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
     }))
     const cashflows = cashflowsByModule.flatMap((entry) => entry.cashflows)
     applyCashflows(state, cashflows, monthTotals)
+    const extraCashflowsByModule = new Map<string, CashflowItem[]>()
+    const extraCashflows = modules.flatMap((module) => {
+      const extras = module.onAfterCashflows?.(cashflows, state, context) ?? []
+      if (extras.length > 0) {
+        extraCashflowsByModule.set(module.id, extras)
+      }
+      return extras
+    })
+    if (extraCashflows.length > 0) {
+      applyCashflows(state, extraCashflows, monthTotals)
+    }
 
     const intentsByModule = modules.map((module) => ({
       moduleId: module.id,
@@ -593,6 +604,10 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
     const cashflowsByModuleId = new Map<string, CashflowItem[]>()
     cashflowsByModule.forEach((entry) => {
       cashflowsByModuleId.set(entry.moduleId, entry.cashflows)
+    })
+    extraCashflowsByModule.forEach((extras, moduleId) => {
+      const list = cashflowsByModuleId.get(moduleId) ?? []
+      cashflowsByModuleId.set(moduleId, [...list, ...extras])
     })
 
     const actionsByModuleId = new Map<string, ActionRecord[]>()

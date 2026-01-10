@@ -1,5 +1,4 @@
 import type {
-  ActionRecord,
   InvestmentAccountHolding,
   MarketReturn,
   SimulationSnapshot,
@@ -139,6 +138,11 @@ export type SimulationModule = {
   onStartOfYear?: (state: SimulationState, context: SimulationContext) => void
   onStartOfMonth?: (state: SimulationState, context: SimulationContext) => void
   getCashflows?: (state: SimulationState, context: SimulationContext) => CashflowItem[]
+  onAfterCashflows?: (
+    cashflows: CashflowItem[],
+    state: SimulationState,
+    context: SimulationContext,
+  ) => CashflowItem[]
   getActionIntents?: (state: SimulationState, context: SimulationContext) => ActionIntent[]
   onActionsResolved?: (actions: ActionRecord[], state: SimulationState, context: SimulationContext) => void
   onEndOfMonth?: (state: SimulationState, context: SimulationContext) => void

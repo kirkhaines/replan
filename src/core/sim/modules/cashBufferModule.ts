@@ -10,7 +10,7 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   const early = scenario.strategies.earlyRetirement
   const taxableLot = scenario.strategies.taxableLot
   const spendingItems = snapshot.spendingLineItems.filter(
-    (item) => item.spendingStrategyId === scenario.spendingStrategyId,
+    (item) => item.spendingStrategyId === scenario.spendingStrategyId && !item.isPreTax,
   )
   const explain = createExplainTracker()
 
