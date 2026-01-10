@@ -136,10 +136,10 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
       const employerMonthlyTotal = activePeriods.reduce((sum, period) => {
         const employeeAnnual = getEmployee401kAnnual(period, context)
         const matchBase = Math.min(
-          employeeAnnual,
+          employeeAnnual * period['401kMatchRatio'],
           getInflatedAnnual(period.salary, period, context) * period['401kMatchPctCap'],
         )
-        return sum + (matchBase * period['401kMatchRatio']) / 12
+        return sum + matchBase / 12
       }, 0)
       const hsaEmployeeMonthlyTotal = activePeriods.reduce(
         (sum, period) => sum + getEmployeeHsaAnnual(period, context) / 12,
@@ -174,10 +174,10 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
         const employeeMonthly401k = employeeAnnual401k / 12
         const inflatedSalary = getInflatedAnnual(period.salary, period, context)
         const matchBase = Math.min(
-          employeeAnnual401k,
+          employeeAnnual401k * period['401kMatchRatio'],
           inflatedSalary * period['401kMatchPctCap'],
         )
-        const employerAnnual401k = matchBase * period['401kMatchRatio']
+        const employerAnnual401k = matchBase
         const employerMonthly401k = employerAnnual401k / 12
 
         if (employeeMonthly401k > 0 && employeeHoldingValid) {

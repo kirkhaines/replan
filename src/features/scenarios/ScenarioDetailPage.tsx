@@ -315,7 +315,8 @@ const ScenarioDetailPage = () => {
   const navigate = useNavigate()
   const storage = useAppStore((state) => state.storage)
   const simClient = useAppStore((state) => state.simClient)
-  const backTo = (location.state as { from?: string } | null)?.from ?? '/scenarios'
+  const from = (location.state as { from?: string } | null)?.from
+  const backTo = from && from.startsWith('/runs/') ? '/scenarios' : from ?? '/scenarios'
   const [scenario, setScenario] = useState<Scenario | null>(null)
   const [runs, setRuns] = useState<SimulationRun[]>([])
   const [isLoading, setIsLoading] = useState(true)

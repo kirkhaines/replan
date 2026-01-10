@@ -49,6 +49,7 @@ const AppShell = () => {
     await storage.clearAll()
     await seedDefaults(storage)
     setMenuOpen(false)
+    window.dispatchEvent(new Event('data-cleared'))
     navigate('/scenarios')
   }
 

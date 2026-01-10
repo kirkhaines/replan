@@ -47,9 +47,14 @@ const ScenarioListPage = () => {
     const handleDemoAdded = () => {
       void loadScenarios()
     }
+    const handleDataCleared = () => {
+      void loadScenarios()
+    }
     window.addEventListener('demo-scenario-added', handleDemoAdded)
+    window.addEventListener('data-cleared', handleDataCleared)
     return () => {
       window.removeEventListener('demo-scenario-added', handleDemoAdded)
+      window.removeEventListener('data-cleared', handleDataCleared)
     }
   }, [loadScenarios])
 
