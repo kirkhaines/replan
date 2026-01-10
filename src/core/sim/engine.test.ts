@@ -119,7 +119,7 @@ describe('runSimulation', () => {
             name: 'Index',
             taxType: 'taxable',
             balance: 200,
-            contributionBasis: 200,
+            contributionBasisEntries: [{ date: '2020-01-01', amount: 200 }],
             holdingType: 'sp500',
             returnRate: 0,
             returnStdDev: 0,

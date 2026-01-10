@@ -113,7 +113,11 @@ export const taxAwareSellPriority: Record<SimHolding['taxType'], number> = {
   taxable: 3,
 }
 
-export const getHoldingGain = (holding: SimHolding) => holding.balance - holding.contributionBasis
+const sumContributionBasis = (entries: SimHolding['contributionBasisEntries']) =>
+  entries.reduce((sum, entry) => sum + entry.amount, 0)
+
+export const getHoldingGain = (holding: SimHolding) =>
+  holding.balance - sumContributionBasis(holding.contributionBasisEntries)
 
 export const interpolateTargets = (
   targets: SimulationSnapshot['scenario']['strategies']['glidepath']['targets'],

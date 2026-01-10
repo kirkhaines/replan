@@ -18,12 +18,13 @@ const formatCurrency = (value: number) =>
 
 const createHolding = (investmentAccountId: string): InvestmentAccountHolding => {
   const now = Date.now()
+  const nowIso = new Date(now).toISOString().slice(0, 10)
   return {
     id: createUuid(),
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 50000,
-    contributionBasis: 50000,
+    contributionBasisEntries: [{ date: nowIso, amount: 50000 }],
     holdingType: 'sp500',
     returnRate: 0.1,
     returnStdDev: 0.16,
@@ -78,12 +79,23 @@ const InvestmentAccountDetailPage = () => {
     if (data) {
       reset(data)
       const items = await storage.investmentAccountHoldingRepo.listForAccount(data.id)
-      const normalized = items.map((item) => ({
-        ...item,
-        contributionBasis: item.contributionBasis ?? 0,
-        returnRate: item.returnRate ?? (item as InvestmentAccountHolding & { return?: number }).return ?? 0,
-        returnStdDev: item.returnStdDev ?? (item as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
-      }))
+      const normalized = items.map((item) => {
+        const legacy = item as InvestmentAccountHolding & { contributionBasis?: number }
+        const nowIso = new Date(item.createdAt ?? Date.now()).toISOString().slice(0, 10)
+        return {
+          ...item,
+          contributionBasisEntries:
+            item.contributionBasisEntries?.length > 0
+              ? item.contributionBasisEntries
+              : legacy.contributionBasis && legacy.contributionBasis > 0
+                ? [{ date: nowIso, amount: legacy.contributionBasis }]
+                : [],
+          returnRate:
+            item.returnRate ?? (item as InvestmentAccountHolding & { return?: number }).return ?? 0,
+          returnStdDev:
+            item.returnStdDev ?? (item as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
+        }
+      })
       setHoldings(normalized)
     }
     setIsLoading(false)

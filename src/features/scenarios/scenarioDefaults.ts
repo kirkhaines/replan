@@ -170,12 +170,13 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     updatedAt: now,
   }
 
+  const nowIso = toIsoDate(new Date(now))
   const investmentAccountHolding: InvestmentAccountHolding = {
     id: investmentAccountHoldingId,
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 150000,
-    contributionBasis: 150000,
+    contributionBasisEntries: [{ date: nowIso, amount: 150000 }],
     holdingType: 'sp500',
     returnRate: 0.1,
     returnStdDev: 0.16,

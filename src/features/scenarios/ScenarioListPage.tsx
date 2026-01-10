@@ -368,12 +368,14 @@ const ScenarioListPage = () => {
 
     if (holdings.length === 0) {
       const holdingId = createUuid()
+      const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
+      const nowIso = toIsoDate(new Date(now))
       const holding = {
         id: holdingId,
         name: 'S&P 500',
         taxType: 'taxable' as const,
         balance: 150000,
-        contributionBasis: 150000,
+        contributionBasisEntries: [{ date: nowIso, amount: 150000 }],
         holdingType: 'sp500' as const,
         returnRate: 0.1,
         returnStdDev: 0.16,

@@ -122,6 +122,90 @@ const sumMarketTotals = (marketReturns: MarketReturn[]) => {
   return totals
 }
 
+const toIsoDateFromTimestamp = (value: number) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString().slice(0, 10)
+  }
+  return date.toISOString().slice(0, 10)
+}
+
+const sumContributionBasisEntries = (
+  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+) => entries.reduce((sum, entry) => sum + entry.amount, 0)
+
+const scaleContributionBasisEntries = (
+  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+  ratio: number,
+) =>
+  entries
+    .map((entry) => ({ ...entry, amount: Math.max(0, entry.amount * ratio) }))
+    .filter((entry) => entry.amount > 0)
+
+const consumeContributionBasisEntries = (
+  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+  amount: number,
+  order: 'fifo' | 'lifo',
+) => {
+  if (amount <= 0 || entries.length === 0) {
+    return { used: 0, entries }
+  }
+  const sorted = [...entries].sort((a, b) =>
+    order === 'fifo' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date),
+  )
+  let remaining = amount
+  const updated: typeof entries = []
+  let used = 0
+  sorted.forEach((entry) => {
+    if (remaining <= 0) {
+      updated.push(entry)
+      return
+    }
+    const applied = Math.min(remaining, entry.amount)
+    used += applied
+    remaining -= applied
+    const leftover = entry.amount - applied
+    if (leftover > 0) {
+      updated.push({ ...entry, amount: leftover })
+    }
+  })
+  return { used, entries: updated }
+}
+
+const sumSeasonedBasis = (
+  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+  dateIso: string,
+) => {
+  const current = new Date(dateIso)
+  if (Number.isNaN(current.getTime())) {
+    return 0
+  }
+  return entries.reduce((sum, entry) => {
+    const entryDate = new Date(entry.date)
+    if (Number.isNaN(entryDate.getTime())) {
+      return sum
+    }
+    const months =
+      (current.getFullYear() - entryDate.getFullYear()) * 12 +
+      (current.getMonth() - entryDate.getMonth())
+    if (current.getDate() < entryDate.getDate()) {
+      return sum
+    }
+    return months >= 60 ? sum + entry.amount : sum
+  }, 0)
+}
+
+const addContributionBasisEntry = (
+  holding: SimulationState['holdings'][number],
+  amount: number,
+  dateIso: string,
+) => {
+  if (amount <= 0) {
+    return
+  }
+  holding.contributionBasisEntries.push({ date: dateIso, amount })
+}
+
 const buildAccountBalances = (state: SimulationState): AccountBalanceSnapshot[] => [
   ...state.cashAccounts.map((account) => ({
     id: account.id,
@@ -186,7 +270,21 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     taxType: holding.taxType,
     holdingType: holding.holdingType,
     balance: holding.balance,
-    contributionBasis: holding.contributionBasis,
+    contributionBasisEntries:
+      holding.contributionBasisEntries?.length > 0
+        ? holding.contributionBasisEntries.map((entry) => ({ ...entry }))
+        : (() => {
+            const legacy = holding as typeof holding & { contributionBasis?: number }
+            if (legacy.contributionBasis && legacy.contributionBasis > 0) {
+              return [
+                {
+                  date: toIsoDateFromTimestamp(holding.createdAt),
+                  amount: legacy.contributionBasis,
+                },
+              ]
+            }
+            return []
+          })(),
     returnRate: holding.returnRate,
     returnStdDev: holding.returnStdDev,
   }))
@@ -295,6 +393,10 @@ const applyHoldingWithdrawal = (
   if (withdrawal <= 0) {
     return 0
   }
+  const seasonedRothBasis =
+    holding.taxType === 'roth'
+      ? sumSeasonedBasis(holding.contributionBasisEntries, context.dateIso)
+      : 0
   holding.balance -= withdrawal
   if (taxTreatmentOverride === 'ordinary') {
     state.yearLedger.ordinaryIncome += withdrawal
@@ -306,28 +408,60 @@ const applyHoldingWithdrawal = (
     state.yearLedger.taxExemptIncome += withdrawal
   } else if (holding.taxType === 'taxable') {
     const basisMethod = context.snapshot.scenario.strategies.taxableLot.costBasisMethod
-    const basisRatio = startingBalance > 0 ? holding.contributionBasis / startingBalance : 0
-    // FIFO/LIFO need lot data; fall back to average-basis for now.
-    const basisUsed = withdrawal * (basisMethod === 'average' ? basisRatio : basisRatio)
-    holding.contributionBasis = Math.max(0, holding.contributionBasis - basisUsed)
+    const totalBasis = sumContributionBasisEntries(holding.contributionBasisEntries)
+    let basisUsed = 0
+    if (basisMethod === 'average') {
+      const basisRatio = startingBalance > 0 ? totalBasis / startingBalance : 0
+      basisUsed = withdrawal * basisRatio
+      if (basisRatio > 0 && startingBalance > 0) {
+        const scale = Math.max(0, (startingBalance - withdrawal) / startingBalance)
+        holding.contributionBasisEntries = scaleContributionBasisEntries(
+          holding.contributionBasisEntries,
+          scale,
+        )
+      }
+    } else {
+      const { used, entries } = consumeContributionBasisEntries(
+        holding.contributionBasisEntries,
+        withdrawal,
+        basisMethod === 'fifo' ? 'fifo' : 'lifo',
+      )
+      basisUsed = used
+      holding.contributionBasisEntries = entries
+    }
     const gain = Math.max(0, withdrawal - basisUsed)
     state.yearLedger.capitalGains += gain
     totals.capitalGains += gain
   } else if (holding.taxType === 'traditional') {
     state.yearLedger.ordinaryIncome += withdrawal
     totals.ordinaryIncome += withdrawal
+  } else if (holding.taxType === 'roth') {
+    holding.contributionBasisEntries = consumeContributionBasisEntries(
+      holding.contributionBasisEntries,
+      withdrawal,
+      'fifo',
+    ).entries
+    state.yearLedger.taxExemptIncome += withdrawal
   } else {
     state.yearLedger.taxExemptIncome += withdrawal
   }
 
   const early = context.snapshot.scenario.strategies.earlyRetirement
-  const penaltyApplies =
-    !skipPenalty &&
-    context.age < 59.5 &&
-    ((holding.taxType === 'traditional' && !early.use72t) ||
-      (holding.taxType === 'roth' && !early.useRothBasisFirst))
-  if (penaltyApplies) {
-    state.yearLedger.penalties += withdrawal * early.penaltyRate
+  let penaltyAmount = 0
+  if (!skipPenalty && context.age < 59.5) {
+    if (holding.taxType === 'traditional' && !early.use72t) {
+      penaltyAmount = withdrawal
+    }
+    if (holding.taxType === 'roth') {
+      if (early.useRothBasisFirst) {
+        penaltyAmount = Math.max(0, withdrawal - seasonedRothBasis)
+      } else {
+        penaltyAmount = withdrawal
+      }
+    }
+  }
+  if (penaltyAmount > 0) {
+    state.yearLedger.penalties += penaltyAmount * early.penaltyRate
   }
   totals.withdrawals += withdrawal
   return withdrawal
@@ -421,9 +555,7 @@ const applyActions = (
             applyCashToAccounts(state, -action.resolvedAmount)
           }
           holding.balance += action.resolvedAmount
-          if (holding.taxType === 'taxable') {
-            holding.contributionBasis += action.resolvedAmount
-          }
+          addContributionBasisEntry(holding, action.resolvedAmount, context.dateIso)
           totals.contributions += action.resolvedAmount
         }
       } else {
@@ -455,6 +587,7 @@ const applyActions = (
         const holding = state.holdings.find((entry) => entry.id === targetHolding)
         if (holding) {
           holding.balance += applied
+          addContributionBasisEntry(holding, applied, context.dateIso)
         }
       }
     }

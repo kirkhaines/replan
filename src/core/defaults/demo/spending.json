@@ -696,7 +696,7 @@
       "name": "Demo S&P 500",
       "taxType": "taxable",
       "balance": 175000,
-      "contributionBasis": 175000,
+      "contributionBasisEntries": [{"date": "2020-01-01", "amount": 175000}],
       "holdingType": "sp500",
       "returnRate": 0.06,
       "returnStdDev": 0.12,

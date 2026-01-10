@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { baseEntitySchema } from './common'
+import { baseEntitySchema, isoDateStringSchema } from './common'
 import { holdingTypeSchema, taxTypeSchema } from './enums'
 
 export const nonInvestmentAccountSchema = baseEntitySchema.extend({
@@ -16,7 +16,12 @@ export const investmentAccountHoldingSchema = baseEntitySchema.extend({
   name: z.string().min(1),
   taxType: taxTypeSchema,
   balance: z.number().min(0),
-  contributionBasis: z.number().min(0),
+  contributionBasisEntries: z.array(
+    z.object({
+      date: isoDateStringSchema,
+      amount: z.number().min(0),
+    }),
+  ),
   holdingType: holdingTypeSchema,
   returnRate: z.number(),
   returnStdDev: z.number(),

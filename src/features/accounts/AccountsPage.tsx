@@ -36,12 +36,13 @@ const createInvestmentAccount = (): InvestmentAccount => {
 
 const createHolding = (investmentAccountId: string): InvestmentAccountHolding => {
   const now = Date.now()
+  const nowIso = new Date(now).toISOString().slice(0, 10)
   return {
     id: createUuid(),
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 50000,
-    contributionBasis: 50000,
+    contributionBasisEntries: [{ date: nowIso, amount: 50000 }],
     holdingType: 'sp500',
     returnRate: 0.1,
     returnStdDev: 0.16,

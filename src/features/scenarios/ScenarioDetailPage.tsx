@@ -262,14 +262,27 @@ const normalizeFutureWorkPeriod = (base: FutureWorkPeriod): FutureWorkPeriod => 
   }
 }
 
-const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountHolding => ({
-  ...holding,
-  contributionBasis: holding.contributionBasis ?? 0,
-  returnRate:
-    holding.returnRate ?? (holding as InvestmentAccountHolding & { return?: number }).return ?? 0,
-  returnStdDev:
-    holding.returnStdDev ?? (holding as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
-})
+const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountHolding => {
+  const legacy = holding as InvestmentAccountHolding & { contributionBasis?: number }
+  return {
+    ...holding,
+    contributionBasisEntries:
+      holding.contributionBasisEntries?.length > 0
+        ? holding.contributionBasisEntries
+        : legacy.contributionBasis && legacy.contributionBasis > 0
+          ? [
+              {
+                date: new Date(holding.createdAt ?? Date.now()).toISOString().slice(0, 10),
+                amount: legacy.contributionBasis,
+              },
+            ]
+          : [],
+    returnRate:
+      holding.returnRate ?? (holding as InvestmentAccountHolding & { return?: number }).return ?? 0,
+    returnStdDev:
+      holding.returnStdDev ?? (holding as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
+  }
+}
 
 
 const buildInflationMap = (

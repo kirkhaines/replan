@@ -17,7 +17,10 @@ export type SimHolding = {
   taxType: InvestmentAccountHolding['taxType']
   holdingType: InvestmentAccountHolding['holdingType']
   balance: number
-  contributionBasis: number
+  contributionBasisEntries: Array<{
+    date: string
+    amount: number
+  }>
   returnRate: number
   returnStdDev: number
 }

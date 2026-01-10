@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { useForm, type SubmitHandler } from 'react-hook-form'
+import { useFieldArray, useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   investmentAccountHoldingSchema,
@@ -34,7 +34,7 @@ const HoldingDetailPage = () => {
       name: '',
       taxType: 'taxable' as const,
       balance: 0,
-      contributionBasis: 0,
+      contributionBasisEntries: [],
       holdingType: 'sp500' as const,
       returnRate: 0,
       returnStdDev: 0,
@@ -51,10 +51,16 @@ const HoldingDetailPage = () => {
     reset,
     setValue,
     watch,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<InvestmentAccountHolding>({
     resolver: zodResolver(investmentAccountHoldingSchema),
     defaultValues,
+  })
+
+  const { fields: basisFields, append: appendBasis, remove: removeBasis } = useFieldArray({
+    control,
+    name: 'contributionBasisEntries',
   })
 
   useUnsavedChangesWarning(isDirty)
@@ -97,7 +103,17 @@ const HoldingDetailPage = () => {
     const normalized = data
       ? {
           ...data,
-          contributionBasis: data.contributionBasis ?? 0,
+          contributionBasisEntries:
+            data.contributionBasisEntries?.length > 0
+              ? data.contributionBasisEntries
+              : legacy.contributionBasis && legacy.contributionBasis > 0
+                ? [
+                    {
+                      date: new Date(data.createdAt ?? Date.now()).toISOString().slice(0, 10),
+                      amount: legacy.contributionBasis,
+                    },
+                  ]
+                : [],
           returnRate: data.returnRate ?? legacy.return ?? 0,
           returnStdDev: data.returnStdDev ?? legacy.risk ?? 0,
         }
@@ -205,17 +221,6 @@ const HoldingDetailPage = () => {
           </label>
 
           <label className="field">
-            <span>Contribution basis</span>
-            <input
-              type="number"
-              {...register('contributionBasis', { valueAsNumber: true })}
-            />
-            {errors.contributionBasis ? (
-              <span className="error">{errors.contributionBasis.message}</span>
-            ) : null}
-          </label>
-
-          <label className="field">
             <span>Holding type</span>
             <select {...register('holdingType')}>
               {holdingTypeSchema.options.map((option) => (
@@ -260,6 +265,81 @@ const HoldingDetailPage = () => {
               value={formatStdDevRange(returnRate ?? 0, returnStdDev ?? 0)}
             />
           </label>
+        </div>
+
+        <div className="stack">
+          <div className="row">
+            <h3>Contribution basis</h3>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() =>
+                appendBasis({
+                  date: new Date().toISOString().slice(0, 10),
+                  amount: 0,
+                })
+              }
+            >
+              Add entry
+            </button>
+          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {basisFields.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="muted">
+                    No contribution basis entries yet.
+                  </td>
+                </tr>
+              ) : (
+                basisFields.map((field, index) => (
+                  <tr key={field.id}>
+                    <td>
+                      <input
+                        type="date"
+                        {...register(`contributionBasisEntries.${index}.date`)}
+                      />
+                      {errors.contributionBasisEntries?.[index]?.date ? (
+                        <span className="error">
+                          {errors.contributionBasisEntries[index]?.date?.message}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.01"
+                        {...register(`contributionBasisEntries.${index}.amount`, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                      {errors.contributionBasisEntries?.[index]?.amount ? (
+                        <span className="error">
+                          {errors.contributionBasisEntries[index]?.amount?.message}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={() => removeBasis(index)}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
         <div className="button-row">
