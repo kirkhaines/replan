@@ -1,4 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import { buildSsaEstimate } from '../ssa'
 import type { CashflowItem, SimulationModule } from '../types'
 import { isWithinRange, monthsBetween } from './utils'
@@ -24,6 +25,7 @@ export const createSocialSecurityModule = (snapshot: SimulationSnapshot): Simula
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId,
   )
+  const explain = createExplainTracker()
 
   const benefits = activePersonStrategies
     .map((strategy) => {
@@ -64,6 +66,7 @@ export const createSocialSecurityModule = (snapshot: SimulationSnapshot): Simula
 
   return {
     id: 'social-security',
+    explain,
     getCashflows: (_state, context) => {
       const cashflows: CashflowItem[] = []
       benefits.forEach((benefit) => {
@@ -84,6 +87,11 @@ export const createSocialSecurityModule = (snapshot: SimulationSnapshot): Simula
           ordinaryIncome: monthlyBenefit,
         })
       })
+      const totalBenefits = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
+      explain.addInput('Strategy count', snapshot.socialSecurityStrategies.length)
+      explain.addInput('CPI rate', cpiRate)
+      explain.addCheckpoint('Benefit count', cashflows.length)
+      explain.addCheckpoint('Benefit total', totalBenefits)
       return cashflows
     },
   }

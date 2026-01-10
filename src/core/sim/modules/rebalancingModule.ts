@@ -1,9 +1,24 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationContext, SimulationModule, SimHolding } from '../types'
 import { interpolateTargets, taxAwareSellPriority, toAssetClass } from './utils'
 
 export const createRebalancingModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const { glidepath, rebalancing } = snapshot.scenario.strategies
+  const explain = createExplainTracker()
+
+  const formatTargetWeights = (target: ReturnType<typeof interpolateTargets> | null) => {
+    if (!target) {
+      return 'none'
+    }
+    return [
+      `equity ${(target.equity * 100).toFixed(1)}%`,
+      `bonds ${(target.bonds * 100).toFixed(1)}%`,
+      `cash ${(target.cash * 100).toFixed(1)}%`,
+      `realEstate ${(target.realEstate * 100).toFixed(1)}%`,
+      `other ${(target.other * 100).toFixed(1)}%`,
+    ].join(', ')
+  }
 
   const shouldRebalance = (context: SimulationContext) => {
     if (rebalancing.frequency === 'monthly') {
@@ -32,13 +47,31 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
 
   return {
     id: 'rebalancing',
+    explain,
     getActionIntents: (state, context) => {
-      if (!shouldRebalance(context)) {
+      const canRebalance = shouldRebalance(context)
+      if (!canRebalance) {
+        explain.addInput('Frequency', rebalancing.frequency)
+        explain.addInput('Tax aware', rebalancing.taxAware)
+        explain.addInput('Use contributions', rebalancing.useContributions)
+        explain.addInput('Drift threshold', rebalancing.driftThreshold)
+        explain.addInput('Min trade', rebalancing.minTradeAmount)
+        explain.addCheckpoint('Should rebalance', false)
+        explain.addCheckpoint('Target weights', 'none')
+        explain.addCheckpoint('Trades', 0)
         return []
       }
       const key = glidepath.mode === 'year' ? context.yearIndex : context.age
       const target = interpolateTargets(glidepath.targets, key)
       if (!target) {
+        explain.addInput('Frequency', rebalancing.frequency)
+        explain.addInput('Tax aware', rebalancing.taxAware)
+        explain.addInput('Use contributions', rebalancing.useContributions)
+        explain.addInput('Drift threshold', rebalancing.driftThreshold)
+        explain.addInput('Min trade', rebalancing.minTradeAmount)
+        explain.addCheckpoint('Should rebalance', true)
+        explain.addCheckpoint('Target weights', 'none')
+        explain.addCheckpoint('Trades', 0)
         return []
       }
       const availableCashRef = {
@@ -150,8 +183,9 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         return actions
       }
 
+      let actions: ActionIntent[] = []
       if (glidepath.scope === 'per_account') {
-        const actions: ActionIntent[] = []
+        const perAccountActions: ActionIntent[] = []
         const holdingsByAccount = new Map<string, SimHolding[]>()
         state.holdings.forEach((holding) => {
           const list = holdingsByAccount.get(holding.investmentAccountId) ?? []
@@ -159,12 +193,29 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
           holdingsByAccount.set(holding.investmentAccountId, list)
         })
         holdingsByAccount.forEach((holdings) => {
-          actions.push(...buildActionsForHoldings(holdings))
+          perAccountActions.push(...buildActionsForHoldings(holdings))
         })
-        return actions
+        explain.addInput('Frequency', rebalancing.frequency)
+        explain.addInput('Tax aware', rebalancing.taxAware)
+        explain.addInput('Use contributions', rebalancing.useContributions)
+        explain.addInput('Drift threshold', rebalancing.driftThreshold)
+        explain.addInput('Min trade', rebalancing.minTradeAmount)
+        explain.addCheckpoint('Should rebalance', true)
+        explain.addCheckpoint('Target weights', formatTargetWeights(target))
+        explain.addCheckpoint('Trades', perAccountActions.length)
+        return perAccountActions
       }
 
-      return buildActionsForHoldings(state.holdings)
+      actions = buildActionsForHoldings(state.holdings)
+      explain.addInput('Frequency', rebalancing.frequency)
+      explain.addInput('Tax aware', rebalancing.taxAware)
+      explain.addInput('Use contributions', rebalancing.useContributions)
+      explain.addInput('Drift threshold', rebalancing.driftThreshold)
+      explain.addInput('Min trade', rebalancing.minTradeAmount)
+      explain.addCheckpoint('Should rebalance', true)
+      explain.addCheckpoint('Target weights', formatTargetWeights(target))
+      explain.addCheckpoint('Trades', actions.length)
+      return actions
     },
   }
 }

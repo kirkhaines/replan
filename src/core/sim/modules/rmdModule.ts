@@ -1,8 +1,10 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationContext, SimulationModule, SimulationState } from '../types'
 
 export const createRmdModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const strategy = snapshot.scenario.strategies.rmd
+  const explain = createExplainTracker()
 
   const computeRmd = (state: SimulationState, context: SimulationContext) => {
     if (!strategy.enabled || !context.isStartOfYear) {
@@ -29,6 +31,7 @@ export const createRmdModule = (snapshot: SimulationSnapshot): SimulationModule 
 
   return {
     id: 'rmd',
+    explain,
     getCashflows: (state, context) => {
       const result = computeRmd(state, context)
       if (!result) {
@@ -51,11 +54,33 @@ export const createRmdModule = (snapshot: SimulationSnapshot): SimulationModule 
       ]
     },
     getActionIntents: (state, context) => {
+      explain.addInput('Enabled', strategy.enabled)
+      explain.addInput('Start age', strategy.startAge)
+      explain.addInput('Account types', strategy.accountTypes.join(', '))
+      explain.addInput('Withholding rate', strategy.withholdingRate)
+      explain.addInput('Excess handling', strategy.excessHandling)
+
       const result = computeRmd(state, context)
       if (!result) {
+        explain.addCheckpoint('Eligible balance', 0)
+        explain.addCheckpoint('Divisor', 0)
+        explain.addCheckpoint('Total RMD', 0)
         return []
       }
       const { totalRmd, eligibleHoldings } = result
+      const eligibleBalance = eligibleHoldings.reduce(
+        (sum, holding) => sum + holding.balance,
+        0,
+      )
+      const ageKey = Math.floor(context.age)
+      const divisor =
+        snapshot.rmdTable.find((entry) => entry.age === ageKey)?.divisor ??
+        snapshot.rmdTable[snapshot.rmdTable.length - 1]?.divisor ??
+        1
+      explain.addCheckpoint('Eligible balance', eligibleBalance)
+      explain.addCheckpoint('Divisor', divisor)
+      explain.addCheckpoint('Total RMD', totalRmd)
+
       let remaining = totalRmd
       const intents: ActionIntent[] = []
       let priority = 30

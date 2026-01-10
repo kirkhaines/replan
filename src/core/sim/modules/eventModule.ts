@@ -1,11 +1,14 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import type { CashflowItem, SimulationModule } from '../types'
 import { isSameMonth } from './utils'
 
 export const createEventModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const events = snapshot.scenario.strategies.events
+  const explain = createExplainTracker()
   return {
     id: 'events',
+    explain,
     getCashflows: (_state, context) => {
       const cashflows: CashflowItem[] = []
       events.forEach((event) => {
@@ -30,6 +33,10 @@ export const createEventModule = (snapshot: SimulationSnapshot): SimulationModul
         }
         cashflows.push(cashflow)
       })
+      const netCash = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
+      explain.addInput('Events', events.length)
+      explain.addCheckpoint('Triggered events', cashflows.length)
+      explain.addCheckpoint('Net cash', netCash)
       return cashflows
     },
   }

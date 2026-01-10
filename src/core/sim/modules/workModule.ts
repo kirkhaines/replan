@@ -1,4 +1,5 @@
 import type { FutureWorkPeriod, SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import type { ActionIntent, CashflowItem, SimulationContext, SimulationModule } from '../types'
 import { inflateAmount, isWithinRange } from './utils'
 
@@ -17,6 +18,7 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
   const holdingIds = new Set(snapshot.investmentAccountHoldings.map((holding) => holding.id))
   const contributionLimits = snapshot.contributionLimits ?? []
   const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+  const explain = createExplainTracker()
 
   const getActivePeriods = (context: SimulationContext): FutureWorkPeriod[] =>
     periods.filter((period) => isWithinRange(context.dateIso, period.startDate, period.endDate))
@@ -73,9 +75,11 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
 
   return {
     id: 'future-work',
+    explain,
     getCashflows: (_state, context) => {
       const cashflows: CashflowItem[] = []
-      getActivePeriods(context).forEach((period) => {
+      const activePeriods = getActivePeriods(context)
+      activePeriods.forEach((period) => {
         const monthlyIncome =
           getInflatedAnnual(period.salary, period, context) / 12 +
           getInflatedAnnual(period.bonus, period, context) / 12
@@ -116,6 +120,44 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
           })
         }
       })
+      const max401k = getContributionLimit('401k', context)
+      const maxHsa = getContributionLimit('hsa', context)
+      const monthlyIncomeTotal = activePeriods.reduce(
+        (sum, period) =>
+          sum +
+          getInflatedAnnual(period.salary, period, context) / 12 +
+          getInflatedAnnual(period.bonus, period, context) / 12,
+        0,
+      )
+      const employeeMonthlyTotal = activePeriods.reduce(
+        (sum, period) => sum + getEmployee401kAnnual(period, context) / 12,
+        0,
+      )
+      const employerMonthlyTotal = activePeriods.reduce((sum, period) => {
+        const employeeAnnual = getEmployee401kAnnual(period, context)
+        const matchBase = Math.min(
+          employeeAnnual,
+          getInflatedAnnual(period.salary, period, context) * period['401kMatchPctCap'],
+        )
+        return sum + (matchBase * period['401kMatchRatio']) / 12
+      }, 0)
+      const hsaEmployeeMonthlyTotal = activePeriods.reduce(
+        (sum, period) => sum + getEmployeeHsaAnnual(period, context) / 12,
+        0,
+      )
+      const hsaEmployerMonthlyTotal = activePeriods.reduce(
+        (sum, period) => sum + getInflatedAnnual(period['hsaEmployerContributionAnnual'], period, context) / 12,
+        0,
+      )
+      explain.addInput('Periods', periods.length)
+      explain.addInput('Active periods', activePeriods.length)
+      explain.addInput('Max 401k', max401k)
+      explain.addInput('Max HSA', maxHsa)
+      explain.addCheckpoint('Monthly income', monthlyIncomeTotal)
+      explain.addCheckpoint('Employee 401k', employeeMonthlyTotal)
+      explain.addCheckpoint('Employer match', employerMonthlyTotal)
+      explain.addCheckpoint('Employee HSA', hsaEmployeeMonthlyTotal)
+      explain.addCheckpoint('Employer HSA', hsaEmployerMonthlyTotal)
       return cashflows
     },
     getActionIntents: (_state, context) => {

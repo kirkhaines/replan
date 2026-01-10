@@ -1,4 +1,10 @@
-import type { InvestmentAccountHolding, SimulationSnapshot } from '../models'
+import type {
+  ActionRecord,
+  InvestmentAccountHolding,
+  MarketReturn,
+  SimulationSnapshot,
+} from '../models'
+import type { ModuleExplainTracker } from './explain'
 
 export type SimCashAccount = {
   id: string
@@ -128,11 +134,18 @@ export type SimulationContext = {
 
 export type SimulationModule = {
   id: string
+  explain?: ModuleExplainTracker
   buildPlan?: (snapshot: SimulationSnapshot, settings: SimulationSettings) => void
   onStartOfYear?: (state: SimulationState, context: SimulationContext) => void
   onStartOfMonth?: (state: SimulationState, context: SimulationContext) => void
   getCashflows?: (state: SimulationState, context: SimulationContext) => CashflowItem[]
   getActionIntents?: (state: SimulationState, context: SimulationContext) => ActionIntent[]
+  onActionsResolved?: (actions: ActionRecord[], state: SimulationState, context: SimulationContext) => void
   onEndOfMonth?: (state: SimulationState, context: SimulationContext) => void
+  onMarketReturns?: (
+    marketReturns: MarketReturn[],
+    state: SimulationState,
+    context: SimulationContext,
+  ) => void
   onEndOfYear?: (state: SimulationState, context: SimulationContext) => void
 }

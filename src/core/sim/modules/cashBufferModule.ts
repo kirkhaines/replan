@@ -1,4 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationContext, SimulationModule, SimulationState } from '../types'
 import { getHoldingGain, sumMonthlySpending } from './utils'
 
@@ -11,6 +12,7 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId,
   )
+  const explain = createExplainTracker()
 
   const buildWithdrawalOrder = (state: SimulationState, age: number) => {
     const baseOrder = withdrawal.order
@@ -116,6 +118,7 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
 
   return {
     id: 'cash-buffer',
+    explain,
     getActionIntents: (state: SimulationState, context: SimulationContext) => {
       const cashBalance = state.cashAccounts.reduce((sum, account) => sum + account.balance, 0)
       const monthlySpending = sumMonthlySpending(
@@ -124,6 +127,29 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
         context.dateIso,
         context.settings.startDate,
       )
+      const bridgeMonths = Math.max(0, early.bridgeCashYears) * 12
+      const targetMonths = Math.max(strategy.targetMonths, bridgeMonths)
+      const minMonths = withdrawal.useCashFirst ? strategy.minMonths : targetMonths
+      const maxMonths = Math.max(strategy.maxMonths, targetMonths)
+      const target = monthlySpending * targetMonths
+      const min = monthlySpending * minMonths
+      const max = monthlySpending * maxMonths
+      const refillNeeded = cashBalance < min ? Math.max(0, target - cashBalance) : 0
+      const investExcess = cashBalance > max ? Math.max(0, cashBalance - target) : 0
+      explain.addInput('Monthly spending', monthlySpending)
+      explain.addInput('Cash balance', cashBalance)
+      explain.addInput('Target months', targetMonths)
+      explain.addInput('Min months', minMonths)
+      explain.addInput('Max months', maxMonths)
+      explain.addInput('Order', withdrawal.order.join(', '))
+      explain.addInput('Avoid penalty', withdrawal.avoidEarlyPenalty)
+      explain.addInput('Allow penalty', early.allowPenalty)
+      explain.addInput('Age', context.age)
+      explain.addCheckpoint('Target', target)
+      explain.addCheckpoint('Min', min)
+      explain.addCheckpoint('Max', max)
+      explain.addCheckpoint('Refill needed', refillNeeded)
+      explain.addCheckpoint('Invest excess', investExcess)
       if (monthlySpending <= 0) {
         if (cashBalance >= 0) {
           return []
@@ -136,14 +162,6 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
           100,
         )
       }
-      const bridgeMonths = Math.max(0, early.bridgeCashYears) * 12
-      const targetMonths = Math.max(strategy.targetMonths, bridgeMonths)
-      const minMonths = withdrawal.useCashFirst ? strategy.minMonths : targetMonths
-      const maxMonths = Math.max(strategy.maxMonths, targetMonths)
-      const target = monthlySpending * targetMonths
-      const min = monthlySpending * minMonths
-      const max = monthlySpending * maxMonths
-
       if (cashBalance < min) {
         const needed = Math.max(0, target - cashBalance)
         return buildWithdrawIntents(state, needed, context.age, 'Refill cash buffer', 60)

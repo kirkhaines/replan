@@ -62,6 +62,7 @@ export {
 export type {
   SimulationRun,
   SimulationResult,
+  ActionRecord,
   ModuleRunExplanation,
   MonthExplanation,
   MarketReturn,

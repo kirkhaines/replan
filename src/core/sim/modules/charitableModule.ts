@@ -1,19 +1,36 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationModule } from '../types'
 
 export const createCharitableModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const strategy = snapshot.scenario.strategies.charitable
+  const explain = createExplainTracker()
 
   return {
     id: 'charitable',
+    explain,
     getCashflows: (_state, context) => {
+      explain.addInput('Annual giving', strategy.annualGiving)
+      explain.addInput('Use QCD', strategy.useQcd)
+      explain.addInput('QCD annual', strategy.qcdAnnualAmount)
+      explain.addInput('Start age', strategy.startAge)
+      explain.addInput('End age', strategy.endAge)
       if (strategy.annualGiving <= 0) {
+        explain.addCheckpoint('Monthly giving', 0)
+        explain.addCheckpoint('QCD monthly', 0)
+        explain.addCheckpoint('Deduction', 0)
         return []
       }
       if (strategy.startAge > 0 && context.age < strategy.startAge) {
+        explain.addCheckpoint('Monthly giving', 0)
+        explain.addCheckpoint('QCD monthly', 0)
+        explain.addCheckpoint('Deduction', 0)
         return []
       }
       if (strategy.endAge > 0 && context.age > strategy.endAge) {
+        explain.addCheckpoint('Monthly giving', 0)
+        explain.addCheckpoint('QCD monthly', 0)
+        explain.addCheckpoint('Deduction', 0)
         return []
       }
       const monthlyGiving = strategy.annualGiving / 12
@@ -27,6 +44,9 @@ export const createCharitableModule = (snapshot: SimulationSnapshot): Simulation
         strategy.useQcd && context.age >= 70.5
           ? Math.max(0, monthlyGiving - qcdMonthly)
           : monthlyGiving
+      explain.addCheckpoint('Monthly giving', monthlyGiving)
+      explain.addCheckpoint('QCD monthly', qcdMonthly)
+      explain.addCheckpoint('Deduction', deduction)
       return [
         {
           id: `charitable-${context.monthIndex}`,

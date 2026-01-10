@@ -1,4 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import { createSeededRandom, hashStringToSeed, randomNormal } from '../random'
 import type { SimulationContext, SimulationModule, SimulationSettings, SimHolding } from '../types'
 import { toAssetClass, toMonthlyRate, type AssetClass } from './utils'
@@ -8,6 +9,7 @@ export const createReturnModule = (
   settings: SimulationSettings,
 ): SimulationModule => {
   const returnModel = snapshot.scenario.strategies.returnModel
+  const explain = createExplainTracker()
   const seed =
     returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${settings.startDate}`)
   const random = createSeededRandom(seed)
@@ -56,7 +58,13 @@ export const createReturnModule = (
 
   return {
     id: 'returns-core',
+    explain,
     onEndOfMonth: (state, context) => {
+      explain.addInput('Mode', returnModel.mode)
+      explain.addInput('Sequence model', returnModel.sequenceModel)
+      explain.addInput('Correlation model', returnModel.correlationModel)
+      explain.addInput('Volatility scale', returnModel.volatilityScale)
+      explain.addInput('Cash yield rate', returnModel.cashYieldRate)
       state.cashAccounts.forEach((account) => {
         const baseRate =
           returnModel.cashYieldRate > 0 ? returnModel.cashYieldRate : account.interestRate
@@ -74,6 +82,23 @@ export const createReturnModule = (
         const realized = Math.max(-0.95, expected + shock)
         holding.balance *= 1 + realized
       })
+    },
+    onMarketReturns: (marketReturns) => {
+      const totals = marketReturns.reduce(
+        (sum, entry) => {
+          if (entry.kind === 'cash') {
+            sum.cash += entry.amount
+          } else {
+            sum.holdings += entry.amount
+          }
+          sum.total += entry.amount
+          return sum
+        },
+        { cash: 0, holdings: 0, total: 0 },
+      )
+      explain.addCheckpoint('Cash return', totals.cash)
+      explain.addCheckpoint('Holding return', totals.holdings)
+      explain.addCheckpoint('Total return', totals.total)
     },
   }
 }

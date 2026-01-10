@@ -1,4 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
+import { createExplainTracker } from '../explain'
 import type { CashflowItem, SimulationModule } from '../types'
 import { inflateAmount, isWithinRange } from './utils'
 
@@ -7,9 +8,11 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId,
   )
+  const explain = createExplainTracker()
 
   return {
     id: 'spending',
+    explain,
     getCashflows: (state, context) => {
       const cashflows: CashflowItem[] = []
       const guardrailPct = scenario.strategies.withdrawal.guardrailPct
@@ -55,6 +58,26 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
           })
         }
       })
+      explain.addInput('Line items', spendingItems.length)
+      explain.addInput('Guardrail pct', guardrailPct)
+      explain.addInput('Guardrail active', guardrailActive)
+      explain.addInput('Guardrail factor', guardrailFactor)
+      const needTotal = Math.abs(
+        cashflows.reduce(
+          (sum, flow) => (flow.category === 'spending_need' ? sum + flow.cash : sum),
+          0,
+        ),
+      )
+      const wantTotal = Math.abs(
+        cashflows.reduce(
+          (sum, flow) => (flow.category === 'spending_want' ? sum + flow.cash : sum),
+          0,
+        ),
+      )
+      const deductions = cashflows.reduce((sum, flow) => sum + (flow.deductions ?? 0), 0)
+      explain.addCheckpoint('Need total', needTotal)
+      explain.addCheckpoint('Want total', wantTotal)
+      explain.addCheckpoint('Deductions', deductions)
       return cashflows
     },
   }
