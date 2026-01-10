@@ -4,7 +4,6 @@ import { createCashBufferModule } from './modules/cashBufferModule'
 import { createCharitableModule } from './modules/charitableModule'
 import { createConversionModule } from './modules/conversionModule'
 import { createEventModule } from './modules/eventModule'
-import { createFundingModule } from './modules/fundingModule'
 import { createHealthcareModule } from './modules/healthcareModule'
 import { createPensionModule } from './modules/pensionModule'
 import { createRmdModule } from './modules/rmdModule'
@@ -31,7 +30,6 @@ export const createSimulationModules = (
     createConversionModule(snapshot),
     createRmdModule(snapshot),
     createTaxModule(snapshot),
-    createFundingModule(snapshot),
     createReturnModule(snapshot, settings),
   ]
 }

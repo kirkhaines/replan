@@ -109,7 +109,7 @@ const HelpPage = () => (
           </li>
           <li>
             Cash buffer: refills cash from investments when low or invests excess cash when high
-            to keep cash within the target range.
+            to keep cash within the target range, covering deficits when spending exceeds cash.
           </li>
           <li>
             Rebalancing: trades holdings to return to target allocations after drift (for example,
@@ -125,10 +125,6 @@ const HelpPage = () => (
           <li>
             Taxes: federal and state tax calculations based on ordinary income, capital gains,
             and deductions, including bracket thresholds and credits.
-          </li>
-          <li>
-            Funding: withdrawals to cover cash deficits when spending exceeds income (for
-            example, drawing from a taxable account after expenses post).
           </li>
           <li>
             Market returns: investment and cash account growth from modeled returns (for example,

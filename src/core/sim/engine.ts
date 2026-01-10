@@ -828,6 +828,10 @@ const buildModuleExplain = ({
         toMetric('Target months', targetMonths),
         toMetric('Min months', minMonths),
         toMetric('Max months', maxMonths),
+        toMetric('Order', withdrawal.order.join(', ')),
+        toMetric('Avoid penalty', withdrawal.avoidEarlyPenalty),
+        toMetric('Allow penalty', early.allowPenalty),
+        toMetric('Age', context.age),
       )
       checkpoints.push(
         toMetric('Target', target),
@@ -1018,24 +1022,6 @@ const buildModuleExplain = ({
       } else {
         checkpoints.push(toMetric('Taxes applied', false))
       }
-      break
-    }
-    case 'funding-core': {
-      const withdrawal = scenario.strategies.withdrawal
-      const early = scenario.strategies.earlyRetirement
-      const cashBalance = sumCash(state)
-      const deficit = cashBalance < 0 ? Math.abs(cashBalance) : 0
-      inputs.push(
-        toMetric('Order', withdrawal.order.join(', ')),
-        toMetric('Avoid penalty', withdrawal.avoidEarlyPenalty),
-        toMetric('Allow penalty', early.allowPenalty),
-        toMetric('Age', context.age),
-      )
-      checkpoints.push(
-        toMetric('Cash balance', cashBalance),
-        toMetric('Cash deficit', deficit),
-        toMetric('Withdraw intents', actions.length),
-      )
       break
     }
     case 'returns-core': {

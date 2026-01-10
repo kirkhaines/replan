@@ -62,8 +62,7 @@
       "cashBuffer": {
         "targetMonths": 12,
         "minMonths": 6,
-        "maxMonths": 24,
-        "refillPriority": "taxable_first"
+        "maxMonths": 24
       },
       "withdrawal": {
         "order": [
@@ -668,7 +667,7 @@
       "isCharitable": false,
       "isWork": false,
       "targetInvestmentAccountHoldingId": null,
-      "inflationType": "housing",
+      "inflationType": "none",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
     }

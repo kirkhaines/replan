@@ -62,8 +62,7 @@
       "cashBuffer": {
         "targetMonths": 12,
         "minMonths": 6,
-        "maxMonths": 24,
-        "refillPriority": "taxable_first"
+        "maxMonths": 24
       },
       "withdrawal": {
         "order": [

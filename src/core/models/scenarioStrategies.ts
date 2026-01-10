@@ -45,7 +45,6 @@ export const cashBufferStrategySchema = z.object({
   targetMonths: z.number().min(0),
   minMonths: z.number().min(0),
   maxMonths: z.number().min(0),
-  refillPriority: z.enum(['pro_rata', 'taxable_first', 'tax_deferred_first']),
 })
 
 export const withdrawalStrategySchema = z.object({
@@ -191,7 +190,6 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     targetMonths: 12,
     minMonths: 6,
     maxMonths: 24,
-    refillPriority: 'taxable_first',
   },
   withdrawal: {
     order: ['taxable', 'traditional', 'roth', 'hsa'],

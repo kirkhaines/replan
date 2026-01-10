@@ -4,7 +4,7 @@
     "createdAt": 1700000000000,
     "updatedAt": 1700000000000,
     "name": "Demo Cash Buffer",
-    "description": "Demonstrates cash buffer refills when cash is low. Run a simulation and check the first year for buffer refills and funding actions.",
+    "description": "Demonstrates cash buffer refills when cash is low. Run a simulation and check the first year for buffer refills and withdrawals.",
     "personStrategyIds": [
       "39f29077-a960-4e45-a1c4-dce3e2193cb2"
     ],
@@ -62,8 +62,7 @@
       "cashBuffer": {
         "targetMonths": 12,
         "minMonths": 6,
-        "maxMonths": 18,
-        "refillPriority": "taxable_first"
+        "maxMonths": 18
       },
       "withdrawal": {
         "order": [

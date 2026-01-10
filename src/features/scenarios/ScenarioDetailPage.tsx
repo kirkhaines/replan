@@ -1735,14 +1735,6 @@ const ScenarioDetailPage = () => {
                   })}
                 />
               </label>
-              <label className="field">
-                <span>Refill priority</span>
-                <select {...register('scenario.strategies.cashBuffer.refillPriority')}>
-                  <option value="taxable_first">Taxable first</option>
-                  <option value="tax_deferred_first">Tax deferred first</option>
-                  <option value="pro_rata">Pro rata</option>
-                </select>
-              </label>
             </div>
           </div>
 
