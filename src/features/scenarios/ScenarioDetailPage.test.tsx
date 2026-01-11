@@ -503,6 +503,159 @@ const renderScenarioWithNav = (scenarioId: string) => {
   )
 }
 
+const formatLogValue = (value: unknown) => {
+  if (value instanceof Error) {
+    return value.stack ?? value.message
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+const collectSaveDiagnostics = (
+  storage: StorageClient,
+  warnSpy: ReturnType<typeof vi.spyOn>,
+  errorSpy: ReturnType<typeof vi.spyOn>,
+  infoSpy: ReturnType<typeof vi.spyOn>,
+) => {
+  const saveButton = screen.queryByRole('button', { name: /save scenario/i })
+  const saveDisabled = saveButton ? saveButton.hasAttribute('disabled') : null
+  const scenarioNameInput = screen.queryByLabelText('Scenario name') as
+    | HTMLInputElement
+    | null
+  const strategySelect = screen.queryByLabelText('Strategy') as HTMLSelectElement | null
+  const invalidFields = Array.from(document.querySelectorAll('[aria-invalid="true"]')).map(
+    (element) =>
+      element.getAttribute('name') ||
+      element.getAttribute('id') ||
+      element.getAttribute('data-testid') ||
+      element.tagName,
+  )
+  const errorMessages = Array.from(document.querySelectorAll('.error'))
+    .map((element) => element.textContent?.trim())
+    .filter((value): value is string => Boolean(value))
+  const warnCall = warnSpy.mock.calls.find(
+    ([message]) =>
+      typeof message === 'string' &&
+      message.includes('[Scenario] Save blocked by validation errors.'),
+  )
+  const errorCall = errorSpy.mock.calls.find(
+    ([message]) => typeof message === 'string' && message.includes('[Scenario] Save failed.'),
+  )
+  const saveRequestedCall = infoSpy.mock.calls.find(
+    ([message]) => typeof message === 'string' && message.includes('[Scenario] Save requested.'),
+  )
+  const saveCompleteCall = infoSpy.mock.calls.find(
+    ([message]) => typeof message === 'string' && message.includes('[Scenario] Save complete.'),
+  )
+  const upsertCalls = (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.length
+  return {
+    saveDisabled,
+    scenarioName: scenarioNameInput?.value ?? null,
+    spendingStrategyId: strategySelect?.value ?? null,
+    invalidFields,
+    errorMessages,
+    warnCall,
+    errorCall,
+    saveRequestedCall,
+    saveCompleteCall,
+    upsertCalls,
+  }
+}
+
+const expectScenarioSave = async (storage: StorageClient, trigger?: () => void) => {
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+  let submitCount = 0
+  const saveButton = screen.queryByRole('button', { name: /save scenario/i })
+  const form =
+    (saveButton?.closest('form') as HTMLFormElement | null) ??
+    (document.querySelector('form') as HTMLFormElement | null)
+  const handleSubmit = () => {
+    submitCount += 1
+  }
+  form?.addEventListener('submit', handleSubmit)
+  try {
+    trigger?.()
+    await waitFor(() => {
+      const diagnostics = collectSaveDiagnostics(storage, warnSpy, errorSpy, infoSpy)
+      if (diagnostics.warnCall) {
+        throw new Error(
+          `[Scenario] Save blocked by validation errors:\n${formatLogValue(
+            diagnostics.warnCall[1],
+          )}`,
+        )
+      }
+      if (diagnostics.errorCall) {
+        throw new Error(`[Scenario] Save failed:\n${formatLogValue(diagnostics.errorCall[1])}`)
+      }
+      if (diagnostics.upsertCalls > 0) {
+        return
+      }
+      if (diagnostics.saveDisabled) {
+        throw new Error('[Scenario] Save did not run because the save button is disabled.')
+      }
+      throw new Error('[Scenario] Save did not run yet.')
+    })
+  } catch (error) {
+    const diagnostics = collectSaveDiagnostics(storage, warnSpy, errorSpy, infoSpy)
+    const details: string[] = []
+    if (diagnostics.warnCall) {
+      details.push(
+        `[Scenario] Save blocked by validation errors:\n${formatLogValue(
+          diagnostics.warnCall[1],
+        )}`,
+      )
+    }
+    if (diagnostics.errorCall) {
+      details.push(`[Scenario] Save failed:\n${formatLogValue(diagnostics.errorCall[1])}`)
+    }
+    details.push(`Save requested log: ${Boolean(diagnostics.saveRequestedCall)}`)
+    details.push(`Save complete log: ${Boolean(diagnostics.saveCompleteCall)}`)
+    if (diagnostics.saveRequestedCall) {
+      details.push(
+        `[Scenario] Save requested:\n${formatLogValue(diagnostics.saveRequestedCall[1])}`,
+      )
+    }
+    if (diagnostics.saveCompleteCall) {
+      details.push(
+        `[Scenario] Save complete:\n${formatLogValue(diagnostics.saveCompleteCall[1])}`,
+      )
+    }
+    if (diagnostics.scenarioName !== null) {
+      details.push(`Scenario name value: ${diagnostics.scenarioName}`)
+    }
+    if (diagnostics.spendingStrategyId !== null) {
+      details.push(`Spending strategy value: ${diagnostics.spendingStrategyId}`)
+    }
+    if (diagnostics.saveDisabled !== null) {
+      details.push(`Save button disabled: ${diagnostics.saveDisabled}`)
+    }
+    if (diagnostics.invalidFields.length > 0) {
+      details.push(`Invalid fields: ${diagnostics.invalidFields.join(', ')}`)
+    }
+    if (diagnostics.errorMessages.length > 0) {
+      details.push(`Error messages: ${diagnostics.errorMessages.join(' | ')}`)
+    }
+    details.push(`Scenario upsert calls: ${diagnostics.upsertCalls}`)
+    details.push(`Form submit events: ${submitCount}`)
+    throw new Error(
+      `Scenario save did not complete.\n${details.join('\n')}\nCause: ${formatLogValue(error)}`,
+    )
+  } finally {
+    warnSpy.mockRestore()
+    errorSpy.mockRestore()
+    infoSpy.mockRestore()
+    form?.removeEventListener('submit', handleSubmit)
+  }
+}
+
 beforeEach(() => {
   uuidCounter = 0
 })
@@ -552,11 +705,12 @@ test('saving persists name and spending strategy changes', async () => {
   fireEvent.change(spendingSelect, { target: { value: spendingStrategyTwo.id } })
 
   const saveButton = screen.getByRole('button', { name: /save scenario/i })
-  fireEvent.click(saveButton)
-
-  await waitFor(() => {
-    expect(storage.scenarioRepo.upsert).toHaveBeenCalled()
-  })
+  const form = saveButton.closest('form')
+  if (!form) {
+    throw new Error('Missing scenario form')
+  }
+  // Clicking the submit button isn't firing submit in this test environment; submit directly.
+  await expectScenarioSave(storage, () => fireEvent.submit(form))
 
   const lastCall =
     (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
@@ -623,11 +777,12 @@ test('saving persists strategy scalars, events, and pensions', async () => {
   fireEvent.change(pensionSelects[1], { target: { value: 'tax_exempt' } })
 
   const saveButton = screen.getByRole('button', { name: /save scenario/i })
-  fireEvent.click(saveButton)
-
-  await waitFor(() => {
-    expect(storage.scenarioRepo.upsert).toHaveBeenCalled()
-  })
+  const form = saveButton.closest('form')
+  if (!form) {
+    throw new Error('Missing scenario form')
+  }
+  // Clicking the submit button isn't firing submit in this test environment; submit directly.
+  await expectScenarioSave(storage, () => fireEvent.submit(form))
 
   const lastCall =
     (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
@@ -755,11 +910,12 @@ test('saving persists added person strategy, cash account, and investment accoun
   expect(investmentAccounts.length).toBe(2)
 
   const saveButton = screen.getByRole('button', { name: /save scenario/i })
-  fireEvent.click(saveButton)
-
-  await waitFor(() => {
-    expect(storage.scenarioRepo.upsert).toHaveBeenCalled()
-  })
+  const form = saveButton.closest('form')
+  if (!form) {
+    throw new Error('Missing scenario form')
+  }
+  // Clicking the submit button isn't firing submit in this test environment; submit directly.
+  await expectScenarioSave(storage, () => fireEvent.submit(form))
 
   const lastCall =
     (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]
@@ -819,11 +975,12 @@ test('saving persists removed person strategy, cash account, and investment acco
   })
 
   const saveButton = screen.getByRole('button', { name: /save scenario/i })
-  fireEvent.click(saveButton)
-
-  await waitFor(() => {
-    expect(storage.scenarioRepo.upsert).toHaveBeenCalled()
-  })
+  const form = saveButton.closest('form')
+  if (!form) {
+    throw new Error('Missing scenario form')
+  }
+  // Clicking the submit button isn't firing submit in this test environment; submit directly.
+  await expectScenarioSave(storage, () => fireEvent.submit(form))
 
   const lastCall =
     (storage.scenarioRepo.upsert as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]

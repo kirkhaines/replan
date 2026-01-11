@@ -122,14 +122,6 @@ const sumMarketTotals = (marketReturns: MarketReturn[]) => {
   return totals
 }
 
-const toIsoDateFromTimestamp = (value: number) => {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return new Date().toISOString().slice(0, 10)
-  }
-  return date.toISOString().slice(0, 10)
-}
-
 const sumContributionBasisEntries = (
   entries: SimulationState['holdings'][number]['contributionBasisEntries'],
 ) => entries.reduce((sum, entry) => sum + entry.amount, 0)
@@ -270,21 +262,7 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     taxType: holding.taxType,
     holdingType: holding.holdingType,
     balance: holding.balance,
-    contributionBasisEntries:
-      holding.contributionBasisEntries?.length > 0
-        ? holding.contributionBasisEntries.map((entry) => ({ ...entry }))
-        : (() => {
-            const legacy = holding as typeof holding & { contributionBasis?: number }
-            if (legacy.contributionBasis && legacy.contributionBasis > 0) {
-              return [
-                {
-                  date: toIsoDateFromTimestamp(holding.createdAt),
-                  amount: legacy.contributionBasis,
-                },
-              ]
-            }
-            return []
-          })(),
+    contributionBasisEntries: holding.contributionBasisEntries.map((entry) => ({ ...entry })),
     returnRate: holding.returnRate,
     returnStdDev: holding.returnStdDev,
   }))

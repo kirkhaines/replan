@@ -79,24 +79,7 @@ const InvestmentAccountDetailPage = () => {
     if (data) {
       reset(data)
       const items = await storage.investmentAccountHoldingRepo.listForAccount(data.id)
-      const normalized = items.map((item) => {
-        const legacy = item as InvestmentAccountHolding & { contributionBasis?: number }
-        const nowIso = new Date(item.createdAt ?? Date.now()).toISOString().slice(0, 10)
-        return {
-          ...item,
-          contributionBasisEntries:
-            item.contributionBasisEntries?.length > 0
-              ? item.contributionBasisEntries
-              : legacy.contributionBasis && legacy.contributionBasis > 0
-                ? [{ date: nowIso, amount: legacy.contributionBasis }]
-                : [],
-          returnRate:
-            item.returnRate ?? (item as InvestmentAccountHolding & { return?: number }).return ?? 0,
-          returnStdDev:
-            item.returnStdDev ?? (item as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
-        }
-      })
-      setHoldings(normalized)
+      setHoldings(items)
     }
     setIsLoading(false)
   }, [id, reset, storage])

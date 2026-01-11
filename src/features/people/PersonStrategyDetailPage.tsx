@@ -28,12 +28,6 @@ const addMonthsToIsoDate = (isoDate: string, months: number) => {
   return toIsoDate(date)
 }
 
-const addYearsToIsoDate = (isoDate: string, years: number) => {
-  const date = new Date(isoDate)
-  date.setFullYear(date.getFullYear() + years)
-  return toIsoDate(date)
-}
-
 const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
   const birth = new Date(dateOfBirth)
   const target = new Date(dateValue)
@@ -105,37 +99,15 @@ const PersonStrategyDetailPage = () => {
     [storage],
   )
 
-  const normalizeSocialStrategy = useCallback(
-    (strategy: SocialSecurityStrategy, person: Person) => {
-      const legacy = strategy as SocialSecurityStrategy & { startAge?: number }
-      if (strategy.startDate) {
-        return strategy
-      }
-      const startAge = legacy.startAge ?? 67
-      return {
-        ...strategy,
-        startDate: addYearsToIsoDate(person.dateOfBirth, startAge),
-      }
-    },
-    [],
-  )
-
-  const refreshStrategies = useCallback(
-    async (peopleList: Person[] = people) => {
-      const [socialList, futureList] = await Promise.all([
-        storage.socialSecurityStrategyRepo.list(),
-        storage.futureWorkStrategyRepo.list(),
-      ])
-      const normalizedSocialList = socialList.map((strategy) => {
-        const person = peopleList.find((entry) => entry.id === strategy.personId)
-        return person ? normalizeSocialStrategy(strategy, person) : strategy
-      })
-      setSocialStrategies(normalizedSocialList)
-      setFutureWorkStrategies(futureList)
-      return { socialList: normalizedSocialList, futureList }
-    },
-    [normalizeSocialStrategy, people, storage],
-  )
+  const refreshStrategies = useCallback(async () => {
+    const [socialList, futureList] = await Promise.all([
+      storage.socialSecurityStrategyRepo.list(),
+      storage.futureWorkStrategyRepo.list(),
+    ])
+    setSocialStrategies(socialList)
+    setFutureWorkStrategies(futureList)
+    return { socialList, futureList }
+  }, [storage])
 
   const loadData = useCallback(async () => {
     if (!id) {
@@ -171,11 +143,7 @@ const PersonStrategyDetailPage = () => {
     setSsaWageIndex(wageIndex)
     setSsaBendPoints(bendPoints)
     setRetirementAdjustments(adjustmentList)
-    const normalizedSocialList = socialList.map((item) => {
-      const person = peopleList.find((entry) => entry.id === item.personId)
-      return person ? normalizeSocialStrategy(item, person) : item
-    })
-    setSocialStrategies(normalizedSocialList)
+    setSocialStrategies(socialList)
     setFutureWorkStrategies(futureList)
 
     if (!strategy) {
@@ -197,10 +165,7 @@ const PersonStrategyDetailPage = () => {
     setSelectedFutureWorkId(resolvedStrategy.futureWorkStrategyId)
 
     const social =
-      normalizedSocialList.find(
-        (item) => item.id === resolvedStrategy.socialSecurityStrategyId,
-      ) ??
-      null
+      socialList.find((item) => item.id === resolvedStrategy.socialSecurityStrategyId) ?? null
     const future =
       futureList.find((item) => item.id === resolvedStrategy.futureWorkStrategyId) ??
       null
@@ -230,7 +195,7 @@ const PersonStrategyDetailPage = () => {
     setSsaEarnings(earnings)
     setSpendingLineItems(lineItems)
     setIsLoading(false)
-  }, [id, loadPeriods, normalizeSocialStrategy, scenarioIdFromState, storage])
+  }, [id, loadPeriods, scenarioIdFromState, storage])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -309,7 +274,7 @@ const PersonStrategyDetailPage = () => {
     const strategy: SocialSecurityStrategy = {
       id: createUuid(),
       personId: selectedPersonId,
-      startDate: addYearsToIsoDate(selectedPerson.dateOfBirth, 67),
+      startDate: getStartDateFromAge(selectedPerson.dateOfBirth, 67),
       createdAt: now,
       updatedAt: now,
     }
@@ -350,10 +315,7 @@ const PersonStrategyDetailPage = () => {
       return
     }
     const now = Date.now()
-    const { startAge: _startAge, ...rest } = socialDraft as SocialSecurityStrategy & {
-      startAge?: number
-    }
-    const next = { ...rest, updatedAt: now }
+    const next = { ...socialDraft, updatedAt: now }
     await storage.socialSecurityStrategyRepo.upsert(next)
     setSocialDraft(next)
     await refreshStrategies()

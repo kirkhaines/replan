@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import type { SocialSecurityStrategy, Person } from '../../core/models'
+import type { Person } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { buildSsaEstimate } from '../../core/sim/ssa'
@@ -9,27 +9,6 @@ const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 
 const formatNumber = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 2 })
-
-const addYearsToIsoDate = (isoDate: string, years: number) => {
-  const date = new Date(isoDate)
-  date.setFullYear(date.getFullYear() + years)
-  return date.toISOString().slice(0, 10)
-}
-
-const normalizeSocialStrategy = (
-  strategy: SocialSecurityStrategy,
-  person: Person,
-): SocialSecurityStrategy => {
-  const legacy = strategy as SocialSecurityStrategy & { startAge?: number }
-  if (strategy.startDate) {
-    return strategy
-  }
-  const startAge = legacy.startAge ?? 67
-  return {
-    ...strategy,
-    startDate: addYearsToIsoDate(person.dateOfBirth, startAge),
-  }
-}
 
 const SsaBenefitDetailsPage = () => {
   const { id } = useParams<{ id: string }>()
@@ -81,10 +60,9 @@ const SsaBenefitDetailsPage = () => {
           storage.ssaRetirementAdjustmentRepo.list(),
         ])
 
-      const normalizedSocial = normalizeSocialStrategy(socialStrategyRecord, personRecord)
       const estimateResult = buildSsaEstimate({
         person: personRecord,
-        socialStrategy: normalizedSocial,
+        socialStrategy: socialStrategyRecord,
         scenario,
         earnings,
         futureWorkPeriods,

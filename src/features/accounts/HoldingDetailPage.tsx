@@ -99,25 +99,7 @@ const HoldingDetailPage = () => {
             updatedAt: timestamp,
           }))
     setHoldingDefaults(normalizedDefaults)
-    const legacy = data as InvestmentAccountHolding & { return?: number; risk?: number }
-    const normalized = data
-      ? {
-          ...data,
-          contributionBasisEntries:
-            data.contributionBasisEntries?.length > 0
-              ? data.contributionBasisEntries
-              : legacy.contributionBasis && legacy.contributionBasis > 0
-                ? [
-                    {
-                      date: new Date(data.createdAt ?? Date.now()).toISOString().slice(0, 10),
-                      amount: legacy.contributionBasis,
-                    },
-                  ]
-                : [],
-          returnRate: data.returnRate ?? legacy.return ?? 0,
-          returnStdDev: data.returnStdDev ?? legacy.risk ?? 0,
-        }
-      : null
+    const normalized = data ?? null
     setHolding(normalized)
     if (normalized) {
       reset(normalized)

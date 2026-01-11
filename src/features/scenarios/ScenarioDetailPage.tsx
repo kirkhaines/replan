@@ -60,21 +60,6 @@ const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
   return Math.max(0, Math.round((months / 12) * 10) / 10)
 }
 
-const normalizeSocialSecurityStrategy = (
-  strategy: SocialSecurityStrategy,
-  person: Person,
-): SocialSecurityStrategy => {
-  const legacy = strategy as SocialSecurityStrategy & { startAge?: number }
-  if (strategy.startDate) {
-    return strategy
-  }
-  const startAge = legacy.startAge ?? 67
-  return {
-    ...strategy,
-    startDate: addYearsToIsoDate(person.dateOfBirth, startAge),
-  }
-}
-
 type ScenarioEditorValues = {
   scenario: Scenario
 }
@@ -103,16 +88,10 @@ const toIsoDateString = (value?: string | null) => {
 const buildSimulationSnapshot = async (
   scenario: Scenario,
   storage: StorageClient,
-  normalizeSocial: (strategy: SocialSecurityStrategy, person: Person) => SocialSecurityStrategy,
 ): Promise<SimulationSnapshot> => {
-  const legacyInflation = (
-    scenario as Scenario & {
-      inflationAssumptions?: Scenario['strategies']['returnModel']['inflationAssumptions']
-    }
-  ).inflationAssumptions
   const inflationAssumptions = buildInflationMap(
     inflationDefaultsSeed,
-    scenario.strategies?.returnModel?.inflationAssumptions ?? legacyInflation,
+    scenario.strategies.returnModel.inflationAssumptions,
   )
   const normalizedScenario = {
     ...scenario,
@@ -142,10 +121,6 @@ const buildSimulationSnapshot = async (
     )
   )
     .filter(isDefined)
-    .map((strategy) => {
-      const person = people.find((entry) => entry.id === strategy.personId)
-      return person ? normalizeSocial(strategy, person) : strategy
-    })
 
   const futureWorkStrategies = (
     await Promise.all(
@@ -262,27 +237,7 @@ const normalizeFutureWorkPeriod = (base: FutureWorkPeriod): FutureWorkPeriod => 
   }
 }
 
-const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountHolding => {
-  const legacy = holding as InvestmentAccountHolding & { contributionBasis?: number }
-  return {
-    ...holding,
-    contributionBasisEntries:
-      holding.contributionBasisEntries?.length > 0
-        ? holding.contributionBasisEntries
-        : legacy.contributionBasis && legacy.contributionBasis > 0
-          ? [
-              {
-                date: new Date(holding.createdAt ?? Date.now()).toISOString().slice(0, 10),
-                amount: legacy.contributionBasis,
-              },
-            ]
-          : [],
-    returnRate:
-      holding.returnRate ?? (holding as InvestmentAccountHolding & { return?: number }).return ?? 0,
-    returnStdDev:
-      holding.returnStdDev ?? (holding as InvestmentAccountHolding & { risk?: number }).risk ?? 0,
-  }
-}
+const normalizeHolding = (holding: InvestmentAccountHolding): InvestmentAccountHolding => holding
 
 
 const buildInflationMap = (
@@ -563,11 +518,7 @@ const ScenarioDetailPage = () => {
     ])
     setPeople(peopleData)
     setPersonStrategies(personStrategyData)
-    const normalizedSocial = socialSecurityData.map((strategy) => {
-      const person = peopleData.find((entry) => entry.id === strategy.personId)
-      return person ? normalizeSocialSecurityStrategy(strategy, person) : strategy
-    })
-    setSocialSecurityStrategies(normalizedSocial)
+    setSocialSecurityStrategies(socialSecurityData)
     setFutureWorkStrategies(futureWorkData)
     setSpendingStrategies(spendingStrategyData)
     setCashAccounts(cashData)
@@ -712,14 +663,9 @@ const ScenarioDetailPage = () => {
       return
     }
 
-    const legacyInflation = (
-      data as Scenario & {
-        inflationAssumptions?: Scenario['strategies']['returnModel']['inflationAssumptions']
-      }
-    ).inflationAssumptions
     const inflationAssumptions = buildInflationMap(
       inflationDefaultsRef.current,
-      data.strategies?.returnModel?.inflationAssumptions ?? legacyInflation,
+      data.strategies.returnModel.inflationAssumptions,
     )
     const normalizedScenario = {
       ...data,
@@ -1080,11 +1026,7 @@ const ScenarioDetailPage = () => {
 
   const onRun = async (values: ScenarioEditorValues) => {
     const saved = await persistBundle(values, storage, setScenario, reset)
-    const snapshot = await buildSimulationSnapshot(
-      saved.scenario,
-      storage,
-      normalizeSocialSecurityStrategy,
-    )
+    const snapshot = await buildSimulationSnapshot(saved.scenario, storage)
     const input: SimulationRequest = {
       snapshot,
       // Default to today's date until scenarios have a configurable start date.
