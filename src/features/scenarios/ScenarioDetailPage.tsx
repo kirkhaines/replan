@@ -48,6 +48,99 @@ const addYearsToIsoDate = (isoDate: string, years: number) => {
   return date.toISOString().slice(0, 10)
 }
 
+type SpendingIntervalRow = {
+  startMs: number | null
+  endMs: number | null
+  startLabel: string
+  endLabel: string
+  needTotal: number
+  wantTotal: number
+}
+
+const buildSpendingIntervals = (items: SpendingLineItem[]): SpendingIntervalRow[] => {
+  if (items.length === 0) {
+    return []
+  }
+
+  const dayMs = 24 * 60 * 60 * 1000
+  const parseDate = (value?: string | null) => {
+    if (!value) {
+      return null
+    }
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date.getTime()
+  }
+
+  const boundaries = new Set<number>()
+  items.forEach((item) => {
+    const start = parseDate(item.startDate)
+    const end = parseDate(item.endDate)
+    if (start !== null) {
+      boundaries.add(start)
+    }
+    if (end !== null) {
+      boundaries.add(end)
+    }
+  })
+
+  const sorted = Array.from(boundaries).sort((a, b) => a - b)
+  const intervals: Array<{ start: number | null; end: number | null }> = []
+  let cursor: number | null = null
+  sorted.forEach((point) => {
+    intervals.push({ start: cursor, end: point })
+    cursor = point
+  })
+  intervals.push({ start: cursor, end: null })
+
+  return intervals
+    .map((interval) => {
+      const sample =
+        interval.start !== null
+          ? interval.start
+          : interval.end !== null
+            ? interval.end - dayMs
+            : null
+      const effectiveItems =
+        sample === null
+          ? items
+          : items.filter((item) => {
+              const start = parseDate(item.startDate)
+              const end = parseDate(item.endDate)
+              const startsBefore = start === null || sample >= start
+              const endsAfter = end === null || sample < end
+              return startsBefore && endsAfter
+            })
+
+      if (effectiveItems.length === 0) {
+        return null
+      }
+
+      const needTotal = effectiveItems.reduce((sum, item) => sum + item.needAmount, 0)
+      const wantTotal = effectiveItems.reduce((sum, item) => sum + item.wantAmount, 0)
+
+      const formatDate = (value: number | null, offsetDays = 0) => {
+        if (value === null) {
+          return 'Open'
+        }
+        const date = new Date(value + offsetDays * dayMs)
+        return date.toISOString().slice(0, 10)
+      }
+
+      const startLabel = interval.start !== null ? formatDate(interval.start) : 'Open'
+      const endLabel = interval.end !== null ? formatDate(interval.end, -1) : 'Open'
+
+      return {
+        startMs: interval.start,
+        endMs: interval.end,
+        startLabel,
+        endLabel,
+        needTotal,
+        wantTotal,
+      }
+    })
+    .filter((row): row is SpendingIntervalRow => Boolean(row))
+}
+
 const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
   const birth = new Date(dateOfBirth)
   const target = new Date(dateValue)
@@ -377,87 +470,10 @@ const ScenarioDetailPage = () => {
     name: 'scenario.strategies.pensions',
   })
 
-  const spendingSummaryRows = useMemo(() => {
-    if (spendingLineItems.length === 0) {
-      return []
-    }
-
-    const dayMs = 24 * 60 * 60 * 1000
-    const parseDate = (value?: string | null) => {
-      if (!value) {
-        return null
-      }
-      const date = new Date(value)
-      return Number.isNaN(date.getTime()) ? null : date.getTime()
-    }
-
-    const boundaries = new Set<number>()
-    spendingLineItems.forEach((item) => {
-      const start = parseDate(item.startDate)
-      const end = parseDate(item.endDate)
-      if (start !== null) {
-        boundaries.add(start)
-      }
-      if (end !== null) {
-        boundaries.add(end)
-      }
-    })
-
-    const sorted = Array.from(boundaries).sort((a, b) => a - b)
-    const intervals: Array<{ start: number | null; end: number | null }> = []
-    let cursor: number | null = null
-    sorted.forEach((point) => {
-      intervals.push({ start: cursor, end: point })
-      cursor = point
-    })
-    intervals.push({ start: cursor, end: null })
-
-    return intervals
-      .map((interval) => {
-        const sample =
-          interval.start !== null
-            ? interval.start
-            : interval.end !== null
-              ? interval.end - dayMs
-              : null
-        const effectiveItems =
-          sample === null
-            ? spendingLineItems
-            : spendingLineItems.filter((item) => {
-                const start = parseDate(item.startDate)
-                const end = parseDate(item.endDate)
-                const startsBefore = start === null || sample >= start
-                const endsAfter = end === null || sample < end
-                return startsBefore && endsAfter
-              })
-
-        if (effectiveItems.length === 0) {
-          return null
-        }
-
-        const needTotal = effectiveItems.reduce((sum, item) => sum + item.needAmount, 0)
-        const wantTotal = effectiveItems.reduce((sum, item) => sum + item.wantAmount, 0)
-
-        const formatDate = (value: number | null, offsetDays = 0) => {
-          if (value === null) {
-            return 'Open'
-          }
-          const date = new Date(value + offsetDays * dayMs)
-          return date.toISOString().slice(0, 10)
-        }
-
-        const startLabel = interval.start !== null ? formatDate(interval.start) : 'Open'
-        const endLabel = interval.end !== null ? formatDate(interval.end, -1) : 'Open'
-
-        return {
-          startLabel,
-          endLabel,
-          needTotal,
-          wantTotal,
-        }
-      })
-      .filter((row): row is NonNullable<typeof row> => Boolean(row))
-  }, [spendingLineItems])
+  const spendingSummaryRows = useMemo(
+    () => buildSpendingIntervals(spendingLineItems),
+    [spendingLineItems],
+  )
 
   const peopleById = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
@@ -476,6 +492,64 @@ const ScenarioDetailPage = () => {
     const ids = new Set(scenario?.personStrategyIds ?? [])
     return personStrategies.filter((strategy) => ids.has(strategy.id))
   }, [personStrategies, scenario?.personStrategyIds])
+
+  const ladderSpendingRows = useMemo(() => {
+    if (!scenario || spendingSummaryRows.length === 0) {
+      return []
+    }
+    if (ladderStartAge <= 0 && ladderEndAge <= 0) {
+      return []
+    }
+    const primaryStrategy = scenarioPersonStrategies[0]
+    const primaryPerson = primaryStrategy
+      ? peopleById.get(primaryStrategy.personId)
+      : undefined
+    if (!primaryPerson) {
+      return []
+    }
+    const startMs =
+      ladderStartAge > 0
+        ? new Date(addYearsToIsoDate(primaryPerson.dateOfBirth, ladderStartAge)).getTime()
+        : null
+    const endMs =
+      ladderEndAge > 0
+        ? new Date(addYearsToIsoDate(primaryPerson.dateOfBirth, ladderEndAge)).getTime()
+        : null
+    const rangeStart = startMs ?? Number.NEGATIVE_INFINITY
+    const rangeEnd = endMs ?? Number.POSITIVE_INFINITY
+    const dayMs = 24 * 60 * 60 * 1000
+    const formatAgeLabel = (timestamp: number | null, offsetDays = 0) => {
+      if (timestamp === null) {
+        return 'Open'
+      }
+      const date = new Date(timestamp + offsetDays * dayMs).toISOString().slice(0, 10)
+      return getAgeInYearsAtDate(primaryPerson.dateOfBirth, date).toFixed(1)
+    }
+    return spendingSummaryRows
+      .filter((row) => {
+        const intervalStart = row.startMs ?? Number.NEGATIVE_INFINITY
+        const intervalEnd = row.endMs ?? Number.POSITIVE_INFINITY
+        return intervalStart < rangeEnd && intervalEnd > rangeStart
+      })
+      .map((row) => {
+        const annualNeed = row.needTotal * 12
+        const annualWant = row.wantTotal * 12
+        return {
+          startAgeLabel: formatAgeLabel(row.startMs),
+          endAgeLabel: formatAgeLabel(row.endMs, -1),
+          annualNeed,
+          annualWant,
+          annualTotal: annualNeed + annualWant,
+        }
+      })
+  }, [
+    ladderEndAge,
+    ladderStartAge,
+    peopleById,
+    scenario,
+    scenarioPersonStrategies,
+    spendingSummaryRows,
+  ])
 
   const scenarioCashAccounts = useMemo(() => {
     const ids = new Set(scenario?.nonInvestmentAccountIds ?? [])
@@ -1973,8 +2047,39 @@ const ScenarioDetailPage = () => {
                 <div className="muted">
                   Conversion window: {ladderConversionStart.toFixed(1)}–{ladderConversionEnd.toFixed(1)}
                 </div>
+                <div className="stack" style={{ gridColumn: '1 / -1' }}>
+                  <span className="muted">
+                    Spending totals (availability window)
+                  </span>
+                  {ladderSpendingRows.length === 0 ? (
+                    <p className="muted">No spending intervals in this availability range.</p>
+                  ) : (
+                    <table className="table compact">
+                      <thead>
+                        <tr>
+                          <th>Start age</th>
+                          <th>End age</th>
+                          <th>Need total (annual)</th>
+                          <th>Want total (annual)</th>
+                          <th>Total (annual)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ladderSpendingRows.map((row) => (
+                          <tr key={`${row.startAgeLabel}-${row.endAgeLabel}`}>
+                            <td>{row.startAgeLabel}</td>
+                            <td>{row.endAgeLabel}</td>
+                            <td>{formatCurrency(row.annualNeed)}</td>
+                            <td>{formatCurrency(row.annualWant)}</td>
+                            <td>{formatCurrency(row.annualTotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
                 <label className="field">
-                  <span>Target after-tax spending</span>
+                  <span>Target after-tax spending (annual)</span>
                   <input
                     type="number"
                     {...register('scenario.strategies.rothLadder.targetAfterTaxSpending', {
