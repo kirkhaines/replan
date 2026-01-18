@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
-  LineChart,
   AreaChart,
   Area,
   Line,
@@ -139,6 +138,44 @@ const RunResultsPage = () => {
     })
     return balances
   }, [run?.snapshot])
+
+  const balanceOverTime = useMemo(() => {
+    if (!run?.snapshot) {
+      return { data: [], seriesKeys: [] }
+    }
+    const holdingTaxType = new Map(
+      run.snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
+    )
+    const seriesKeys = ['cash', 'taxable', 'traditional', 'roth', 'hsa'] as const
+    const data = run.result.timeline.map((point) => {
+      const monthly = monthlyByYear.get(point.yearIndex)
+      const lastMonth = monthly && monthly.length > 0 ? monthly[monthly.length - 1] : null
+      const accounts = lastMonth
+        ? explanationsByMonth.get(lastMonth.monthIndex)?.accounts
+        : undefined
+      const totals: Record<(typeof seriesKeys)[number], number> = {
+        cash: 0,
+        taxable: 0,
+        traditional: 0,
+        roth: 0,
+        hsa: 0,
+      }
+      if (accounts) {
+        accounts.forEach((account) => {
+          if (account.kind === 'cash') {
+            totals.cash += account.balance
+            return
+          }
+          const taxType = holdingTaxType.get(account.id)
+          if (taxType) {
+            totals[taxType] += account.balance
+          }
+        })
+      }
+      return { ...point, ...totals }
+    })
+    return { data, seriesKeys }
+  }, [explanationsByMonth, monthlyByYear, run?.result.timeline, run?.snapshot])
 
   const ordinaryIncomeChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -358,7 +395,7 @@ const RunResultsPage = () => {
         <h2>Balance over time</h2>
         <div className="chart">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={run.result.timeline}>
+            <AreaChart data={balanceOverTime.data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="age" />
               <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
@@ -372,8 +409,48 @@ const RunResultsPage = () => {
                 }}
                 wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
               />
-              <Line type="monotone" dataKey="balance" stroke="var(--accent)" />
-            </LineChart>
+              <Legend />
+              <Area
+                type="monotone"
+                dataKey="cash"
+                stackId="balance"
+                name="Cash"
+                stroke="#22c55e"
+                fill="color-mix(in srgb, #22c55e 35%, transparent)"
+              />
+              <Area
+                type="monotone"
+                dataKey="taxable"
+                stackId="balance"
+                name="Taxable holdings"
+                stroke="#2563eb"
+                fill="color-mix(in srgb, #2563eb 35%, transparent)"
+              />
+              <Area
+                type="monotone"
+                dataKey="traditional"
+                stackId="balance"
+                name="Traditional holdings"
+                stroke="#f59e0b"
+                fill="color-mix(in srgb, #f59e0b 35%, transparent)"
+              />
+              <Area
+                type="monotone"
+                dataKey="roth"
+                stackId="balance"
+                name="Roth holdings"
+                stroke="#8b5cf6"
+                fill="color-mix(in srgb, #8b5cf6 35%, transparent)"
+              />
+              <Area
+                type="monotone"
+                dataKey="hsa"
+                stackId="balance"
+                name="HSA holdings"
+                stroke="#ec4899"
+                fill="color-mix(in srgb, #ec4899 35%, transparent)"
+              />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
