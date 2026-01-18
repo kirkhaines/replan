@@ -87,6 +87,7 @@ const RunResultsPage = () => {
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
   const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set())
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
+  const [showPresentDay, setShowPresentDay] = useState(false)
 
   const monthlyTimeline = run?.result.monthlyTimeline ?? []
   const explanations = run?.result.explanations ?? []
@@ -139,6 +140,28 @@ const RunResultsPage = () => {
     return balances
   }, [run?.snapshot])
 
+  const baseYear = new Date().getFullYear()
+  const cpiRate = run?.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+  const adjustForInflation = (value: number, dateIso?: string | null) => {
+    if (!showPresentDay || !dateIso || cpiRate === 0) {
+      return value
+    }
+    const year = new Date(dateIso).getFullYear()
+    if (Number.isNaN(year)) {
+      return value
+    }
+    const yearDelta = year - baseYear
+    if (yearDelta === 0) {
+      return value
+    }
+    return value / Math.pow(1 + cpiRate, yearDelta)
+  }
+
+  const formatCurrencyForDate = (value: number, dateIso?: string | null) =>
+    formatCurrency(adjustForInflation(value, dateIso))
+  const formatSignedCurrencyForDate = (value: number, dateIso?: string | null) =>
+    formatSignedCurrency(adjustForInflation(value, dateIso))
+
   const balanceOverTime = useMemo(() => {
     if (!run?.snapshot) {
       return { data: [], seriesKeys: [] }
@@ -163,19 +186,25 @@ const RunResultsPage = () => {
       if (accounts) {
         accounts.forEach((account) => {
           if (account.kind === 'cash') {
-            totals.cash += account.balance
+            totals.cash += adjustForInflation(account.balance, lastMonth?.date ?? point.date)
             return
           }
           const taxType = holdingTaxType.get(account.id)
           if (taxType) {
-            totals[taxType] += account.balance
+            totals[taxType] += adjustForInflation(account.balance, lastMonth?.date ?? point.date)
           }
         })
       }
       return { ...point, ...totals }
     })
     return { data, seriesKeys }
-  }, [explanationsByMonth, monthlyByYear, run?.result.timeline, run?.snapshot])
+  }, [
+    adjustForInflation,
+    explanationsByMonth,
+    monthlyByYear,
+    run?.result.timeline,
+    run?.snapshot,
+  ])
 
   const ordinaryIncomeChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -294,17 +323,18 @@ const RunResultsPage = () => {
           if (bracket.upTo === null) {
             return
           }
-          bracketValues[`bracket_${index}`] = bracket.upTo * inflationMultiplier
+          const absoluteValue = bracket.upTo * inflationMultiplier
+          bracketValues[`bracket_${index}`] = adjustForInflation(absoluteValue, point.date)
         })
       }
       return {
         age: point.age,
         yearIndex: point.yearIndex,
-        salaryIncome: totals.salary,
-        investmentIncome: totals.investment,
-        socialSecurityIncome: totals.socialSecurity,
-        pensionIncome: totals.pension,
-        taxDeferredIncome: totals.taxDeferred,
+        salaryIncome: adjustForInflation(totals.salary, point.date),
+        investmentIncome: adjustForInflation(totals.investment, point.date),
+        socialSecurityIncome: adjustForInflation(totals.socialSecurity, point.date),
+        pensionIncome: adjustForInflation(totals.pension, point.date),
+        taxDeferredIncome: adjustForInflation(totals.taxDeferred, point.date),
         ...bracketValues,
       } as OrdinaryIncomeChartEntry
     })
@@ -319,7 +349,7 @@ const RunResultsPage = () => {
     }, 0)
 
     return { data, bracketLines, maxValue }
-  }, [explanations, run?.finishedAt, run?.result.timeline, run?.snapshot])
+  }, [adjustForInflation, explanations, run?.finishedAt, run?.result.timeline, run?.snapshot])
 
   useEffect(() => {
     const load = async () => {
@@ -335,6 +365,27 @@ const RunResultsPage = () => {
     }
     void load()
   }, [id, storage])
+
+  const summary = useMemo(() => {
+    if (!run) {
+      return {
+        endingBalance: 0,
+        minBalance: 0,
+        maxBalance: 0,
+      }
+    }
+    if (!showPresentDay) {
+      return run.result.summary
+    }
+    const balances = run.result.timeline.map((point) =>
+      adjustForInflation(point.balance, point.date),
+    )
+    return {
+      endingBalance: balances.length > 0 ? balances[balances.length - 1] : 0,
+      minBalance: balances.length > 0 ? Math.min(...balances) : 0,
+      maxBalance: balances.length > 0 ? Math.max(...balances) : 0,
+    }
+  }, [adjustForInflation, run, showPresentDay])
 
   if (isLoading) {
     return <p className="muted">Loading run...</p>
@@ -390,6 +441,20 @@ const RunResultsPage = () => {
           <p className="error">{run.errorMessage ?? 'Simulation failed.'}</p>
         </div>
       ) : null}
+
+      <div className="card stack">
+        <div className="field">
+          <span>Display</span>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={showPresentDay}
+              onChange={(event) => setShowPresentDay(event.target.checked)}
+            />
+            Show values in present-day dollars
+          </label>
+        </div>
+      </div>
 
       <div className="card stack">
         <h2>Balance over time</h2>
@@ -548,15 +613,15 @@ const RunResultsPage = () => {
         <div className="summary">
           <div>
             <span className="muted">Ending balance</span>
-            <strong>{formatCurrency(run.result.summary.endingBalance)}</strong>
+            <strong>{formatCurrency(summary.endingBalance)}</strong>
           </div>
           <div>
             <span className="muted">Min balance</span>
-            <strong>{formatCurrency(run.result.summary.minBalance)}</strong>
+            <strong>{formatCurrency(summary.minBalance)}</strong>
           </div>
           <div>
             <span className="muted">Max balance</span>
-            <strong>{formatCurrency(run.result.summary.maxBalance)}</strong>
+            <strong>{formatCurrency(summary.maxBalance)}</strong>
           </div>
         </div>
       </div>
@@ -599,9 +664,9 @@ const RunResultsPage = () => {
                       {point.date ? addMonths(point.date, -11) ?? '-' : '-'}
                     </td>
                     <td>{point.age}</td>
-                    <td>{formatCurrency(point.balance)}</td>
-                    <td>{formatCurrency(point.contribution)}</td>
-                    <td>{formatCurrency(point.spending)}</td>
+                    <td>{formatCurrencyForDate(point.balance, point.date)}</td>
+                    <td>{formatCurrencyForDate(point.contribution, point.date)}</td>
+                    <td>{formatCurrencyForDate(point.spending, point.date)}</td>
                   </tr>
                   {isExpanded
                     ? monthRows.map((month) => {
@@ -633,9 +698,15 @@ const RunResultsPage = () => {
                                 {month.date}
                               </td>
                               <td className="muted">{month.age}</td>
-                              <td className="muted">{formatCurrency(month.totalBalance)}</td>
-                              <td className="muted">{formatCurrency(month.contributions)}</td>
-                              <td className="muted">{formatCurrency(month.spending)}</td>
+                              <td className="muted">
+                                {formatCurrencyForDate(month.totalBalance, month.date)}
+                              </td>
+                              <td className="muted">
+                                {formatCurrencyForDate(month.contributions, month.date)}
+                              </td>
+                              <td className="muted">
+                                {formatCurrencyForDate(month.spending, month.date)}
+                              </td>
                             </tr>
                             {monthExpanded ? (
                               <tr className="table-row-highlight">
@@ -704,33 +775,60 @@ const RunResultsPage = () => {
                                                           </span>{' '}
                                                           {moduleLabels[module.moduleId] ?? module.moduleId}
                                                         </td>
-                                                        <td>{formatSignedCurrency(module.totals.cashflows.cash)}</td>
                                                         <td>
-                                                          {formatSignedCurrency(
+                                                          {formatSignedCurrencyForDate(
+                                                            module.totals.cashflows.cash,
+                                                            month.date,
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          {formatSignedCurrencyForDate(
                                                             module.totals.cashflows.ordinaryIncome,
+                                                            month.date,
                                                           )}
                                                         </td>
                                                         <td>
-                                                          {formatSignedCurrency(
+                                                          {formatSignedCurrencyForDate(
                                                             module.totals.cashflows.capitalGains,
+                                                            month.date,
                                                           )}
                                                         </td>
                                                         <td>
-                                                          {formatSignedCurrency(
+                                                          {formatSignedCurrencyForDate(
                                                             module.totals.cashflows.deductions,
+                                                            month.date,
                                                           )}
                                                         </td>
                                                         <td>
-                                                          {formatSignedCurrency(
+                                                          {formatSignedCurrencyForDate(
                                                             module.totals.cashflows.taxExemptIncome,
+                                                            month.date,
                                                           )}
                                                         </td>
-                                                        <td>{formatSignedCurrency(module.totals.actions.deposit)}</td>
-                                                        <td>{formatSignedCurrency(module.totals.actions.withdraw)}</td>
-                                                        <td>{formatSignedCurrency(module.totals.actions.convert)}</td>
+                                                        <td>
+                                                          {formatSignedCurrencyForDate(
+                                                            module.totals.actions.deposit,
+                                                            month.date,
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          {formatSignedCurrencyForDate(
+                                                            module.totals.actions.withdraw,
+                                                            month.date,
+                                                          )}
+                                                        </td>
+                                                        <td>
+                                                          {formatSignedCurrencyForDate(
+                                                            module.totals.actions.convert,
+                                                            month.date,
+                                                          )}
+                                                        </td>
                                                         <td>
                                                           {module.totals.market
-                                                            ? formatSignedCurrency(module.totals.market.total)
+                                                            ? formatSignedCurrencyForDate(
+                                                                module.totals.market.total,
+                                                                month.date,
+                                                              )
                                                             : '-'}
                                                         </td>
                                                       </tr>
@@ -792,26 +890,33 @@ const RunResultsPage = () => {
                                                                             <td>{flow.label}</td>
                                                                             <td className="muted">{flow.category}</td>
                                                                             <td>
-                                                                              {formatSignedCurrency(flow.cash)}
+                                                                              {formatSignedCurrencyForDate(
+                                                                                flow.cash,
+                                                                                month.date,
+                                                                              )}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(
+                                                                              {formatSignedCurrencyForDate(
                                                                                 flow.ordinaryIncome ?? 0,
+                                                                                month.date,
                                                                               )}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(
+                                                                              {formatSignedCurrencyForDate(
                                                                                 flow.capitalGains ?? 0,
+                                                                                month.date,
                                                                               )}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(
+                                                                              {formatSignedCurrencyForDate(
                                                                                 flow.deductions ?? 0,
+                                                                                month.date,
                                                                               )}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(
+                                                                              {formatSignedCurrencyForDate(
                                                                                 flow.taxExemptIncome ?? 0,
+                                                                                month.date,
                                                                               )}
                                                                             </td>
                                                                           </tr>
@@ -842,11 +947,15 @@ const RunResultsPage = () => {
                                                                             <td>{action.label ?? action.id}</td>
                                                                             <td className="muted">{action.kind}</td>
                                                                             <td>
-                                                                              {formatSignedCurrency(action.amount)}
+                                                                              {formatSignedCurrencyForDate(
+                                                                                action.amount,
+                                                                                month.date,
+                                                                              )}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(
+                                                                              {formatSignedCurrencyForDate(
                                                                                 action.resolvedAmount,
+                                                                                month.date,
                                                                               )}
                                                                             </td>
                                                                             <td className="muted">
@@ -890,13 +999,22 @@ const RunResultsPage = () => {
                                                                                 : getHoldingLabel(entry.id)}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(entry.balanceStart)}
+                                                                              {formatSignedCurrencyForDate(
+                                                                                entry.balanceStart,
+                                                                                month.date,
+                                                                              )}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(entry.balanceEnd)}
+                                                                              {formatSignedCurrencyForDate(
+                                                                                entry.balanceEnd,
+                                                                                month.date,
+                                                                              )}
                                                                             </td>
                                                                             <td>
-                                                                              {formatSignedCurrency(entry.amount)}
+                                                                              {formatSignedCurrencyForDate(
+                                                                                entry.amount,
+                                                                                month.date,
+                                                                              )}
                                                                             </td>
                                                                             <td>{formatRate(entry.rate)}</td>
                                                                           </tr>
@@ -942,19 +1060,28 @@ const RunResultsPage = () => {
                                                           `${account.kind}:${account.id}`,
                                                         )
                                                       : undefined
-                                                  const delta =
+                                                  const priorDate = priorExplanation?.date
+                                                  const adjustedPrior =
                                                     priorBalance !== undefined
-                                                      ? account.balance - priorBalance
+                                                      ? adjustForInflation(priorBalance, priorDate)
+                                                      : undefined
+                                                  const adjustedCurrent = adjustForInflation(
+                                                    account.balance,
+                                                    month.date,
+                                                  )
+                                                  const delta =
+                                                    adjustedPrior !== undefined
+                                                      ? adjustedCurrent - adjustedPrior
                                                       : null
                                                   return (
                                                     <tr key={`${account.kind}-${account.id}`}>
                                                       <td>{getAccountLabel(account)}</td>
                                                       <td>
-                                                        {priorBalance !== undefined
-                                                          ? formatSignedCurrency(priorBalance)
+                                                        {adjustedPrior !== undefined
+                                                          ? formatSignedCurrency(adjustedPrior)
                                                           : '-'}
                                                       </td>
-                                                      <td>{formatSignedCurrency(account.balance)}</td>
+                                                      <td>{formatSignedCurrency(adjustedCurrent)}</td>
                                                       <td>
                                                         {delta === null ? '-' : formatSignedCurrency(delta)}
                                                       </td>
