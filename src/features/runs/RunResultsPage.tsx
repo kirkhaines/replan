@@ -465,7 +465,33 @@ const RunResultsPage = () => {
               <XAxis dataKey="age" />
               <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
               <Tooltip
-                formatter={(value) => formatCurrency(Number(value))}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload || payload.length === 0) {
+                    return null
+                  }
+                  const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0)
+                  return (
+                    <div
+                      style={{
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                        padding: '10px 12px',
+                      }}
+                    >
+                      <div className="tooltip-label">{label}</div>
+                      {payload.map((entry) => (
+                        <div key={String(entry.dataKey)} style={{ color: entry.color }}>
+                          {entry.name}: {formatCurrency(Number(entry.value))}
+                        </div>
+                      ))}
+                      <div className="tooltip-total">
+                        Total: {formatCurrency(total)}
+                      </div>
+                    </div>
+                  )
+                }}
                 contentStyle={{
                   background: 'var(--surface)',
                   border: '1px solid var(--border)',
