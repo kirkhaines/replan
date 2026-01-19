@@ -316,7 +316,7 @@ const applyCashToAccounts = (state: SimulationState, amount: number) => {
       break
     }
     const available = Math.max(0, account.balance)
-    const withdrawal = Math.min(available, Math.abs(remaining))
+    const withdrawal = Math.min(available, -remaining)
     account.balance -= withdrawal
     remaining += withdrawal
   }
@@ -334,7 +334,7 @@ const applyCashflows = (
     if (flow.cash >= 0) {
       totals.income += flow.cash
     } else {
-      const amount = Math.abs(flow.cash)
+      const amount = -flow.cash
       if (flow.category === 'tax') {
         totals.taxes += amount
         state.yearLedger.taxPaid += amount

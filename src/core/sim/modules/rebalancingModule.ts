@@ -148,7 +148,7 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
             return
           }
           if (delta < 0) {
-            let remaining = Math.abs(delta)
+            let remaining = -delta
             sortHoldingsForSale(assetHoldings).forEach((holding) => {
               if (remaining <= 0) {
                 return

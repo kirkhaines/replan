@@ -125,21 +125,21 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
         entries.push({
           key: 'future-work:401k',
           label: 'Work - 401k',
-          value: -Math.abs(employee401k + employer401k),
+          value: -(employee401k + employer401k),
         })
       }
       if (employeeHsa + employerHsa !== 0) {
         entries.push({
           key: 'future-work:hsa',
           label: 'Work - hsa',
-          value: -Math.abs(employeeHsa + employerHsa),
+          value: -(employeeHsa + employerHsa),
         })
       }
       if (otherDeductions !== 0) {
         entries.push({
           key: 'future-work:deductions',
           label: 'Work - other deductions',
-          value: -Math.abs(otherDeductions),
+          value: -otherDeductions,
         })
       }
       return entries

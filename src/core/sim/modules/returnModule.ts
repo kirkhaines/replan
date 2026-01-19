@@ -67,7 +67,7 @@ export const createReturnModule = (
         {
           key: 'returns-core:market',
           label: 'Market returns - market',
-          value: Math.abs(marketTotal),
+          value: marketTotal,
         },
       ]
     },

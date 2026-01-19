@@ -37,14 +37,14 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
           entries.push({
             key: `conversions:${sourceTax}`,
             label: `Conversions - ${sourceTax}`,
-            value: -Math.abs(amount),
+            value: -amount,
           })
         }
         if (targetTax) {
           entries.push({
             key: `conversions:${targetTax}`,
             label: `Conversions - ${targetTax}`,
-            value: Math.abs(amount),
+            value: amount,
           })
         }
       })

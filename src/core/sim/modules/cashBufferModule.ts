@@ -161,13 +161,7 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
         if (cashBalance >= 0) {
           return []
         }
-        return buildWithdrawIntents(
-          state,
-          Math.abs(cashBalance),
-          context.age,
-          'Cover cash deficit',
-          100,
-        )
+        return buildWithdrawIntents(state, -cashBalance, context.age, 'Cover cash deficit', 100)
       }
       if (cashBalance < min) {
         const needed = Math.max(0, target - cashBalance)
