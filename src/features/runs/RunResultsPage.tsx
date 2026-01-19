@@ -4,6 +4,7 @@ import {
   AreaChart,
   Area,
   Line,
+  ReferenceLine,
   XAxis,
   YAxis,
   Tooltip,
@@ -461,7 +462,19 @@ const RunResultsPage = () => {
         color: meta.color,
       }))
 
-    return { data, series }
+    const seriesKeys = series.map((entry) => entry.key)
+    const normalizedData = data.map((row) => {
+      const next = { ...row } as Record<string, number | string>
+      seriesKeys.forEach((key) => {
+        const value = typeof next[key] === 'number' ? next[key] : 0
+        next[key] = value
+        next[`${key}__pos`] = Math.max(0, value)
+        next[`${key}__neg`] = Math.min(0, value)
+      })
+      return next
+    })
+
+    return { data: normalizedData, series }
   }, [adjustForInflation, explanationsByMonth, monthlyTimeline, run?.snapshot])
 
   useEffect(() => {
@@ -754,50 +767,139 @@ const RunResultsPage = () => {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={cashflowChart.data}>
                 <CartesianGrid strokeDasharray="3 3" />
+                <ReferenceLine y={0} stroke="var(--text-muted)" strokeWidth={1.5} />
                 <XAxis dataKey="age" />
                 <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
                 <Tooltip
-                  formatter={(value) => formatSignedCurrency(Number(value))}
-                  contentStyle={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '10px',
-                    boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                  content={({ active, label, payload }) => {
+                    if (!active || !payload || payload.length === 0) {
+                      return null
+                    }
+                    const row = payload[0]?.payload as Record<string, number> | undefined
+                    if (!row) {
+                      return null
+                    }
+                    return (
+                      <div
+                        style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '10px',
+                          boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                          padding: '10px 12px',
+                        }}
+                      >
+                        <div className="tooltip-label">{label}</div>
+                        {(() => {
+                          const visible = cashflowChart.series.filter((series) => {
+                            if (hiddenSeries.has(series.key)) {
+                              return false
+                            }
+                            const value = row[series.key]
+                            return typeof value === 'number' && Math.abs(value) > 0.005
+                          })
+                          const positives = visible.filter(
+                            (series) => Number(row[series.key]) > 0,
+                          )
+                          const negatives = visible.filter(
+                            (series) => Number(row[series.key]) < 0,
+                          )
+                          return [...positives.reverse(), ...negatives].map((series) => (
+                            <div key={series.key} style={{ color: series.color }}>
+                              {series.label}: {formatSignedCurrency(Number(row[series.key]))}
+                            </div>
+                          ))
+                        })()}
+                      </div>
+                    )
                   }}
                   wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                 />
                 <Legend
-                  onClick={(payload) => {
-                    const dataKey = payload && 'dataKey' in payload ? String(payload.dataKey) : null
-                    if (!dataKey) {
-                      return
-                    }
-                    setHiddenSeries((current) => {
-                      const next = new Set(current)
-                      if (next.has(dataKey)) {
-                        next.delete(dataKey)
-                      } else {
-                        next.add(dataKey)
-                      }
-                      return next
-                    })
-                  }}
+                  content={() => (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.85rem',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {cashflowChart.series.map((series) => {
+                        const isHidden = hiddenSeries.has(series.key)
+                        return (
+                          <button
+                            key={series.key}
+                            type="button"
+                            onClick={() =>
+                              setHiddenSeries((current) => {
+                                const next = new Set(current)
+                                if (next.has(series.key)) {
+                                  next.delete(series.key)
+                                } else {
+                                  next.add(series.key)
+                                }
+                                return next
+                              })
+                            }
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.4rem',
+                              border: 'none',
+                              background: 'none',
+                              padding: 0,
+                              color: isHidden ? 'var(--text-muted)' : 'inherit',
+                              opacity: isHidden ? 0.55 : 1,
+                              cursor: 'pointer',
+                              font: 'inherit',
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '999px',
+                                background: series.color,
+                                display: 'inline-block',
+                              }}
+                            />
+                            {series.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 />
                 {cashflowChart.series.map((series) => (
-                  <Area
-                    key={series.key}
-                    type="monotone"
-                    dataKey={series.key}
-                    name={series.label}
-                    stroke={series.color}
-                    strokeWidth={1.25}
-                    fill={`color-mix(in srgb, ${series.color} 45%, transparent)`}
-                    fillOpacity={0.85}
-                    dot={false}
-                    stackId="cashflow"
-                    hide={hiddenSeries.has(series.key)}
-                    isAnimationActive={false}
-                  />
+                  <Fragment key={series.key}>
+                    <Area
+                      type="monotone"
+                      dataKey={`${series.key}__pos`}
+                      name={series.label}
+                      stroke={series.color}
+                      strokeWidth={1.25}
+                      fill={`color-mix(in srgb, ${series.color} 45%, transparent)`}
+                      fillOpacity={0.85}
+                      dot={false}
+                      stackId="cashflow-pos"
+                      hide={hiddenSeries.has(series.key)}
+                      isAnimationActive={false}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey={`${series.key}__neg`}
+                      name={series.label}
+                      stroke={series.color}
+                      strokeWidth={1.25}
+                      fill={`color-mix(in srgb, ${series.color} 45%, transparent)`}
+                      fillOpacity={0.85}
+                      dot={false}
+                      stackId="cashflow-neg"
+                      hide={hiddenSeries.has(series.key)}
+                      isAnimationActive={false}
+                    />
+                  </Fragment>
                 ))}
               </AreaChart>
             </ResponsiveContainer>
