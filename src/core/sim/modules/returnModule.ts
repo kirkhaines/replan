@@ -59,6 +59,18 @@ export const createReturnModule = (
   return {
     id: 'returns-core',
     explain,
+    getCashflowSeries: ({ marketTotal }) => {
+      if (!marketTotal) {
+        return []
+      }
+      return [
+        {
+          key: 'returns-core:market',
+          label: 'Market returns - market',
+          value: Math.abs(marketTotal),
+        },
+      ]
+    },
     onEndOfMonth: (state, context) => {
       explain.addInput('Mode', returnModel.mode)
       explain.addInput('Sequence model', returnModel.sequenceModel)

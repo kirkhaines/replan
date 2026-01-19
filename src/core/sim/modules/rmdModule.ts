@@ -1,6 +1,7 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationContext, SimulationModule, SimulationState } from '../types'
+import { buildActionCashflowSeries } from './utils'
 
 export const createRmdModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const strategy = snapshot.scenario.strategies.rmd
@@ -32,6 +33,13 @@ export const createRmdModule = (snapshot: SimulationSnapshot): SimulationModule 
   return {
     id: 'rmd',
     explain,
+    getCashflowSeries: ({ actions, holdingTaxTypeById }) =>
+      buildActionCashflowSeries({
+        moduleId: 'rmd',
+        moduleLabel: 'RMD',
+        actions,
+        holdingTaxTypeById,
+      }),
     getCashflows: (state, context) => {
       const result = computeRmd(state, context)
       if (!result) {

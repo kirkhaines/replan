@@ -1,7 +1,7 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationContext, SimulationModule, SimulationState } from '../types'
-import { getHoldingGain, sumMonthlySpending } from './utils'
+import { buildActionCashflowSeries, getHoldingGain, sumMonthlySpending } from './utils'
 
 export const createCashBufferModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const scenario = snapshot.scenario
@@ -119,6 +119,13 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   return {
     id: 'cash-buffer',
     explain,
+    getCashflowSeries: ({ actions, holdingTaxTypeById }) =>
+      buildActionCashflowSeries({
+        moduleId: 'cash-buffer',
+        moduleLabel: 'Cash buffer',
+        actions,
+        holdingTaxTypeById,
+      }),
     getActionIntents: (state: SimulationState, context: SimulationContext) => {
       const cashBalance = state.cashAccounts.reduce((sum, account) => sum + account.balance, 0)
       const monthlySpending = sumMonthlySpending(

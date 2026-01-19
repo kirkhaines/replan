@@ -13,6 +13,19 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
   return {
     id: 'spending',
     explain,
+    getCashflowSeries: ({ cashflows }) => {
+      const totalCash = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
+      if (totalCash === 0) {
+        return []
+      }
+      return [
+        {
+          key: 'spending:cash',
+          label: 'Spending - cash',
+          value: -Math.abs(totalCash),
+        },
+      ]
+    },
     getCashflows: (state, context) => {
       const cashflows: CashflowItem[] = []
       const guardrailPct = scenario.strategies.withdrawal.guardrailPct

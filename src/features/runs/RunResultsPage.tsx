@@ -52,6 +52,42 @@ const formatAxisValue = (value: number) => {
   return `$${Math.round(value)}`
 }
 
+const chartPalette = [
+  '#2563eb',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#ec4899',
+  '#14b8a6',
+  '#f97316',
+  '#0ea5e9',
+  '#a3e635',
+]
+
+const chartKeyColors: Record<string, string> = {
+  'spending:cash': '#ef4444',
+  'taxes:ordinary': '#f97316',
+  'taxes:capital_gains': '#f59e0b',
+  'returns-core:market': '#22c55e',
+  'future-work:income': '#22c55e',
+  'future-work:401k': '#f59e0b',
+  'future-work:hsa': '#ec4899',
+  'future-work:deductions': '#ef4444',
+}
+
+const hashKey = (value: string) => {
+  let hash = 0
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+const colorForChartKey = (key: string) =>
+  chartKeyColors[key] ?? chartPalette[hashKey(key) % chartPalette.length]
+
 const addMonths = (isoDate: string, months: number) => {
   const date = new Date(isoDate)
   if (Number.isNaN(date.getTime())) {
@@ -88,6 +124,7 @@ const RunResultsPage = () => {
   const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set())
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
   const [showPresentDay, setShowPresentDay] = useState(false)
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set())
 
   const monthlyTimeline = run?.result.monthlyTimeline ?? []
   const explanations = run?.result.explanations ?? []
@@ -350,6 +387,82 @@ const RunResultsPage = () => {
 
     return { data, bracketLines, maxValue }
   }, [adjustForInflation, explanations, run?.finishedAt, run?.result.timeline, run?.snapshot])
+
+  const cashflowChart = useMemo(() => {
+    if (!run?.snapshot) {
+      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+    }
+
+    const seriesMeta = new Map<string, { label: string; color: string }>()
+    const registerSeries = (key: string, label: string) => {
+      if (!seriesMeta.has(key)) {
+        seriesMeta.set(key, { label, color: colorForChartKey(key) })
+      }
+    }
+    const addValue = (
+      row: Record<string, number | string>,
+      key: string,
+      label: string,
+      value: number,
+      dateIso: string,
+    ) => {
+      if (value === 0) {
+        return
+      }
+      registerSeries(key, label)
+      row[key] = Number(row[key] ?? 0) + adjustForInflation(value, dateIso)
+    }
+
+    const rowByYear = new Map<number, Record<string, number | string>>()
+    monthlyTimeline.forEach((month) => {
+      const yearIndex = Math.floor(month.monthIndex / 12)
+      const point = run.result.timeline[yearIndex]
+      const row =
+        rowByYear.get(yearIndex) ??
+        ({
+          age: point?.age ?? month.age,
+          date: point?.date ?? month.date,
+        } as Record<string, number | string>)
+      rowByYear.set(yearIndex, row)
+
+      const explanation = explanationsByMonth.get(month.monthIndex)
+      if (!explanation) {
+        return
+      }
+
+      explanation.modules.forEach((module) => {
+        module.cashflowSeries?.forEach((entry) => {
+          addValue(row, entry.key, entry.label, entry.value, month.date)
+        })
+      })
+    })
+
+    const data = run.result.timeline.map((point) => {
+      return rowByYear.get(point.yearIndex) ?? { age: point.age, date: point.date }
+    })
+
+    const activeKeys = new Set<string>()
+    data.forEach((row) => {
+      Object.entries(row).forEach(([key, value]) => {
+        if (key === 'age' || key === 'date') {
+          return
+        }
+        if (typeof value === 'number' && Math.abs(value) > 0.005) {
+          activeKeys.add(key)
+        }
+      })
+    })
+
+    const series = Array.from(seriesMeta.entries())
+      .filter(([key]) => activeKeys.has(key))
+      .map(([key, meta]) => ({
+        key,
+        label: meta.label,
+        color: meta.color,
+      }))
+
+    return { data, series }
+  }, [adjustForInflation, explanationsByMonth, monthlyTimeline, run?.snapshot])
 
   useEffect(() => {
     const load = async () => {
@@ -628,6 +741,64 @@ const RunResultsPage = () => {
                     />
                   )
                 })}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      ) : null}
+
+      {cashflowChart.data.length > 0 && cashflowChart.series.length > 0 ? (
+        <div className="card stack">
+          <h2>Cash flow by module</h2>
+          <div className="chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={cashflowChart.data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="age" />
+                <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
+                <Tooltip
+                  formatter={(value) => formatSignedCurrency(Number(value))}
+                  contentStyle={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '10px',
+                    boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                  }}
+                  wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
+                />
+                <Legend
+                  onClick={(payload) => {
+                    const dataKey = payload && 'dataKey' in payload ? String(payload.dataKey) : null
+                    if (!dataKey) {
+                      return
+                    }
+                    setHiddenSeries((current) => {
+                      const next = new Set(current)
+                      if (next.has(dataKey)) {
+                        next.delete(dataKey)
+                      } else {
+                        next.add(dataKey)
+                      }
+                      return next
+                    })
+                  }}
+                />
+                {cashflowChart.series.map((series) => (
+                  <Area
+                    key={series.key}
+                    type="monotone"
+                    dataKey={series.key}
+                    name={series.label}
+                    stroke={series.color}
+                    strokeWidth={1.25}
+                    fill={`color-mix(in srgb, ${series.color} 45%, transparent)`}
+                    fillOpacity={0.85}
+                    dot={false}
+                    stackId="cashflow"
+                    hide={hiddenSeries.has(series.key)}
+                    isAnimationActive={false}
+                  />
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>

@@ -1,6 +1,7 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationModule } from '../types'
+import { buildActionCashflowSeries } from './utils'
 
 export const createCharitableModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const strategy = snapshot.scenario.strategies.charitable
@@ -9,6 +10,13 @@ export const createCharitableModule = (snapshot: SimulationSnapshot): Simulation
   return {
     id: 'charitable',
     explain,
+    getCashflowSeries: ({ actions, holdingTaxTypeById }) =>
+      buildActionCashflowSeries({
+        moduleId: 'charitable',
+        moduleLabel: 'Charitable',
+        actions,
+        holdingTaxTypeById,
+      }),
     getCashflows: (_state, context) => {
       explain.addInput('Annual giving', strategy.annualGiving)
       explain.addInput('Use QCD', strategy.useQcd)

@@ -64,6 +64,17 @@ export type CashflowItem = {
   taxExemptIncome?: number
 }
 
+export type CashflowSeriesEntry = {
+  key: string
+  label: string
+  value: number
+}
+
+export type ExplainMetric = {
+  label: string
+  value: string | number | boolean | null
+}
+
 export type ActionKind = 'withdraw' | 'deposit' | 'convert' | 'rebalance' | 'rmd'
 
 export type ActionIntent = {
@@ -155,4 +166,13 @@ export type SimulationModule = {
     context: SimulationContext,
   ) => void
   onEndOfYear?: (state: SimulationState, context: SimulationContext) => void
+  getCashflowSeries?: (context: {
+    moduleId: string
+    moduleLabel: string
+    cashflows: CashflowItem[]
+    actions: ActionRecord[]
+    marketTotal?: number
+    checkpoints?: ExplainMetric[]
+    holdingTaxTypeById: Map<string, InvestmentAccountHolding['taxType']>
+  }) => CashflowSeriesEntry[]
 }

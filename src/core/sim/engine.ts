@@ -626,6 +626,9 @@ const buildYearRecord = (
 export const runSimulation = (input: SimulationInput): SimulationResult => {
   const { snapshot, settings } = input
   const modules = createSimulationModules(snapshot, settings)
+  const holdingTaxTypeById = new Map(
+    snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
+  )
   modules.forEach((module) => module.buildPlan?.(snapshot, settings))
 
   const state = createInitialState(snapshot)
@@ -764,11 +767,22 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
         moduleMarketReturns.length > 0 ? sumMarketTotals(moduleMarketReturns) : undefined
       const inputs = module.explain?.inputs ? [...module.explain.inputs] : undefined
       const checkpoints = module.explain?.checkpoints ? [...module.explain.checkpoints] : undefined
+      const cashflowSeries =
+        module.getCashflowSeries?.({
+          moduleId: module.id,
+          moduleLabel: module.id,
+          cashflows: moduleCashflows,
+          actions: moduleActions,
+          marketTotal: marketTotals?.total,
+          checkpoints,
+          holdingTaxTypeById,
+        }) ?? []
       return {
         moduleId: module.id,
         cashflows: moduleCashflows,
         actions: moduleActions,
         marketReturns: moduleMarketReturns.length > 0 ? moduleMarketReturns : undefined,
+        cashflowSeries: cashflowSeries.length > 0 ? cashflowSeries : undefined,
         totals: {
           cashflows: cashflowTotals,
           actions: actionTotals,

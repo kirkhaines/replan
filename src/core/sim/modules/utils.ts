@@ -1,5 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
-import type { SimHolding } from '../types'
+import type { ActionRecord, CashflowSeriesEntry, SimHolding } from '../types'
 
 export const toMonthlyRate = (annualRate: number) => Math.pow(1 + annualRate, 1 / 12) - 1
 
@@ -146,6 +146,65 @@ export const interpolateTargets = (
     realEstate: lower.realEstate + (upper.realEstate - lower.realEstate) * ratio,
     other: lower.other + (upper.other - lower.other) * ratio,
   }
+}
+
+export const buildActionCashflowSeries = ({
+  moduleId,
+  moduleLabel,
+  actions,
+  holdingTaxTypeById,
+}: {
+  moduleId: string
+  moduleLabel: string
+  actions: ActionRecord[]
+  holdingTaxTypeById: Map<string, SimHolding['taxType']>
+}): CashflowSeriesEntry[] => {
+  let cashDelta = 0
+  const investmentByTax: Record<string, number> = {}
+  actions.forEach((action) => {
+    const amount = action.resolvedAmount ?? action.amount
+    if (action.kind === 'deposit') {
+      if (action.fromCash) {
+        cashDelta -= amount
+      }
+      const taxType = action.targetHoldingId
+        ? holdingTaxTypeById.get(action.targetHoldingId)
+        : undefined
+      if (taxType) {
+        investmentByTax[taxType] = (investmentByTax[taxType] ?? 0) + amount
+      }
+      return
+    }
+    if (action.kind === 'withdraw' || action.kind === 'rmd') {
+      cashDelta += amount
+      const taxType = action.sourceHoldingId
+        ? holdingTaxTypeById.get(action.sourceHoldingId)
+        : undefined
+      if (taxType) {
+        investmentByTax[taxType] = (investmentByTax[taxType] ?? 0) - amount
+      }
+    }
+  })
+
+  const entries: CashflowSeriesEntry[] = []
+  if (cashDelta !== 0) {
+    entries.push({
+      key: `${moduleId}:cash`,
+      label: `${moduleLabel} - cash`,
+      value: cashDelta,
+    })
+  }
+  Object.entries(investmentByTax).forEach(([taxType, value]) => {
+    if (!value) {
+      return
+    }
+    entries.push({
+      key: `${moduleId}:${taxType}`,
+      label: `${moduleLabel} - ${taxType}`,
+      value,
+    })
+  })
+  return entries
 }
 
 export type { AssetClass }

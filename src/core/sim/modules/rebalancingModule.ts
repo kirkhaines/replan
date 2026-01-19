@@ -1,7 +1,12 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationContext, SimulationModule, SimHolding } from '../types'
-import { interpolateTargets, taxAwareSellPriority, toAssetClass } from './utils'
+import {
+  buildActionCashflowSeries,
+  interpolateTargets,
+  taxAwareSellPriority,
+  toAssetClass,
+} from './utils'
 
 export const createRebalancingModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const { glidepath, rebalancing } = snapshot.scenario.strategies
@@ -48,6 +53,13 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
   return {
     id: 'rebalancing',
     explain,
+    getCashflowSeries: ({ actions, holdingTaxTypeById }) =>
+      buildActionCashflowSeries({
+        moduleId: 'rebalancing',
+        moduleLabel: 'Rebalancing',
+        actions,
+        holdingTaxTypeById,
+      }),
     getActionIntents: (state, context) => {
       const canRebalance = shouldRebalance(context)
       if (!canRebalance) {

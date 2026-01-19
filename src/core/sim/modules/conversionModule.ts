@@ -20,6 +20,36 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
   return {
     id: 'conversions',
     explain,
+    getCashflowSeries: ({ actions, holdingTaxTypeById }) => {
+      const entries = []
+      actions.forEach((action) => {
+        if (action.kind !== 'convert') {
+          return
+        }
+        const amount = action.resolvedAmount ?? action.amount
+        const sourceTax = action.sourceHoldingId
+          ? holdingTaxTypeById.get(action.sourceHoldingId)
+          : undefined
+        const targetTax = action.targetHoldingId
+          ? holdingTaxTypeById.get(action.targetHoldingId)
+          : undefined
+        if (sourceTax) {
+          entries.push({
+            key: `conversions:${sourceTax}`,
+            label: `Conversions - ${sourceTax}`,
+            value: -Math.abs(amount),
+          })
+        }
+        if (targetTax) {
+          entries.push({
+            key: `conversions:${targetTax}`,
+            label: `Conversions - ${targetTax}`,
+            value: Math.abs(amount),
+          })
+        }
+      })
+      return entries
+    },
     getActionIntents: (state, context) => {
       const age = context.age
       let conversionAmount = 0

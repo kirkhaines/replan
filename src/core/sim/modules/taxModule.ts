@@ -10,6 +10,41 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
   return {
     id: 'taxes',
     explain,
+    getCashflowSeries: ({ cashflows, checkpoints }) => {
+      const taxCash = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
+      if (taxCash === 0) {
+        return []
+      }
+      const lookup = new Map(
+        (checkpoints ?? []).map((checkpoint) => [checkpoint.label, checkpoint.value]),
+      )
+      const taxableOrdinary = lookup.get('Taxable ordinary')
+      const taxableCapGains = lookup.get('Taxable cap gains')
+      if (typeof taxableOrdinary === 'number' && typeof taxableCapGains === 'number') {
+        const total = taxableOrdinary + taxableCapGains
+        if (total > 0) {
+          return [
+            {
+              key: 'taxes:ordinary',
+              label: 'Taxes - ordinary',
+              value: (taxableOrdinary / total) * taxCash,
+            },
+            {
+              key: 'taxes:capital_gains',
+              label: 'Taxes - capital gains',
+              value: (taxableCapGains / total) * taxCash,
+            },
+          ]
+        }
+      }
+      return [
+        {
+          key: 'taxes:ordinary',
+          label: 'Taxes - ordinary',
+          value: taxCash,
+        },
+      ]
+    },
     getCashflows: (state, context) => {
       const policyYear = taxStrategy.policyYear || context.date.getFullYear()
       explain.addInput('Policy year', policyYear)

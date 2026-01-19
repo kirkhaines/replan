@@ -76,6 +76,74 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
   return {
     id: 'future-work',
     explain,
+    getCashflowSeries: ({ cashflows, actions }) => {
+      let income = 0
+      let employee401k = 0
+      let employeeHsa = 0
+      let otherDeductions = 0
+      cashflows.forEach((flow) => {
+        if (flow.cash > 0) {
+          income += flow.cash
+        }
+        const deductions = flow.deductions ?? 0
+        if (deductions !== 0) {
+          const label = flow.label.toLowerCase()
+          if (label.includes('401k')) {
+            employee401k += deductions
+          } else if (label.includes('hsa')) {
+            employeeHsa += deductions
+          } else {
+            otherDeductions += deductions
+          }
+        }
+      })
+
+      let employer401k = 0
+      let employerHsa = 0
+      actions.forEach((action) => {
+        if (action.kind !== 'deposit') {
+          return
+        }
+        const label = (action.label ?? '').toLowerCase()
+        const resolved = action.resolvedAmount ?? action.amount
+        if (label.includes('401k')) {
+          employer401k += resolved
+        } else if (label.includes('hsa')) {
+          employerHsa += resolved
+        }
+      })
+
+      const entries = []
+      if (income !== 0) {
+        entries.push({
+          key: 'future-work:income',
+          label: 'Work - income',
+          value: income,
+        })
+      }
+      if (employee401k + employer401k !== 0) {
+        entries.push({
+          key: 'future-work:401k',
+          label: 'Work - 401k',
+          value: -Math.abs(employee401k + employer401k),
+        })
+      }
+      if (employeeHsa + employerHsa !== 0) {
+        entries.push({
+          key: 'future-work:hsa',
+          label: 'Work - hsa',
+          value: -Math.abs(employeeHsa + employerHsa),
+        })
+      }
+      if (otherDeductions !== 0) {
+        entries.push({
+          key: 'future-work:deductions',
+          label: 'Work - other deductions',
+          value: -Math.abs(otherDeductions),
+        })
+      }
+      return entries
+    },
     getCashflows: (_state, context) => {
       const cashflows: CashflowItem[] = []
       const activePeriods = getActivePeriods(context)

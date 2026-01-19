@@ -93,6 +93,15 @@ const moduleRunSchema = z.object({
   cashflows: z.array(cashflowItemSchema),
   actions: z.array(actionRecordSchema),
   marketReturns: z.array(marketReturnSchema).optional(),
+  cashflowSeries: z
+    .array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        value: z.number(),
+      }),
+    )
+    .optional(),
   totals: z.object({
     cashflows: cashflowTotalsSchema,
     actions: actionTotalsSchema,
