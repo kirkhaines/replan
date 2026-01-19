@@ -134,7 +134,7 @@ const RunResultsPage = () => {
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
   const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set())
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
-  const [showPresentDay, setShowPresentDay] = useState(false)
+  const [showPresentDay, setShowPresentDay] = useState(true)
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set())
   const [rangeKey, setRangeKey] = useState('all')
 
@@ -250,21 +250,50 @@ const RunResultsPage = () => {
     return options
   }, [run?.result.timeline, run?.snapshot])
   const selectedRange = rangeOptions.find((option) => option.key === rangeKey) ?? rangeOptions[0]
-  const isWithinRange = (date?: string) => {
-    if (!date || !selectedRange.start || !selectedRange.end) {
-      return true
+  const rangeYearBounds = useMemo(() => {
+    if (!selectedRange.start || !selectedRange.end) {
+      return null
     }
-    return date >= selectedRange.start && date <= selectedRange.end
-  }
+    const startYear = new Date(selectedRange.start).getFullYear()
+    const endYear = new Date(selectedRange.end).getFullYear()
+    if (Number.isNaN(startYear) || Number.isNaN(endYear)) {
+      return null
+    }
+    return {
+      startYear: Math.min(startYear, endYear),
+      endYear: Math.max(startYear, endYear),
+    }
+  }, [selectedRange.end, selectedRange.start])
+  const filteredMonthlyTimeline = useMemo(() => {
+    if (!rangeYearBounds) {
+      return monthlyTimeline
+    }
+    return monthlyTimeline.filter((entry) => {
+      const year = new Date(entry.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return false
+      }
+      return year >= rangeYearBounds.startYear && year <= rangeYearBounds.endYear
+    })
+  }, [monthlyTimeline, rangeYearBounds])
   const filteredTimeline = useMemo(() => {
     if (!run?.result.timeline) {
       return []
     }
-    return run.result.timeline.filter((point) => isWithinRange(point.date))
-  }, [run?.result.timeline, selectedRange.start, selectedRange.end])
-  const filteredMonthlyTimeline = useMemo(() => {
-    return monthlyTimeline.filter((entry) => isWithinRange(entry.date))
-  }, [monthlyTimeline, selectedRange.start, selectedRange.end])
+    if (!rangeYearBounds) {
+      return run.result.timeline
+    }
+    return run.result.timeline.filter((point) => {
+      if (!point.date) {
+        return true
+      }
+      const year = new Date(point.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return true
+      }
+      return year >= rangeYearBounds.startYear && year <= rangeYearBounds.endYear
+    })
+  }, [rangeYearBounds, run?.result.timeline])
   const monthlyByYear = useMemo(() => {
     return filteredMonthlyTimeline.reduce<Map<number, typeof monthlyTimeline>>((acc, entry) => {
       const yearIndex = Math.floor(entry.monthIndex / 12)
@@ -374,7 +403,7 @@ const RunResultsPage = () => {
     }
     const snapshot = run.snapshot
     const finishedAt = run.finishedAt
-    const timeline = run.result.timeline
+    const timeline = filteredTimeline
     const inflationRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
     const holdingTaxType = new Map(
       snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),

@@ -9,6 +9,19 @@ export const createEventModule = (snapshot: SimulationSnapshot): SimulationModul
   return {
     id: 'events',
     explain,
+    getCashflowSeries: ({ cashflows }) => {
+      const totalCash = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
+      if (totalCash === 0) {
+        return []
+      }
+      return [
+        {
+          key: 'events:cash',
+          label: 'Events - cash',
+          value: totalCash,
+        },
+      ]
+    },
     getCashflows: (_state, context) => {
       const cashflows: CashflowItem[] = []
       events.forEach((event) => {

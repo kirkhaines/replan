@@ -10,6 +10,19 @@ export const createPensionModule = (snapshot: SimulationSnapshot): SimulationMod
   return {
     id: 'pensions',
     explain,
+    getCashflowSeries: ({ cashflows }) => {
+      const totalCash = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
+      if (totalCash === 0) {
+        return []
+      }
+      return [
+        {
+          key: 'pensions:cash',
+          label: 'Pensions - cash',
+          value: totalCash,
+        },
+      ]
+    },
     getCashflows: (_state, context) => {
       const cashflows: CashflowItem[] = []
       pensions.forEach((pension) => {

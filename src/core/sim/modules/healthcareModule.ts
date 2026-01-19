@@ -16,6 +16,19 @@ export const createHealthcareModule = (
   return {
     id: 'healthcare',
     explain,
+    getCashflowSeries: ({ cashflows }) => {
+      const totalCash = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
+      if (totalCash === 0) {
+        return []
+      }
+      return [
+        {
+          key: 'healthcare:cash',
+          label: 'Healthcare - cash',
+          value: totalCash,
+        },
+      ]
+    },
     getCashflows: (state, context) => {
       const isMedicare = context.age >= 65
       const baseMonthly = isMedicare
