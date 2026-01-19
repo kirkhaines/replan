@@ -167,6 +167,25 @@ h2 {
   margin: 2rem auto 3rem;
 }
 
+.app-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+}
+
+.app-footer-content {
+  width: min(1080px, 92vw);
+  margin: 0 auto;
+  padding: 1.25rem 0 1.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

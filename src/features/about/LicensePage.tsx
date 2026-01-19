@@ -67,6 +67,20 @@ const LicensePage = () => (
       </p>
     </div>
     <div className="card stack">
+      <h2>Copyright and trademarks</h2>
+      <p>© 2025 Kirk Haines. All rights reserved.</p>
+      <p>RePlan is a trademark of Kirk Haines.</p>
+      <h2>Disclaimer</h2>
+      <p>
+        This software is provided "as is", without warranty of any kind, express or implied,
+        including but not limited to the warranties of merchantability, fitness for a particular
+        purpose, and noninfringement. In no event shall the authors or copyright holders be liable
+        for any claim, damages, or other liability, whether in an action of contract, tort, or
+        otherwise, arising from, out of, or in connection with the software or the use or other
+        dealings in the software.
+      </p>
+    </div>
+    <div className="card stack">
       <h2>Third-party notices</h2>
       <p className="muted">
         RePlan depends on the following open source packages. Please refer to each project for full

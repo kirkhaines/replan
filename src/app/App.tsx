@@ -223,6 +223,18 @@ const AppShell = () => {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <footer className="app-footer">
+        <div className="app-footer-content">
+          <span>© 2025 Kirk Haines. RePlan is a trademark of Kirk Haines.</span>
+          <span>
+            Provided "as is", without warranties of any kind. No liability for damages arising from
+            use.
+          </span>
+          <Link className="link" to="/license">
+            Licensing
+          </Link>
+        </div>
+      </footer>
     </div>
   )
 }
