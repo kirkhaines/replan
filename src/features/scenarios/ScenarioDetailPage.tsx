@@ -1148,9 +1148,41 @@ const ScenarioDetailPage = () => {
         title="Edit scenario"
         subtitle="Update people, accounts, and spending before running simulations."
         actions={
-          <Link className="link" to={backTo}>
-            Back
-          </Link>
+          <div className="button-row">
+            <Link className="link" to={backTo}>
+              Back
+            </Link>
+            <button
+              className="button secondary"
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleSubmit(onRun)}
+            >
+              <span
+                title="Development only. This runs the simulation without saving changes."
+                aria-hidden="true"
+                style={{ display: 'inline-flex', marginRight: '0.4rem', color: '#b32020' }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                  <path
+                    d="M12 3l9 16H3L12 3z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M12 9v5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="12" cy="16.5" r="1" fill="currentColor" />
+                </svg>
+              </span>
+              Run simulation
+            </button>
+          </div>
         }
       />
 

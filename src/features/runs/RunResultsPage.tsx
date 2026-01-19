@@ -98,6 +98,16 @@ const addMonths = (isoDate: string, months: number) => {
   return date.toISOString().slice(0, 10)
 }
 
+const addYears = (isoDate: string, years: number) => addMonths(isoDate, years * 12)
+
+const isIsoDate = (value?: string | null) => {
+  if (!value) {
+    return false
+  }
+  const date = new Date(value)
+  return !Number.isNaN(date.getTime())
+}
+
 const moduleLabels: Record<string, string> = {
   spending: 'Spending',
   events: 'Events',
@@ -126,24 +136,144 @@ const RunResultsPage = () => {
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
   const [showPresentDay, setShowPresentDay] = useState(false)
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set())
+  const [rangeKey, setRangeKey] = useState('all')
 
   const monthlyTimeline = run?.result.monthlyTimeline ?? []
   const explanations = run?.result.explanations ?? []
-  const monthlyByYear = useMemo(() => {
-    return monthlyTimeline.reduce<Map<number, typeof monthlyTimeline>>((acc, entry) => {
-      const yearIndex = Math.floor(entry.monthIndex / 12)
-      const list = acc.get(yearIndex) ?? []
-      list.push(entry)
-      acc.set(yearIndex, list)
-      return acc
-    }, new Map())
-  }, [monthlyTimeline])
   const explanationsByMonth = useMemo(() => {
     return explanations.reduce<Map<number, (typeof explanations)[number]>>((acc, entry) => {
       acc.set(entry.monthIndex, entry)
       return acc
     }, new Map())
   }, [explanations])
+  const rangeOptions = useMemo(() => {
+    if (!run?.snapshot || run.result.timeline.length === 0) {
+      return [{ key: 'all', label: 'All', start: null, end: null }]
+    }
+    const { scenario } = run.snapshot
+    const timeline = run.result.timeline
+    const simStart = timeline[0].date ?? null
+    const simEnd = timeline[timeline.length - 1].date ?? null
+    if (!simStart || !simEnd) {
+      return [{ key: 'all', label: 'All', start: null, end: null }]
+    }
+
+    const strategyIds = new Set(scenario.personStrategyIds)
+    const activePersonStrategies = run.snapshot.personStrategies.filter((strategy) =>
+      strategyIds.has(strategy.id),
+    )
+    const futureWorkStrategyIds = new Set(
+      activePersonStrategies.map((strategy) => strategy.futureWorkStrategyId),
+    )
+    const socialSecurityStrategyIds = new Set(
+      activePersonStrategies.map((strategy) => strategy.socialSecurityStrategyId),
+    )
+
+    const activePeriods = run.snapshot.futureWorkPeriods.filter((period) =>
+      futureWorkStrategyIds.has(period.futureWorkStrategyId),
+    )
+    const retireEndDates = activePeriods
+      .map((period) => (isIsoDate(period.endDate) ? period.endDate : null))
+      .filter((value): value is string => Boolean(value))
+    const retireEnd = retireEndDates.length > 0 ? retireEndDates.sort().slice(-1)[0] : null
+
+    const ssaStartDates = run.snapshot.socialSecurityStrategies
+      .filter((strategy) => socialSecurityStrategyIds.has(strategy.id))
+      .map((strategy) => strategy.startDate)
+      .filter((value) => isIsoDate(value))
+    const ssaStart = ssaStartDates.length > 0 ? ssaStartDates.sort()[0] : null
+
+    const primaryStrategy = scenario.personStrategyIds
+      .map((id) => run.snapshot.personStrategies.find((strategy) => strategy.id === id))
+      .find(Boolean)
+    const primaryPerson = primaryStrategy
+      ? run.snapshot.people.find((person) => person.id === primaryStrategy.personId)
+      : null
+    const penaltyFreeStart = primaryPerson?.dateOfBirth
+      ? addMonths(primaryPerson.dateOfBirth, Math.round(59.5 * 12))
+      : null
+    const rmdStart =
+      primaryPerson?.dateOfBirth && scenario.strategies.rmd.startAge > 0
+        ? addMonths(primaryPerson.dateOfBirth, Math.round(scenario.strategies.rmd.startAge * 12))
+        : null
+
+    const withLead = (start: string, end: string) => {
+      const leadStart = addYears(start, -1) ?? start
+      const leadEnd = addYears(end, 1) ?? end
+      return {
+        start: leadStart < simStart ? simStart : leadStart,
+        end: leadEnd > simEnd ? simEnd : leadEnd,
+      }
+    }
+
+    const options = [{ key: 'all', label: 'All', start: null, end: null }]
+    if (retireEnd && retireEnd > simStart) {
+      options.push({
+        key: 'pre-retirement',
+        label: 'Pre-retirement',
+        ...withLead(simStart, retireEnd),
+      })
+    }
+    if (retireEnd && penaltyFreeStart && penaltyFreeStart > retireEnd) {
+      options.push({
+        key: 'bridge',
+        label: 'Bridge',
+        ...withLead(retireEnd, penaltyFreeStart),
+      })
+    }
+    if (
+      penaltyFreeStart &&
+      ssaStart &&
+      ssaStart > penaltyFreeStart &&
+      (!retireEnd || penaltyFreeStart > retireEnd)
+    ) {
+      options.push({
+        key: 'penalty-free',
+        label: 'Penalty-free',
+        ...withLead(penaltyFreeStart, ssaStart),
+      })
+    }
+    if (ssaStart && rmdStart && rmdStart > ssaStart) {
+      options.push({
+        key: 'ssa',
+        label: 'SSA',
+        ...withLead(ssaStart, rmdStart),
+      })
+    }
+    if (rmdStart && rmdStart < simEnd) {
+      options.push({
+        key: 'rmd',
+        label: 'RMD',
+        ...withLead(rmdStart, simEnd),
+      })
+    }
+    return options
+  }, [run?.result.timeline, run?.snapshot])
+  const selectedRange = rangeOptions.find((option) => option.key === rangeKey) ?? rangeOptions[0]
+  const isWithinRange = (date?: string) => {
+    if (!date || !selectedRange.start || !selectedRange.end) {
+      return true
+    }
+    return date >= selectedRange.start && date <= selectedRange.end
+  }
+  const filteredTimeline = useMemo(() => {
+    if (!run?.result.timeline) {
+      return []
+    }
+    return run.result.timeline.filter((point) => isWithinRange(point.date))
+  }, [run?.result.timeline, selectedRange.start, selectedRange.end])
+  const filteredMonthlyTimeline = useMemo(() => {
+    return monthlyTimeline.filter((entry) => isWithinRange(entry.date))
+  }, [monthlyTimeline, selectedRange.start, selectedRange.end])
+  const monthlyByYear = useMemo(() => {
+    return filteredMonthlyTimeline.reduce<Map<number, typeof monthlyTimeline>>((acc, entry) => {
+      const yearIndex = Math.floor(entry.monthIndex / 12)
+      const list = acc.get(yearIndex) ?? []
+      list.push(entry)
+      acc.set(yearIndex, list)
+      return acc
+    }, new Map())
+  }, [filteredMonthlyTimeline, monthlyTimeline])
   const accountLookup = useMemo(() => {
     const cashById = new Map<string, string>()
     const investmentById = new Map<string, string>()
@@ -208,7 +338,7 @@ const RunResultsPage = () => {
       run.snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
     )
     const seriesKeys = ['cash', 'taxable', 'traditional', 'roth', 'hsa'] as const
-    const data = run.result.timeline.map((point) => {
+    const data = filteredTimeline.map((point) => {
       const monthly = monthlyByYear.get(point.yearIndex)
       const lastMonth = monthly && monthly.length > 0 ? monthly[monthly.length - 1] : null
       const accounts = lastMonth
@@ -236,13 +366,7 @@ const RunResultsPage = () => {
       return { ...point, ...totals }
     })
     return { data, seriesKeys }
-  }, [
-    adjustForInflation,
-    explanationsByMonth,
-    monthlyByYear,
-    run?.result.timeline,
-    run?.snapshot,
-  ])
+  }, [adjustForInflation, explanationsByMonth, filteredTimeline, monthlyByYear, run?.snapshot])
 
   const ordinaryIncomeChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -387,7 +511,7 @@ const RunResultsPage = () => {
     }, 0)
 
     return { data, bracketLines, maxValue }
-  }, [adjustForInflation, explanations, run?.finishedAt, run?.result.timeline, run?.snapshot])
+  }, [adjustForInflation, explanations, filteredTimeline, run?.finishedAt, run?.snapshot])
 
   const cashflowChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -415,9 +539,9 @@ const RunResultsPage = () => {
     }
 
     const rowByYear = new Map<number, Record<string, number | string>>()
-    monthlyTimeline.forEach((month) => {
+    filteredMonthlyTimeline.forEach((month) => {
       const yearIndex = Math.floor(month.monthIndex / 12)
-      const point = run.result.timeline[yearIndex]
+      const point = filteredTimeline.find((entry) => entry.yearIndex === yearIndex)
       const row =
         rowByYear.get(yearIndex) ??
         ({
@@ -438,7 +562,7 @@ const RunResultsPage = () => {
       })
     })
 
-    const data = run.result.timeline.map((point) => {
+    const data = filteredTimeline.map((point) => {
       return rowByYear.get(point.yearIndex) ?? { age: point.age, date: point.date }
     })
 
@@ -475,7 +599,7 @@ const RunResultsPage = () => {
     })
 
     return { data: normalizedData, series }
-  }, [adjustForInflation, explanationsByMonth, monthlyTimeline, run?.snapshot])
+  }, [adjustForInflation, explanationsByMonth, filteredMonthlyTimeline, filteredTimeline, run?.snapshot])
 
   useEffect(() => {
     const load = async () => {
@@ -500,18 +624,22 @@ const RunResultsPage = () => {
         maxBalance: 0,
       }
     }
-    if (!showPresentDay) {
-      return run.result.summary
+    if (filteredTimeline.length === 0) {
+      return {
+        endingBalance: 0,
+        minBalance: 0,
+        maxBalance: 0,
+      }
     }
-    const balances = run.result.timeline.map((point) =>
-      adjustForInflation(point.balance, point.date),
+    const balances = filteredTimeline.map((point) =>
+      showPresentDay ? adjustForInflation(point.balance, point.date) : point.balance,
     )
     return {
       endingBalance: balances.length > 0 ? balances[balances.length - 1] : 0,
       minBalance: balances.length > 0 ? Math.min(...balances) : 0,
       maxBalance: balances.length > 0 ? Math.max(...balances) : 0,
     }
-  }, [adjustForInflation, run, showPresentDay])
+  }, [adjustForInflation, filteredTimeline, run, showPresentDay])
 
   if (isLoading) {
     return <p className="muted">Loading run...</p>
@@ -580,6 +708,19 @@ const RunResultsPage = () => {
             Show values in present-day dollars
           </label>
         </div>
+        <label className="field">
+          <span>Date range</span>
+          <select
+            value={rangeKey}
+            onChange={(event) => setRangeKey(event.target.value)}
+          >
+            {rangeOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="card stack">
@@ -938,7 +1079,7 @@ const RunResultsPage = () => {
             </tr>
           </thead>
           <tbody>
-            {run.result.timeline.map((point) => {
+            {filteredTimeline.map((point) => {
               const isExpanded = expandedYears.has(point.yearIndex)
               const monthRows = monthlyByYear.get(point.yearIndex) ?? []
               return (
