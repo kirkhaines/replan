@@ -64,10 +64,13 @@ export type CashflowItem = {
   taxExemptIncome?: number
 }
 
+export type CashflowSeriesBucket = 'cash' | 'taxable' | 'traditional' | 'roth' | 'hsa'
+
 export type CashflowSeriesEntry = {
   key: string
   label: string
   value: number
+  bucket: CashflowSeriesBucket
 }
 
 export type ExplainMetric = {
@@ -172,6 +175,7 @@ export type SimulationModule = {
     cashflows: CashflowItem[]
     actions: ActionRecord[]
     marketTotal?: number
+    marketReturns?: MarketReturn[]
     checkpoints?: ExplainMetric[]
     holdingTaxTypeById: Map<string, InvestmentAccountHolding['taxType']>
   }) => CashflowSeriesEntry[]

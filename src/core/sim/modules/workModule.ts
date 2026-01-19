@@ -1,6 +1,12 @@
 import type { FutureWorkPeriod, SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import type { ActionIntent, CashflowItem, SimulationContext, SimulationModule } from '../types'
+import type {
+  ActionIntent,
+  CashflowItem,
+  CashflowSeriesEntry,
+  SimulationContext,
+  SimulationModule,
+} from '../types'
 import { inflateAmount, isWithinRange } from './utils'
 
 export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule => {
@@ -76,30 +82,22 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
   return {
     id: 'future-work',
     explain,
-    getCashflowSeries: ({ cashflows, actions }) => {
+    getCashflowSeries: ({ cashflows, actions, holdingTaxTypeById }) => {
       let income = 0
-      let employee401k = 0
-      let employeeHsa = 0
-      let otherDeductions = 0
+      const contributionsByTax: Record<
+        'taxable' | 'traditional' | 'roth' | 'hsa',
+        number
+      > = {
+        taxable: 0,
+        traditional: 0,
+        roth: 0,
+        hsa: 0,
+      }
+      let hsaDeposits = 0
       cashflows.forEach((flow) => {
-        if (flow.cash > 0) {
-          income += flow.cash
-        }
-        const deductions = flow.deductions ?? 0
-        if (deductions !== 0) {
-          const label = flow.label.toLowerCase()
-          if (label.includes('401k')) {
-            employee401k += deductions
-          } else if (label.includes('hsa')) {
-            employeeHsa += deductions
-          } else {
-            otherDeductions += deductions
-          }
-        }
+        income += flow.cash
       })
 
-      let employer401k = 0
-      let employerHsa = 0
       actions.forEach((action) => {
         if (action.kind !== 'deposit') {
           return
@@ -107,39 +105,48 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
         const label = (action.label ?? '').toLowerCase()
         const resolved = action.resolvedAmount ?? action.amount
         if (label.includes('401k')) {
-          employer401k += resolved
+          const taxType = action.targetHoldingId
+            ? holdingTaxTypeById.get(action.targetHoldingId)
+            : undefined
+          const bucket =
+            taxType === 'taxable' ||
+            taxType === 'traditional' ||
+            taxType === 'roth' ||
+            taxType === 'hsa'
+              ? taxType
+              : 'traditional'
+          contributionsByTax[bucket] += resolved
         } else if (label.includes('hsa')) {
-          employerHsa += resolved
+          hsaDeposits += resolved
         }
       })
 
-      const entries = []
+      const entries: CashflowSeriesEntry[] = []
       if (income !== 0) {
         entries.push({
           key: 'future-work:income',
           label: 'Work - income',
           value: income,
+          bucket: 'cash',
         })
       }
-      if (employee401k + employer401k !== 0) {
+      Object.entries(contributionsByTax).forEach(([bucket, value]) => {
+        if (!value) {
+          return
+        }
         entries.push({
-          key: 'future-work:401k',
-          label: 'Work - 401k',
-          value: -(employee401k + employer401k),
+          key: `future-work:401k:${bucket}`,
+          label: `Work - 401k (${bucket})`,
+          value,
+          bucket: bucket as 'taxable' | 'traditional' | 'roth' | 'hsa',
         })
-      }
-      if (employeeHsa + employerHsa !== 0) {
+      })
+      if (hsaDeposits !== 0) {
         entries.push({
           key: 'future-work:hsa',
           label: 'Work - hsa',
-          value: -(employeeHsa + employerHsa),
-        })
-      }
-      if (otherDeductions !== 0) {
-        entries.push({
-          key: 'future-work:deductions',
-          label: 'Work - other deductions',
-          value: -otherDeductions,
+          value: hsaDeposits,
+          bucket: 'hsa',
         })
       }
       return entries

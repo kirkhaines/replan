@@ -28,11 +28,13 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
               key: 'taxes:ordinary',
               label: 'Taxes - ordinary',
               value: (taxableOrdinary / total) * taxCash,
+              bucket: 'cash',
             },
             {
               key: 'taxes:capital_gains',
               label: 'Taxes - capital gains',
               value: (taxableCapGains / total) * taxCash,
+              bucket: 'cash',
             },
           ]
         }
@@ -42,6 +44,7 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
           key: 'taxes:ordinary',
           label: 'Taxes - ordinary',
           value: taxCash,
+          bucket: 'cash',
         },
       ]
     },

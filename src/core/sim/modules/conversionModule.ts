@@ -1,7 +1,7 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import { selectIrmaaTable, selectTaxPolicy } from '../tax'
-import type { ActionIntent, SimulationModule } from '../types'
+import type { ActionIntent, CashflowSeriesEntry, SimulationModule } from '../types'
 
 export const createConversionModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const { rothConversion, rothLadder, tax } = snapshot.scenario.strategies
@@ -21,7 +21,7 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
     id: 'conversions',
     explain,
     getCashflowSeries: ({ actions, holdingTaxTypeById }) => {
-      const entries = []
+      const entries: CashflowSeriesEntry[] = []
       actions.forEach((action) => {
         if (action.kind !== 'convert') {
           return
@@ -38,6 +38,7 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
             key: `conversions:${sourceTax}`,
             label: `Conversions - ${sourceTax}`,
             value: -amount,
+            bucket: sourceTax,
           })
         }
         if (targetTax) {
@@ -45,6 +46,7 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
             key: `conversions:${targetTax}`,
             label: `Conversions - ${targetTax}`,
             value: amount,
+            bucket: targetTax,
           })
         }
       })

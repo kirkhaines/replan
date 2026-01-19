@@ -99,6 +99,7 @@ const moduleRunSchema = z.object({
         key: z.string(),
         label: z.string(),
         value: z.number(),
+        bucket: z.enum(['cash', 'taxable', 'traditional', 'roth', 'hsa']),
       }),
     )
     .optional(),

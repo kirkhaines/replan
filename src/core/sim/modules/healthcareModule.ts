@@ -26,6 +26,7 @@ export const createHealthcareModule = (
           key: 'healthcare:cash',
           label: 'Healthcare - cash',
           value: totalCash,
+          bucket: 'cash',
         },
       ]
     },

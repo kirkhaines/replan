@@ -19,6 +19,7 @@ export const createEventModule = (snapshot: SimulationSnapshot): SimulationModul
           key: 'events:cash',
           label: 'Events - cash',
           value: totalCash,
+          bucket: 'cash',
         },
       ]
     },

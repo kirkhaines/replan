@@ -23,6 +23,7 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
           key: 'spending:cash',
           label: 'Spending - cash',
           value: totalCash,
+          bucket: 'cash',
         },
       ]
     },

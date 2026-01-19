@@ -136,6 +136,7 @@ const RunResultsPage = () => {
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
   const [showPresentDay, setShowPresentDay] = useState(true)
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set())
+  const [bucketFilter, setBucketFilter] = useState('all')
   const [rangeKey, setRangeKey] = useState('all')
 
   const monthlyTimeline = run?.result.monthlyTimeline ?? []
@@ -147,19 +148,21 @@ const RunResultsPage = () => {
     }, new Map())
   }, [explanations])
   const rangeOptions = useMemo(() => {
+    type RangeOption = { key: string; label: string; start: string | null; end: string | null }
     if (!run?.snapshot || run.result.timeline.length === 0) {
-      return [{ key: 'all', label: 'All', start: null, end: null }]
+      return [{ key: 'all', label: 'All', start: null, end: null }] as RangeOption[]
     }
-    const { scenario } = run.snapshot
+    const snapshot = run.snapshot
+    const { scenario } = snapshot
     const timeline = run.result.timeline
     const simStart = timeline[0].date ?? null
     const simEnd = timeline[timeline.length - 1].date ?? null
     if (!simStart || !simEnd) {
-      return [{ key: 'all', label: 'All', start: null, end: null }]
+      return [{ key: 'all', label: 'All', start: null, end: null }] as RangeOption[]
     }
 
     const strategyIds = new Set(scenario.personStrategyIds)
-    const activePersonStrategies = run.snapshot.personStrategies.filter((strategy) =>
+    const activePersonStrategies = snapshot.personStrategies.filter((strategy) =>
       strategyIds.has(strategy.id),
     )
     const futureWorkStrategyIds = new Set(
@@ -169,7 +172,7 @@ const RunResultsPage = () => {
       activePersonStrategies.map((strategy) => strategy.socialSecurityStrategyId),
     )
 
-    const activePeriods = run.snapshot.futureWorkPeriods.filter((period) =>
+    const activePeriods = snapshot.futureWorkPeriods.filter((period) =>
       futureWorkStrategyIds.has(period.futureWorkStrategyId),
     )
     const retireEndDates = activePeriods
@@ -177,17 +180,17 @@ const RunResultsPage = () => {
       .filter((value): value is string => Boolean(value))
     const retireEnd = retireEndDates.length > 0 ? retireEndDates.sort().slice(-1)[0] : null
 
-    const ssaStartDates = run.snapshot.socialSecurityStrategies
+    const ssaStartDates = snapshot.socialSecurityStrategies
       .filter((strategy) => socialSecurityStrategyIds.has(strategy.id))
       .map((strategy) => strategy.startDate)
       .filter((value) => isIsoDate(value))
     const ssaStart = ssaStartDates.length > 0 ? ssaStartDates.sort()[0] : null
 
     const primaryStrategy = scenario.personStrategyIds
-      .map((id) => run.snapshot.personStrategies.find((strategy) => strategy.id === id))
+      .map((id) => snapshot.personStrategies.find((strategy) => strategy.id === id))
       .find(Boolean)
     const primaryPerson = primaryStrategy
-      ? run.snapshot.people.find((person) => person.id === primaryStrategy.personId)
+      ? snapshot.people.find((person) => person.id === primaryStrategy.personId)
       : null
     const penaltyFreeStart = primaryPerson?.dateOfBirth
       ? addMonths(primaryPerson.dateOfBirth, Math.round(59.5 * 12))
@@ -206,7 +209,9 @@ const RunResultsPage = () => {
       }
     }
 
-    const options = [{ key: 'all', label: 'All', start: null, end: null }]
+    const options: RangeOption[] = [
+      { key: 'all', label: 'All', start: null, end: null },
+    ]
     if (retireEnd && retireEnd > simStart) {
       options.push({
         key: 'pre-retirement',
@@ -544,13 +549,16 @@ const RunResultsPage = () => {
 
   const cashflowChart = useMemo(() => {
     if (!run?.snapshot) {
-      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+      return {
+        data: [],
+        series: [] as Array<{ key: string; label: string; color: string; bucket: string }>,
+      }
     }
 
-    const seriesMeta = new Map<string, { label: string; color: string }>()
-    const registerSeries = (key: string, label: string) => {
+    const seriesMeta = new Map<string, { label: string; color: string; bucket: string }>()
+    const registerSeries = (key: string, label: string, bucket: string) => {
       if (!seriesMeta.has(key)) {
-        seriesMeta.set(key, { label, color: colorForChartKey(key) })
+        seriesMeta.set(key, { label, color: colorForChartKey(key), bucket })
       }
     }
     const addValue = (
@@ -559,11 +567,12 @@ const RunResultsPage = () => {
       label: string,
       value: number,
       dateIso: string,
+      bucket: string,
     ) => {
       if (value === 0) {
         return
       }
-      registerSeries(key, label)
+      registerSeries(key, label, bucket)
       row[key] = Number(row[key] ?? 0) + adjustForInflation(value, dateIso)
     }
 
@@ -586,7 +595,14 @@ const RunResultsPage = () => {
 
       explanation.modules.forEach((module) => {
         module.cashflowSeries?.forEach((entry) => {
-          addValue(row, entry.key, entry.label, entry.value, month.date)
+          addValue(
+            row,
+            entry.key,
+            entry.label,
+            entry.value,
+            month.date,
+            entry.bucket ?? 'cash',
+          )
         })
       })
     })
@@ -613,6 +629,7 @@ const RunResultsPage = () => {
         key,
         label: meta.label,
         color: meta.color,
+        bucket: meta.bucket,
       }))
 
     const seriesKeys = series.map((entry) => entry.key)
@@ -629,6 +646,13 @@ const RunResultsPage = () => {
 
     return { data: normalizedData, series }
   }, [adjustForInflation, explanationsByMonth, filteredMonthlyTimeline, filteredTimeline, run?.snapshot])
+
+  const visibleCashflowSeries = useMemo(() => {
+    if (bucketFilter === 'all') {
+      return cashflowChart.series
+    }
+    return cashflowChart.series.filter((series) => series.bucket === bucketFilter)
+  }, [bucketFilter, cashflowChart.series])
 
   useEffect(() => {
     const load = async () => {
@@ -932,7 +956,23 @@ const RunResultsPage = () => {
 
       {cashflowChart.data.length > 0 && cashflowChart.series.length > 0 ? (
         <div className="card stack">
-          <h2>Cash flow by module</h2>
+          <div className="row">
+            <h2>Cash flow by module</h2>
+            <label className="field">
+              <span>Account bucket</span>
+              <select
+                value={bucketFilter}
+                onChange={(event) => setBucketFilter(event.target.value)}
+              >
+                <option value="all">All buckets</option>
+                <option value="cash">Cash</option>
+                <option value="taxable">Taxable</option>
+                <option value="traditional">Traditional</option>
+                <option value="roth">Roth</option>
+                <option value="hsa">HSA</option>
+              </select>
+            </label>
+          </div>
           <div className="chart">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={cashflowChart.data}>
@@ -961,7 +1001,7 @@ const RunResultsPage = () => {
                       >
                         <div className="tooltip-label">{label}</div>
                         {(() => {
-                          const visible = cashflowChart.series.filter((series) => {
+                          const visible = visibleCashflowSeries.filter((series) => {
                             if (hiddenSeries.has(series.key)) {
                               return false
                             }
@@ -995,7 +1035,7 @@ const RunResultsPage = () => {
                         justifyContent: 'center',
                       }}
                     >
-                      {cashflowChart.series.map((series) => {
+                      {visibleCashflowSeries.map((series) => {
                         const isHidden = hiddenSeries.has(series.key)
                         return (
                           <button
@@ -1041,7 +1081,7 @@ const RunResultsPage = () => {
                     </div>
                   )}
                 />
-                {cashflowChart.series.map((series) => (
+                {visibleCashflowSeries.map((series) => (
                   <Fragment key={series.key}>
                     <Area
                       type="monotone"

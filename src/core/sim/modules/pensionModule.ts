@@ -20,6 +20,7 @@ export const createPensionModule = (snapshot: SimulationSnapshot): SimulationMod
           key: 'pensions:cash',
           label: 'Pensions - cash',
           value: totalCash,
+          bucket: 'cash',
         },
       ]
     },

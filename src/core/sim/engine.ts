@@ -774,6 +774,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
           cashflows: moduleCashflows,
           actions: moduleActions,
           marketTotal: marketTotals?.total,
+          marketReturns: moduleMarketReturns,
           checkpoints,
           holdingTaxTypeById,
         }) ?? []

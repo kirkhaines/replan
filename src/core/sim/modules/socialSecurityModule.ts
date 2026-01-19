@@ -77,6 +77,7 @@ export const createSocialSecurityModule = (snapshot: SimulationSnapshot): Simula
           key: 'social-security:income',
           label: 'Social Security - income',
           value: totalCash,
+          bucket: 'cash',
         },
       ]
     },

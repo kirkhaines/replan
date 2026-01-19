@@ -192,6 +192,7 @@ export const buildActionCashflowSeries = ({
       key: `${moduleId}:cash`,
       label: `${moduleLabel} - cash`,
       value: cashDelta,
+      bucket: 'cash',
     })
   }
   Object.entries(investmentByTax).forEach(([taxType, value]) => {
@@ -202,6 +203,7 @@ export const buildActionCashflowSeries = ({
       key: `${moduleId}:${taxType}`,
       label: `${moduleLabel} - ${taxType}`,
       value,
+      bucket: taxType as CashflowSeriesEntry['bucket'],
     })
   })
   return entries

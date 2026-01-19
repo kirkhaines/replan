@@ -59,17 +59,40 @@ export const createReturnModule = (
   return {
     id: 'returns-core',
     explain,
-    getCashflowSeries: ({ marketTotal }) => {
-      if (!marketTotal) {
+    getCashflowSeries: ({ marketReturns }) => {
+      if (!marketReturns || marketReturns.length === 0) {
         return []
       }
-      return [
-        {
-          key: 'returns-core:market',
-          label: 'Market returns - market',
-          value: marketTotal,
-        },
-      ]
+      const totals: Record<'cash' | 'taxable' | 'traditional' | 'roth' | 'hsa', number> = {
+        cash: 0,
+        taxable: 0,
+        traditional: 0,
+        roth: 0,
+        hsa: 0,
+      }
+      marketReturns.forEach((entry) => {
+        if (entry.kind === 'cash') {
+          totals.cash += entry.amount
+          return
+        }
+        const rawTaxType = entry.taxType ?? 'taxable'
+        const taxType =
+          rawTaxType === 'taxable' ||
+          rawTaxType === 'traditional' ||
+          rawTaxType === 'roth' ||
+          rawTaxType === 'hsa'
+            ? rawTaxType
+            : 'taxable'
+        totals[taxType] += entry.amount
+      })
+      return (Object.entries(totals) as Array<[keyof typeof totals, number]>)
+        .filter(([, value]) => value !== 0)
+        .map(([bucket, value]) => ({
+          key: `returns-core:${bucket}`,
+          label: `Market returns - ${bucket}`,
+          value,
+          bucket,
+        }))
     },
     onEndOfMonth: (state, context) => {
       explain.addInput('Mode', returnModel.mode)
