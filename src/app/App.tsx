@@ -108,6 +108,23 @@ const AppShell = () => {
       <header className="nav">
         <div className="brand">
           <Link to="/scenarios">RePlan</Link>
+          <span
+            className="wip-badge"
+            title="This project is a work in progress. Many calculations are known to be wrong. Do not use this for planning... yet."
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path
+                d="M12 3l9 16H3L12 3z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+              <path d="M12 9v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="12" cy="16.5" r="1" fill="currentColor" />
+            </svg>
+            WIP
+          </span>
         </div>
         <nav className="nav-links">
           <Link to="/scenarios">Scenarios</Link>
