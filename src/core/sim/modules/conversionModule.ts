@@ -2,9 +2,11 @@ import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import { selectIrmaaTable, selectTaxPolicy } from '../tax'
 import type { ActionIntent, CashflowSeriesEntry, SimulationModule } from '../types'
+import { inflateAmount } from './utils'
 
 export const createConversionModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const { rothConversion, rothLadder, tax } = snapshot.scenario.strategies
+  const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const explain = createExplainTracker()
 
   const isAgeInRange = (age: number, startAge: number, endAge: number) => {
@@ -57,6 +59,10 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
       let conversionAmount = 0
       let ladderAmount = 0
       let conversionCandidate = 0
+      const inflateFromStart = (amount: number) =>
+        inflateAmount(amount, context.settings.startDate, context.dateIso, cpiRate)
+      const inflateFromPolicyYear = (amount: number, year: number) =>
+        inflateAmount(amount, `${year}-01-01`, context.dateIso, cpiRate)
 
       const ladderStartAge =
         rothLadder.startAge > 0
@@ -69,9 +75,8 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
       if (context.isStartOfYear && rothLadder.enabled && isAgeInRange(age, ladderStartAge, ladderEndAge)) {
         ladderAmount =
           rothLadder.annualConversion > 0
-            ? rothLadder.annualConversion
-            : rothLadder.targetAfterTaxSpending
-        conversionAmount += ladderAmount
+            ? inflateFromStart(rothLadder.annualConversion)
+            : inflateFromStart(rothLadder.targetAfterTaxSpending)
       }
 
       if (
@@ -80,44 +85,49 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
         isAgeInRange(age, rothConversion.startAge, rothConversion.endAge)
       ) {
         if (rothConversion.targetOrdinaryBracketRate > 0) {
-          const policy = selectTaxPolicy(
-            snapshot.taxPolicies,
-            context.date.getFullYear(),
-            tax.filingStatus,
-          )
+          const policyYear = context.date.getFullYear()
+          const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, tax.filingStatus)
           const bracket = policy?.ordinaryBrackets.find(
             (entry) => entry.rate === rothConversion.targetOrdinaryBracketRate,
           )
           if (bracket?.upTo !== null && bracket?.upTo !== undefined) {
-            conversionCandidate = Math.max(0, bracket.upTo - state.yearLedger.ordinaryIncome)
+            const bracketCeiling = inflateFromPolicyYear(bracket.upTo, policyYear)
+            conversionCandidate = Math.max(
+              0,
+              bracketCeiling - state.yearLedger.ordinaryIncome,
+            )
           }
         }
         if (rothConversion.respectIrmaa) {
-          const table = selectIrmaaTable(
-            snapshot.irmaaTables,
-            context.date.getFullYear(),
-            tax.filingStatus,
-          )
+          const policyYear = context.date.getFullYear()
+          const table = selectIrmaaTable(snapshot.irmaaTables, policyYear, tax.filingStatus)
           const baseTier = table?.tiers[0]?.maxMagi ?? 0
           const currentMagi =
             state.yearLedger.ordinaryIncome +
             state.yearLedger.capitalGains +
             state.yearLedger.taxExemptIncome
           if (baseTier > 0) {
+            const inflatedTier = inflateFromPolicyYear(baseTier, policyYear)
             conversionCandidate = Math.min(
               conversionCandidate,
-              Math.max(0, baseTier - currentMagi),
+              Math.max(0, inflatedTier - currentMagi),
             )
           }
         }
         if (rothConversion.minConversion > 0) {
-          conversionCandidate = Math.max(conversionCandidate, rothConversion.minConversion)
+          conversionCandidate = Math.max(
+            conversionCandidate,
+            inflateFromStart(rothConversion.minConversion),
+          )
         }
         if (rothConversion.maxConversion > 0) {
-          conversionCandidate = Math.min(conversionCandidate, rothConversion.maxConversion)
+          conversionCandidate = Math.min(
+            conversionCandidate,
+            inflateFromStart(rothConversion.maxConversion),
+          )
         }
-        conversionAmount += conversionCandidate
       }
+      conversionAmount = Math.max(ladderAmount, conversionCandidate)
 
       explain.addInput('Roth ladder', rothLadder.enabled)
       explain.addInput('Roth conversion', rothConversion.enabled)
