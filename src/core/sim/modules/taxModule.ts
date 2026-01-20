@@ -22,33 +22,48 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
       )
       const taxableOrdinary = lookup.get('Taxable ordinary')
       const taxableCapGains = lookup.get('Taxable cap gains')
+      const penalties = lookup.get('Penalties')
+      const entries: CashflowSeriesEntry[] = []
+      const penaltyValue =
+        typeof penalties === 'number' && penalties > 0 ? -penalties : 0
+      const remainingCash = taxCash - penaltyValue
+      if (penaltyValue !== 0) {
+        entries.push({
+          key: 'taxes:penalties',
+          label: 'Taxes - penalties',
+          value: penaltyValue,
+          bucket: 'cash',
+        })
+      }
       if (typeof taxableOrdinary === 'number' && typeof taxableCapGains === 'number') {
         const total = taxableOrdinary + taxableCapGains
-        if (total > 0) {
-          return [
+        if (total > 0 && remainingCash !== 0) {
+          entries.push(
             {
               key: 'taxes:ordinary',
               label: 'Taxes - ordinary',
-              value: (taxableOrdinary / total) * taxCash,
+              value: (taxableOrdinary / total) * remainingCash,
               bucket: 'cash',
             },
             {
               key: 'taxes:capital_gains',
               label: 'Taxes - capital gains',
-              value: (taxableCapGains / total) * taxCash,
+              value: (taxableCapGains / total) * remainingCash,
               bucket: 'cash',
             },
-          ]
+          )
+          return entries
         }
       }
-      return [
-        {
+      if (remainingCash !== 0) {
+        entries.push({
           key: 'taxes:ordinary',
           label: 'Taxes - ordinary',
-          value: taxCash,
+          value: remainingCash,
           bucket: 'cash',
-        },
-      ]
+        })
+      }
+      return entries
     },
     getCashflows: (state, context) => {
       const policyYear = taxStrategy.policyYear || context.date.getFullYear()
@@ -98,18 +113,18 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
           })
         : { socialSecurityTax: 0, medicareTax: 0, totalPayrollTax: 0 }
       state.magiHistory[context.yearIndex] = taxResult.magi
+      const federalTaxOwed = taxResult.taxOwed
       const totalTax =
-        taxResult.taxOwed + stateTax + payrollTaxes.totalPayrollTax + state.yearLedger.penalties
+        federalTaxOwed + stateTax + payrollTaxes.totalPayrollTax + state.yearLedger.penalties
       const taxDue = totalTax - state.yearLedger.taxPaid
       explain.addCheckpoint('Ordinary income', state.yearLedger.ordinaryIncome)
       explain.addCheckpoint('Capital gains', state.yearLedger.capitalGains)
       explain.addCheckpoint('Deductions', state.yearLedger.deductions)
       explain.addCheckpoint('Tax exempt', state.yearLedger.taxExemptIncome)
-      explain.addCheckpoint('Federal tax', taxResult.taxOwed)
+      explain.addCheckpoint('Federal tax', federalTaxOwed)
       explain.addCheckpoint('State tax', stateTax)
       explain.addCheckpoint('Social Security tax', payrollTaxes.socialSecurityTax)
       explain.addCheckpoint('Medicare tax', payrollTaxes.medicareTax)
-      explain.addCheckpoint('Tax owed', taxResult.taxOwed)
       explain.addCheckpoint('Penalties', state.yearLedger.penalties)
       explain.addCheckpoint('Total tax', totalTax)
       explain.addCheckpoint('Tax paid', state.yearLedger.taxPaid)

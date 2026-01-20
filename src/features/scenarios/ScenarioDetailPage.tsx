@@ -48,6 +48,15 @@ const addYearsToIsoDate = (isoDate: string, years: number) => {
   return date.toISOString().slice(0, 10)
 }
 
+const addMonthsToIsoDate = (isoDate: string, months: number) => {
+  const date = new Date(isoDate)
+  date.setMonth(date.getMonth() + months)
+  return date.toISOString().slice(0, 10)
+}
+
+const ageToIsoDate = (dateOfBirth: string, age: number) =>
+  addMonthsToIsoDate(dateOfBirth, Math.round(age * 12))
+
 type SpendingIntervalRow = {
   startMs: number | null
   endMs: number | null
@@ -429,6 +438,8 @@ const ScenarioDetailPage = () => {
   const investmentAccountIds = watch('scenario.investmentAccountIds')
   const taxPolicyYear = watch('scenario.strategies.tax.policyYear')
   const taxFilingStatus = watch('scenario.strategies.tax.filingStatus')
+  const rothConversionStartAge = watch('scenario.strategies.rothConversion.startAge')
+  const rothConversionEndAge = watch('scenario.strategies.rothConversion.endAge')
   const ladderLeadTimeYears = watch('scenario.strategies.rothLadder.leadTimeYears')
   const ladderStartAge = watch('scenario.strategies.rothLadder.startAge')
   const ladderEndAge = watch('scenario.strategies.rothLadder.endAge')
@@ -493,6 +504,11 @@ const ScenarioDetailPage = () => {
     return personStrategies.filter((strategy) => ids.has(strategy.id))
   }, [personStrategies, scenario?.personStrategyIds])
 
+  const primaryPerson = useMemo(() => {
+    const primaryStrategy = scenarioPersonStrategies[0]
+    return primaryStrategy ? peopleById.get(primaryStrategy.personId) : undefined
+  }, [peopleById, scenarioPersonStrategies])
+
   const ladderSpendingRows = useMemo(() => {
     if (!scenario || spendingSummaryRows.length === 0) {
       return []
@@ -500,10 +516,6 @@ const ScenarioDetailPage = () => {
     if (ladderStartAge <= 0 && ladderEndAge <= 0) {
       return []
     }
-    const primaryStrategy = scenarioPersonStrategies[0]
-    const primaryPerson = primaryStrategy
-      ? peopleById.get(primaryStrategy.personId)
-      : undefined
     if (!primaryPerson) {
       return []
     }
@@ -545,11 +557,29 @@ const ScenarioDetailPage = () => {
   }, [
     ladderEndAge,
     ladderStartAge,
-    peopleById,
+    primaryPerson,
     scenario,
-    scenarioPersonStrategies,
     spendingSummaryRows,
   ])
+
+  const formatAgeDate = (age: number) => {
+    if (!primaryPerson || age <= 0) {
+      return '-'
+    }
+    return ageToIsoDate(primaryPerson.dateOfBirth, age)
+  }
+  const rothConversionStartDate =
+    typeof rothConversionStartAge === 'number' ? formatAgeDate(rothConversionStartAge) : '-'
+  const rothConversionEndDate =
+    typeof rothConversionEndAge === 'number' ? formatAgeDate(rothConversionEndAge) : '-'
+  const ladderStartDate =
+    typeof ladderStartAge === 'number' ? formatAgeDate(ladderStartAge) : '-'
+  const ladderEndDate =
+    typeof ladderEndAge === 'number' ? formatAgeDate(ladderEndAge) : '-'
+  const ladderConversionStartDate =
+    typeof ladderConversionStart === 'number' ? formatAgeDate(ladderConversionStart) : '-'
+  const ladderConversionEndDate =
+    typeof ladderConversionEnd === 'number' ? formatAgeDate(ladderConversionEnd) : '-'
 
   const scenarioCashAccounts = useMemo(() => {
     const ids = new Set(scenario?.nonInvestmentAccountIds ?? [])
@@ -1977,6 +2007,23 @@ const ScenarioDetailPage = () => {
                   <span>Enable Roth conversions</span>
                 </label>
                 <label className="field">
+                  <span>Target tax bracket</span>
+                  <select
+                    {...register('scenario.strategies.rothConversion.targetOrdinaryBracketRate', {
+                      setValueAs: (value) => (value === '' ? 0 : Number(value)),
+                    })}
+                  >
+                    <option value={0}>None</option>
+                    {rothConversionBrackets.map((bracket) => (
+                      <option key={`${bracket.rate}-${bracket.upTo ?? 'top'}`} value={bracket.rate}>
+                        {`${Math.round(bracket.rate * 100)}% bracket${
+                          bracket.upTo ? ` (up to ${formatCurrency(bracket.upTo)})` : ''
+                        }`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
                   <span>Conversion start age</span>
                   <input
                     type="number"
@@ -1995,23 +2042,6 @@ const ScenarioDetailPage = () => {
                   />
                 </label>
                 <label className="field">
-                  <span>Target tax bracket</span>
-                  <select
-                    {...register('scenario.strategies.rothConversion.targetOrdinaryBracketRate', {
-                      setValueAs: (value) => (value === '' ? 0 : Number(value)),
-                    })}
-                  >
-                    <option value={0}>None</option>
-                    {rothConversionBrackets.map((bracket) => (
-                      <option key={`${bracket.rate}-${bracket.upTo ?? 'top'}`} value={bracket.rate}>
-                        {`${Math.round(bracket.rate * 100)}% bracket${
-                          bracket.upTo ? ` (up to ${formatCurrency(bracket.upTo)})` : ''
-                        }`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
                   <span>Min conversion</span>
                   <input
                     type="number"
@@ -2028,6 +2058,14 @@ const ScenarioDetailPage = () => {
                       valueAsNumber: true,
                     })}
                   />
+                </label>
+                <label className="field">
+                  <span>Conversion start date</span>
+                  <input readOnly value={rothConversionStartDate} />
+                </label>
+                <label className="field">
+                  <span>Conversion end date</span>
+                  <input readOnly value={rothConversionEndDate} />
                 </label>
                 <label className="field checkbox">
                   <input
@@ -2077,7 +2115,13 @@ const ScenarioDetailPage = () => {
                   />
                 </label>
                 <div className="muted">
-                  Conversion window: {ladderConversionStart.toFixed(1)}–{ladderConversionEnd.toFixed(1)}
+                  Availability window:<br/>
+                  {ladderStartDate}–{ladderEndDate}
+                </div>
+                <div className="muted">
+                  Conversion window:<br/>
+                  {ladderConversionStart.toFixed(1)}–{ladderConversionEnd.toFixed(1)}<br/>
+                  {ladderConversionStartDate}–{ladderConversionEndDate}
                 </div>
                 <div className="stack" style={{ gridColumn: '1 / -1' }}>
                   <span className="muted">

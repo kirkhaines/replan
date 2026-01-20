@@ -373,6 +373,7 @@ const RunResultsPage = () => {
     )
     const seriesKeys = ['cash', 'taxable', 'traditional', 'roth', 'hsa'] as const
     const data = filteredTimeline.map((point) => {
+      const year = point.date ? new Date(point.date).getFullYear() : undefined
       const monthly = monthlyByYear.get(point.yearIndex)
       const lastMonth = monthly && monthly.length > 0 ? monthly[monthly.length - 1] : null
       const accounts = lastMonth
@@ -397,7 +398,7 @@ const RunResultsPage = () => {
           }
         })
       }
-      return { ...point, ...totals }
+      return { ...point, year, ...totals }
     })
     return { data, seriesKeys }
   }, [adjustForInflation, explanationsByMonth, filteredTimeline, monthlyByYear, run?.snapshot])
@@ -486,6 +487,7 @@ const RunResultsPage = () => {
 
     type OrdinaryIncomeChartEntry = {
       age: number
+      year?: number
       yearIndex: number
       salaryIncome: number
       investmentIncome: number
@@ -525,6 +527,7 @@ const RunResultsPage = () => {
       }
       return {
         age: point.age,
+        year: Number.isNaN(pointYear) ? undefined : pointYear,
         yearIndex: point.yearIndex,
         salaryIncome: adjustForInflation(totals.salary, point.date),
         investmentIncome: adjustForInflation(totals.investment, point.date),
@@ -585,6 +588,7 @@ const RunResultsPage = () => {
         ({
           age: point?.age ?? month.age,
           date: point?.date ?? month.date,
+          year: point?.date ? new Date(point.date).getFullYear() : undefined,
         } as Record<string, number | string>)
       rowByYear.set(yearIndex, row)
 
@@ -608,13 +612,14 @@ const RunResultsPage = () => {
     })
 
     const data = filteredTimeline.map((point) => {
-      return rowByYear.get(point.yearIndex) ?? { age: point.age, date: point.date }
+      const year = point.date ? new Date(point.date).getFullYear() : undefined
+      return rowByYear.get(point.yearIndex) ?? { age: point.age, date: point.date, year }
     })
 
     const activeKeys = new Set<string>()
     data.forEach((row) => {
       Object.entries(row).forEach(([key, value]) => {
-        if (key === 'age' || key === 'date') {
+        if (key === 'age' || key === 'date' || key === 'year') {
           return
         }
         if (typeof value === 'number' && Math.abs(value) > 0.005) {
@@ -782,15 +787,17 @@ const RunResultsPage = () => {
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={balanceOverTime.data}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="age" />
+              <XAxis dataKey="year" />
               <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
               <Tooltip
-                content={({ active, payload, label }) => {
-                  if (!active || !payload || payload.length === 0) {
-                    return null
-                  }
-                  const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0)
-                  return (
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) {
+                      return null
+                    }
+                    const row = payload[0]?.payload as { year?: number; age?: number } | undefined
+                    const label = row?.year ? `${row.year} (age ${row.age ?? '-'})` : `${row?.age ?? ''}`
+                    const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0)
+                    return (
                     <div
                       style={{
                         background: 'var(--surface)',
@@ -873,7 +880,7 @@ const RunResultsPage = () => {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={ordinaryIncomeChart.data}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="age" />
+                <XAxis dataKey="year" />
                 <YAxis
                   tickFormatter={(value) => formatAxisValue(Number(value))}
                   width={70}
@@ -881,12 +888,30 @@ const RunResultsPage = () => {
                   allowDataOverflow={true}
                 />
                 <Tooltip
-                  formatter={(value) => formatCurrency(Number(value))}
-                  contentStyle={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '10px',
-                    boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) {
+                      return null
+                    }
+                    const row = payload[0]?.payload as { year?: number; age?: number } | undefined
+                    const label = row?.year ? `${row.year} (age ${row.age ?? '-'})` : `${row?.age ?? ''}`
+                    return (
+                      <div
+                        style={{
+                          background: 'var(--surface)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '10px',
+                          boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                          padding: '10px 12px',
+                        }}
+                      >
+                        <div className="tooltip-label">{label}</div>
+                        {payload.map((entry) => (
+                          <div key={String(entry.dataKey)} style={{ color: entry.color }}>
+                            {entry.name}: {formatCurrency(Number(entry.value))}
+                          </div>
+                        ))}
+                      </div>
+                    )
                   }}
                   wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                 />
@@ -978,10 +1003,10 @@ const RunResultsPage = () => {
               <AreaChart data={cashflowChart.data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <ReferenceLine y={0} stroke="var(--text-muted)" strokeWidth={1.5} />
-                <XAxis dataKey="age" />
+                <XAxis dataKey="year" />
                 <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
                 <Tooltip
-                  content={({ active, label, payload }) => {
+                  content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) {
                       return null
                     }
@@ -989,6 +1014,10 @@ const RunResultsPage = () => {
                     if (!row) {
                       return null
                     }
+                    const header =
+                      typeof row.year === 'number'
+                        ? `${row.year} (age ${row.age ?? '-'})`
+                        : `${row.age ?? ''}`
                     return (
                       <div
                         style={{
@@ -999,7 +1028,7 @@ const RunResultsPage = () => {
                           padding: '10px 12px',
                         }}
                       >
-                        <div className="tooltip-label">{label}</div>
+                        <div className="tooltip-label">{header}</div>
                         {(() => {
                           const visible = visibleCashflowSeries.filter((series) => {
                             if (hiddenSeries.has(series.key)) {

@@ -4,6 +4,18 @@ import type { FutureWorkPeriod, InvestmentAccountHolding } from '../../core/mode
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 
+const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
+  const birth = new Date(dateOfBirth)
+  const target = new Date(dateValue)
+  let months =
+    (target.getFullYear() - birth.getFullYear()) * 12 +
+    (target.getMonth() - birth.getMonth())
+  if (target.getDate() < birth.getDate()) {
+    months -= 1
+  }
+  return Math.max(0, Math.round((months / 12) * 10) / 10)
+}
+
 const FutureWorkPeriodDetailPage = () => {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
@@ -11,6 +23,7 @@ const FutureWorkPeriodDetailPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [period, setPeriod] = useState<FutureWorkPeriod | null>(null)
   const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
+  const [personDateOfBirth, setPersonDateOfBirth] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const normalizePeriod = (value: FutureWorkPeriod): FutureWorkPeriod => {
@@ -41,16 +54,20 @@ const FutureWorkPeriodDetailPage = () => {
       return
     }
     setIsLoading(true)
-    const [data, holdingsList, personStrategies] = await Promise.all([
+    const [data, holdingsList, personStrategies, people] = await Promise.all([
       storage.futureWorkPeriodRepo.get(id),
       storage.investmentAccountHoldingRepo.list(),
       storage.personStrategyRepo.list(),
+      storage.personRepo.list(),
     ])
     setPeriod(data ? normalizePeriod(data) : null)
     if (data) {
       const personStrategy = personStrategies.find(
         (strategy) => strategy.futureWorkStrategyId === data.futureWorkStrategyId,
       )
+      const person = personStrategy
+        ? people.find((entry) => entry.id === personStrategy.personId)
+        : undefined
       const scenario = personStrategy
         ? await storage.scenarioRepo.get(personStrategy.scenarioId)
         : undefined
@@ -62,8 +79,10 @@ const FutureWorkPeriodDetailPage = () => {
             )
           : []
       setHoldings(filteredHoldings)
+      setPersonDateOfBirth(person?.dateOfBirth ?? null)
     } else {
       setHoldings([])
+      setPersonDateOfBirth(null)
     }
     setIsLoading(false)
   }, [id, storage])
@@ -162,6 +181,15 @@ const FutureWorkPeriodDetailPage = () => {
     )
   }
 
+  const startAgeLabel =
+    personDateOfBirth && period.startDate
+      ? getAgeInYearsAtDate(personDateOfBirth, period.startDate).toFixed(1)
+      : '-'
+  const endAgeLabel =
+    personDateOfBirth && period.endDate
+      ? getAgeInYearsAtDate(personDateOfBirth, period.endDate).toFixed(1)
+      : '-'
+
   return (
     <section className="stack">
       <PageHeader
@@ -199,6 +227,14 @@ const FutureWorkPeriodDetailPage = () => {
               value={period.endDate ?? ''}
               onChange={(event) => handleChange('endDate', event.target.value || null)}
             />
+          </label>
+          <label className="field">
+            <span>Start age</span>
+            <input readOnly value={startAgeLabel} />
+          </label>
+          <label className="field">
+            <span>End age</span>
+            <input readOnly value={endAgeLabel} />
           </label>
         </div>
 
