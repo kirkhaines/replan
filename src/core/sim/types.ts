@@ -39,6 +39,7 @@ export type TaxLedger = {
   taxExemptIncome: number
   penalties: number
   taxPaid: number
+  earnedIncome: number
 }
 
 export type CashflowCategory =

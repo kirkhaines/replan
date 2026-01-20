@@ -279,6 +279,7 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
       taxExemptIncome: 0,
       penalties: 0,
       taxPaid: 0,
+      earnedIncome: 0,
     },
     magiHistory: {},
     initialBalance,
@@ -347,6 +348,9 @@ const applyCashflows = (
     state.yearLedger.capitalGains += flow.capitalGains ?? 0
     state.yearLedger.deductions += flow.deductions ?? 0
     state.yearLedger.taxExemptIncome += flow.taxExemptIncome ?? 0
+    if (flow.category === 'work' && flow.cash > 0) {
+      state.yearLedger.earnedIncome += flow.cash
+    }
     totals.ordinaryIncome += flow.ordinaryIncome ?? 0
     totals.capitalGains += flow.capitalGains ?? 0
     totals.deductions += flow.deductions ?? 0
@@ -662,6 +666,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
         taxExemptIncome: 0,
         penalties: 0,
         taxPaid: 0,
+        earnedIncome: 0,
       }
       yearTotals = createEmptyTotals()
     }

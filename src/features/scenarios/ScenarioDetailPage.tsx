@@ -2209,6 +2209,14 @@ const ScenarioDetailPage = () => {
                   {...register('scenario.strategies.tax.stateTaxRate', { valueAsNumber: true })}
                 />
               </label>
+              <label className="field">
+                <span>State</span>
+                <select {...register('scenario.strategies.tax.stateCode')}>
+                  <option value="none">None/Custom</option>
+                  <option value="ok">Oklahoma</option>
+                  <option value="tx">Texas</option>
+                </select>
+              </label>
               <label className="field checkbox">
                 <input type="checkbox" {...register('scenario.strategies.tax.useStandardDeduction')} />
                 <span>Use standard deduction</span>

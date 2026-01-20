@@ -115,6 +115,7 @@ export const healthcareStrategySchema = z.object({
 
 export const taxStrategySchema = z.object({
   filingStatus: filingStatusSchema,
+  stateCode: z.enum(['none', 'ok', 'tx']).default('none'),
   stateTaxRate: z.number().min(0).max(1),
   useStandardDeduction: z.boolean(),
   applyCapitalGainsRates: z.boolean(),
@@ -251,6 +252,7 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
   },
   tax: {
     filingStatus: 'single',
+    stateCode: 'none',
     stateTaxRate: 0,
     useStandardDeduction: true,
     applyCapitalGainsRates: true,
