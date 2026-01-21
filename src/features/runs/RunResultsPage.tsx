@@ -10,7 +10,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
-  Legend,
 } from 'recharts'
 import type { SimulationRun } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
@@ -137,6 +136,9 @@ const RunResultsPage = () => {
   const [showPresentDay, setShowPresentDay] = useState(true)
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set())
   const [bucketFilter, setBucketFilter] = useState('all')
+  const [showBalanceChart, setShowBalanceChart] = useState(true)
+  const [showOrdinaryChart, setShowOrdinaryChart] = useState(true)
+  const [showCashflowChart, setShowCashflowChart] = useState(true)
   const [rangeKey, setRangeKey] = useState('all')
 
   const monthlyTimeline = run?.result.monthlyTimeline ?? []
@@ -776,155 +778,214 @@ const RunResultsPage = () => {
       ) : null}
 
       <div className="card stack">
-        <div className="field">
-          <span>Display</span>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={showPresentDay}
-              onChange={(event) => setShowPresentDay(event.target.checked)}
-            />
-            Show values in present-day dollars
+        <div className="row" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
+          <div className="field">
+            <span>Display</span>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={showPresentDay}
+                onChange={(event) => setShowPresentDay(event.target.checked)}
+              />
+              Show values in present-day dollars
+            </label>
+          </div>
+          <label className="field">
+            <span>Date range</span>
+            <select
+              value={rangeKey}
+              onChange={(event) => setRangeKey(event.target.value)}
+            >
+              {rangeOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
-        <label className="field">
-          <span>Date range</span>
-          <select
-            value={rangeKey}
-            onChange={(event) => setRangeKey(event.target.value)}
-          >
-            {rangeOptions.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
-      <div className="card stack">
-        <h2>Balance over time</h2>
-        <div className="chart">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={balanceOverTime.data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
-              <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
-              <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload || payload.length === 0) {
-                      return null
-                    }
-                    const row = payload[0]?.payload as { year?: number; age?: number } | undefined
-                    const label = row?.year ? `${row.year} (age ${row.age ?? '-'})` : `${row?.age ?? ''}`
-                    const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0)
-                    return (
-                    <div
-                      style={{
-                        background: 'var(--surface)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '10px',
-                        boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
-                        padding: '10px 12px',
-                      }}
-                    >
-                      <div className="tooltip-label">{label}</div>
-                      {payload.map((entry) => (
-                        <div key={String(entry.dataKey)} style={{ color: entry.color }}>
-                          {entry.name}: {formatCurrency(Number(entry.value))}
-                        </div>
-                      ))}
-                      <div className="tooltip-total">
-                        Total: {formatCurrency(total)}
-                      </div>
-                    </div>
-                  )
-                }}
-                contentStyle={{
-                  background: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '10px',
-                  boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
-                }}
-                wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
-              />
-              <Legend />
-              <Area
-                type="monotone"
-                dataKey="cash"
-                stackId="balance"
-                name="Cash"
-                stroke="#22c55e"
-                fill="color-mix(in srgb, #22c55e 35%, transparent)"
-              />
-              <Area
-                type="monotone"
-                dataKey="taxable"
-                stackId="balance"
-                name="Taxable holdings"
-                stroke="#2563eb"
-                fill="color-mix(in srgb, #2563eb 35%, transparent)"
-              />
-              <Area
-                type="monotone"
-                dataKey="traditional"
-                stackId="balance"
-                name="Traditional holdings"
-                stroke="#f59e0b"
-                fill="color-mix(in srgb, #f59e0b 35%, transparent)"
-              />
-              <Area
-                type="monotone"
-                dataKey="rothSeasoned"
-                stackId="balance"
-                name="Roth seasoned basis"
-                stroke="#7c3aed"
-                fill="color-mix(in srgb, #7c3aed 35%, transparent)"
-              />
-              <Area
-                type="monotone"
-                dataKey="rothUnseasoned"
-                stackId="balance"
-                name="Roth unseasoned basis"
-                stroke="#a855f7"
-                fill="color-mix(in srgb, #a855f7 35%, transparent)"
-              />
-              <Area
-                type="monotone"
-                dataKey="rothNonBasis"
-                stackId="balance"
-                name="Roth non-basis"
-                stroke="#d8b4fe"
-                fill="color-mix(in srgb, #d8b4fe 35%, transparent)"
-              />
-              <Area
-                type="monotone"
-                dataKey="hsa"
-                stackId="balance"
-                name="HSA holdings"
-                stroke="#ec4899"
-                fill="color-mix(in srgb, #ec4899 35%, transparent)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+      <div className="card">
+        <div className="row">
+          <h2>Balance over time</h2>
+          <button
+            className="link-button"
+            type="button"
+            onClick={() => setShowBalanceChart((current) => !current)}
+          >
+            {showBalanceChart ? '▾' : '▸'} {showBalanceChart ? 'Hide' : 'Show'}
+          </button>
         </div>
+        {showBalanceChart ? (
+          <>
+            <div className="chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={balanceOverTime.data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" />
+                  <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) {
+                        return null
+                      }
+                      const row = payload[0]?.payload as { year?: number; age?: number } | undefined
+                      const label = row?.year
+                        ? `${row.year} (age ${row.age ?? '-'})`
+                        : `${row?.age ?? ''}`
+                      const total = payload.reduce((sum, entry) => sum + Number(entry.value ?? 0), 0)
+                      return (
+                        <div
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '10px',
+                            boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                            padding: '10px 12px',
+                          }}
+                        >
+                          <div className="tooltip-label">{label}</div>
+                          {payload.map((entry) => (
+                            <div key={String(entry.dataKey)} style={{ color: entry.color }}>
+                              {entry.name}: {formatCurrency(Number(entry.value))}
+                            </div>
+                          ))}
+                          <div className="tooltip-total">Total: {formatCurrency(total)}</div>
+                        </div>
+                      )
+                    }}
+                    contentStyle={{
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '10px',
+                      boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                    }}
+                    wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="cash"
+                    stackId="balance"
+                    name="Cash"
+                    stroke="#22c55e"
+                    fill="color-mix(in srgb, #22c55e 35%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="taxable"
+                    stackId="balance"
+                    name="Taxable holdings"
+                    stroke="#2563eb"
+                    fill="color-mix(in srgb, #2563eb 35%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="traditional"
+                    stackId="balance"
+                    name="Traditional holdings"
+                    stroke="#f59e0b"
+                    fill="color-mix(in srgb, #f59e0b 35%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="rothSeasoned"
+                    stackId="balance"
+                    name="Roth seasoned basis"
+                    stroke="#7c3aed"
+                    fill="color-mix(in srgb, #7c3aed 35%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="rothUnseasoned"
+                    stackId="balance"
+                    name="Roth unseasoned basis"
+                    stroke="#a855f7"
+                    fill="color-mix(in srgb, #a855f7 35%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="rothNonBasis"
+                    stackId="balance"
+                    name="Roth non-basis"
+                    stroke="#d8b4fe"
+                    fill="color-mix(in srgb, #d8b4fe 35%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="hsa"
+                    stackId="balance"
+                    name="HSA holdings"
+                    stroke="#ec4899"
+                    fill="color-mix(in srgb, #ec4899 35%, transparent)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.4rem 0.75rem',
+                justifyContent: 'center',
+                fontSize: '0.85rem',
+                lineHeight: 1.1,
+                marginTop: '0.35rem',
+              }}
+            >
+              {[
+                { key: 'cash', label: 'Cash', color: '#22c55e' },
+                { key: 'taxable', label: 'Taxable holdings', color: '#2563eb' },
+                { key: 'traditional', label: 'Traditional holdings', color: '#f59e0b' },
+                { key: 'rothSeasoned', label: 'Roth seasoned basis', color: '#7c3aed' },
+                { key: 'rothUnseasoned', label: 'Roth unseasoned basis', color: '#a855f7' },
+                { key: 'rothNonBasis', label: 'Roth non-basis', color: '#d8b4fe' },
+                { key: 'hsa', label: 'HSA holdings', color: '#ec4899' },
+              ].map((item) => (
+                <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '999px',
+                      background: item.color,
+                      display: 'inline-block',
+                    }}
+                  />
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
 
       {ordinaryIncomeChart.data.length > 0 ? (
-        <div className="card stack">
-          <h2>Ordinary income tax bracket</h2>
-          <div className="chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={ordinaryIncomeChart.data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="year" />
-                <YAxis
-                  tickFormatter={(value) => formatAxisValue(Number(value))}
-                  width={70}
-                  domain={[0, ordinaryIncomeChart.maxValue]}
-                  allowDataOverflow={true}
-                />
-                <Tooltip
+        <div className="card">
+          <div className="row">
+            <h2>Ordinary income tax bracket</h2>
+          <button
+            className="link-button"
+            type="button"
+            onClick={() => setShowOrdinaryChart((current) => !current)}
+          >
+            {showOrdinaryChart ? '▾' : '▸'} {showOrdinaryChart ? 'Hide' : 'Show'}
+          </button>
+          </div>
+          {showOrdinaryChart ? (
+            <>
+              <div className="chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={ordinaryIncomeChart.data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" />
+                  <YAxis
+                    tickFormatter={(value) => formatAxisValue(Number(value))}
+                    width={70}
+                    domain={[0, ordinaryIncomeChart.maxValue]}
+                    allowDataOverflow={true}
+                  />
+                  <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) {
                       return null
@@ -952,97 +1013,145 @@ const RunResultsPage = () => {
                   }}
                   wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                 />
-                <Legend />
-                <Area
-                  type="monotone"
-                  dataKey="salaryIncome"
-                  stackId="ordinary"
-                  name="Salary and other income"
-                  stroke="#4f63ff"
-                  fill="color-mix(in srgb, #4f63ff 45%, transparent)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="investmentIncome"
-                  stackId="ordinary"
-                  name="Investment income"
-                  stroke="#3da5ff"
-                  fill="color-mix(in srgb, #3da5ff 45%, transparent)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="socialSecurityIncome"
-                  stackId="ordinary"
-                  name="Taxable social security"
-                  stroke="#7ecf7a"
-                  fill="color-mix(in srgb, #7ecf7a 45%, transparent)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="pensionIncome"
-                  stackId="ordinary"
-                  name="Taxable pension and annuity"
-                  stroke="#7d6bff"
-                  fill="color-mix(in srgb, #7d6bff 45%, transparent)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="taxDeferredIncome"
-                  stackId="ordinary"
-                  name="Withdrawal from tax deferred"
-                  stroke="#f39c3d"
-                  fill="color-mix(in srgb, #f39c3d 45%, transparent)"
-                />
-                {ordinaryIncomeChart.bracketLines.map((line) => {
-                  const rateRatio = Math.min(Math.max(line.rate / 0.5, 0), 1)
-                  const hue = 120 - 120 * rateRatio
-                  const stroke = `hsl(${hue} 70% 45%)`
-                  return (
-                    <Line
-                      key={line.key}
-                      type="monotone"
-                      dataKey={line.key}
-                      name={line.label}
-                      stroke={stroke}
-                      strokeDasharray="4 4"
-                      strokeWidth={0.75}
-                      dot={false}
+                  <Area
+                    type="monotone"
+                    dataKey="salaryIncome"
+                    stackId="ordinary"
+                    name="Salary and other income"
+                    stroke="#4f63ff"
+                    fill="color-mix(in srgb, #4f63ff 45%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="investmentIncome"
+                    stackId="ordinary"
+                    name="Investment income"
+                    stroke="#3da5ff"
+                    fill="color-mix(in srgb, #3da5ff 45%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="socialSecurityIncome"
+                    stackId="ordinary"
+                    name="Taxable social security"
+                    stroke="#7ecf7a"
+                    fill="color-mix(in srgb, #7ecf7a 45%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="pensionIncome"
+                    stackId="ordinary"
+                    name="Taxable pension and annuity"
+                    stroke="#7d6bff"
+                    fill="color-mix(in srgb, #7d6bff 45%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="taxDeferredIncome"
+                    stackId="ordinary"
+                    name="Withdrawal from tax deferred"
+                    stroke="#f39c3d"
+                    fill="color-mix(in srgb, #f39c3d 45%, transparent)"
+                  />
+                  {ordinaryIncomeChart.bracketLines.map((line) => {
+                    const rateRatio = Math.min(Math.max(line.rate / 0.5, 0), 1)
+                    const hue = 120 - 120 * rateRatio
+                    const stroke = `hsl(${hue} 70% 45%)`
+                    return (
+                      <Line
+                        key={line.key}
+                        type="monotone"
+                        dataKey={line.key}
+                        name={line.label}
+                        stroke={stroke}
+                        strokeDasharray="4 4"
+                        strokeWidth={0.75}
+                        dot={false}
+                      />
+                    )
+                  })}
+                </AreaChart>
+              </ResponsiveContainer>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '0.4rem 0.75rem',
+                  justifyContent: 'center',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.1,
+                  marginTop: '0.35rem',
+                }}
+              >
+                {[
+                  { key: 'salaryIncome', label: 'Salary and other income', color: '#4f63ff' },
+                  { key: 'investmentIncome', label: 'Investment income', color: '#3da5ff' },
+                  { key: 'socialSecurityIncome', label: 'Taxable social security', color: '#7ecf7a' },
+                  { key: 'pensionIncome', label: 'Taxable pension and annuity', color: '#7d6bff' },
+                  { key: 'taxDeferredIncome', label: 'Withdrawal from tax deferred', color: '#f39c3d' },
+                  ...ordinaryIncomeChart.bracketLines.map((line) => {
+                    const rateRatio = Math.min(Math.max(line.rate / 0.5, 0), 1)
+                    const hue = 120 - 120 * rateRatio
+                    return { key: line.key, label: line.label, color: `hsl(${hue} 70% 45%)` }
+                  }),
+                ].map((item) => (
+                  <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '999px',
+                        background: item.color,
+                        display: 'inline-block',
+                      }}
                     />
-                  )
-                })}
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
 
       {cashflowChart.data.length > 0 && cashflowChart.series.length > 0 ? (
-        <div className="card stack">
+        <div className="card">
           <div className="row">
             <h2>Cash flow by module</h2>
-            <label className="field">
-              <span>Account bucket</span>
-              <select
-                value={bucketFilter}
-                onChange={(event) => setBucketFilter(event.target.value)}
+            <div className="row" style={{ gap: '0.75rem' }}>
+              <label className="field">
+                <select
+                  value={bucketFilter}
+                  onChange={(event) => setBucketFilter(event.target.value)}
+                >
+                  <option value="all">All buckets</option>
+                  <option value="cash">Cash</option>
+                  <option value="taxable">Taxable</option>
+                  <option value="traditional">Traditional</option>
+                  <option value="roth">Roth</option>
+                  <option value="hsa">HSA</option>
+                </select>
+              </label>
+              <button
+                className="link-button"
+                type="button"
+                onClick={() => setShowCashflowChart((current) => !current)}
               >
-                <option value="all">All buckets</option>
-                <option value="cash">Cash</option>
-                <option value="taxable">Taxable</option>
-                <option value="traditional">Traditional</option>
-                <option value="roth">Roth</option>
-                <option value="hsa">HSA</option>
-              </select>
-            </label>
+                {showCashflowChart ? '▾' : '▸'} {showCashflowChart ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
-          <div className="chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cashflowChart.data}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <ReferenceLine y={0} stroke="var(--text-muted)" strokeWidth={1.5} />
-                <XAxis dataKey="year" />
-                <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
-                <Tooltip
+          {showCashflowChart ? (
+            <>
+            <div className="chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={cashflowChart.data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <ReferenceLine y={0} stroke="var(--text-muted)" strokeWidth={1.5} />
+                  <XAxis dataKey="year" />
+                  <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
+                  <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) {
                       return null
@@ -1091,62 +1200,6 @@ const RunResultsPage = () => {
                   }}
                   wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                 />
-                <Legend
-                  content={() => (
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '0.85rem',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {visibleCashflowSeries.map((series) => {
-                        const isHidden = hiddenSeries.has(series.key)
-                        return (
-                          <button
-                            key={series.key}
-                            type="button"
-                            onClick={() =>
-                              setHiddenSeries((current) => {
-                                const next = new Set(current)
-                                if (next.has(series.key)) {
-                                  next.delete(series.key)
-                                } else {
-                                  next.add(series.key)
-                                }
-                                return next
-                              })
-                            }
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.4rem',
-                              border: 'none',
-                              background: 'none',
-                              padding: 0,
-                              color: isHidden ? 'var(--text-muted)' : 'inherit',
-                              opacity: isHidden ? 0.55 : 1,
-                              cursor: 'pointer',
-                              font: 'inherit',
-                            }}
-                          >
-                            <span
-                              style={{
-                                width: '10px',
-                                height: '10px',
-                                borderRadius: '999px',
-                                background: series.color,
-                                display: 'inline-block',
-                              }}
-                            />
-                            {series.label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                />
                 {visibleCashflowSeries.map((series) => (
                   <Fragment key={series.key}>
                     <Area
@@ -1179,7 +1232,63 @@ const RunResultsPage = () => {
                 ))}
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.45rem 0.75rem',
+                fontSize: '0.85rem',
+                lineHeight: 1.1,
+                justifyContent: 'center',
+                marginTop: '0.35rem',
+              }}
+            >
+              {visibleCashflowSeries.map((series) => {
+                const isHidden = hiddenSeries.has(series.key)
+                return (
+                  <button
+                    key={series.key}
+                    type="button"
+                    onClick={() =>
+                      setHiddenSeries((current) => {
+                        const next = new Set(current)
+                        if (next.has(series.key)) {
+                          next.delete(series.key)
+                        } else {
+                          next.add(series.key)
+                        }
+                        return next
+                      })
+                    }
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem',
+                      border: 'none',
+                      background: 'none',
+                      padding: '0.1rem 0',
+                      color: isHidden ? 'var(--text-muted)' : 'inherit',
+                      opacity: isHidden ? 0.55 : 1,
+                      cursor: 'pointer',
+                      font: 'inherit',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '999px',
+                        background: series.color,
+                        display: 'inline-block',
+                      }}
+                    />
+                    {series.label}
+                  </button>
+                )
+              })}
+            </div>
+          </>) : null}
         </div>
       ) : null}
 
