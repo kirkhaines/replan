@@ -13,20 +13,20 @@ const sumSeasonedBasis = (
   entries: SimulationState['holdings'][number]['contributionBasisEntries'],
   dateIso: string,
 ) => {
-  const current = new Date(dateIso)
+  const current = new Date(`${dateIso}T00:00:00Z`)
   if (Number.isNaN(current.getTime())) {
     return 0
   }
   return entries.reduce((sum, entry) => {
-    const entryDate = new Date(entry.date)
+    const entryDate = new Date(`${entry.date}T00:00:00Z`)
     if (Number.isNaN(entryDate.getTime())) {
       return sum
     }
-    const months =
-      (current.getFullYear() - entryDate.getFullYear()) * 12 +
-      (current.getMonth() - entryDate.getMonth())
-    if (current.getDate() < entryDate.getDate()) {
-      return sum
+    let months =
+      (current.getUTCFullYear() - entryDate.getUTCFullYear()) * 12 +
+      (current.getUTCMonth() - entryDate.getUTCMonth())
+    if (current.getUTCDate() < entryDate.getUTCDate()) {
+      months -= 1
     }
     return months >= 60 ? sum + entry.amount : sum
   }, 0)
