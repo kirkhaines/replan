@@ -11,6 +11,28 @@ export const createHealthcareModule = (
   const scenario = snapshot.scenario
   const strategy = scenario.strategies.healthcare
   const taxStrategy = scenario.strategies.tax
+  const activeStrategyIds = new Set(scenario.personStrategyIds)
+  const futureWorkStrategyIds = new Set(
+    snapshot.personStrategies
+      .filter((strategy) => activeStrategyIds.has(strategy.id))
+      .map((strategy) => strategy.futureWorkStrategyId),
+  )
+  const healthPeriods = snapshot.futureWorkPeriods.filter(
+    (period) =>
+      futureWorkStrategyIds.has(period.futureWorkStrategyId) && period.includesHealthInsurance,
+  )
+  let hasOpenEndedHealth = false
+  let lastHealthEndDate: string | null = null
+  healthPeriods.forEach((period) => {
+    const endDate = period.endDate ?? ''
+    if (!endDate) {
+      hasOpenEndedHealth = true
+      return
+    }
+    if (!lastHealthEndDate || endDate > lastHealthEndDate) {
+      lastHealthEndDate = endDate
+    }
+  })
   const explain = createExplainTracker()
 
   return {
@@ -31,6 +53,17 @@ export const createHealthcareModule = (
       ]
     },
     getCashflows: (state, context) => {
+      if (hasOpenEndedHealth) {
+        explain.addInput('Covered by work', true)
+        explain.addCheckpoint('Total', 0)
+        return []
+      }
+      if (lastHealthEndDate && context.dateIso <= lastHealthEndDate) {
+        explain.addInput('Covered by work', true)
+        explain.addInput('Coverage ends', lastHealthEndDate)
+        explain.addCheckpoint('Total', 0)
+        return []
+      }
       const isMedicare = context.age >= 65
       const baseMonthly = isMedicare
         ? strategy.medicarePartBMonthly + strategy.medicarePartDMonthly + strategy.medigapMonthly
