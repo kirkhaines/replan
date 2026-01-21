@@ -65,6 +65,12 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
           ...order.filter((type) => penalizedTypes.has(type)),
         ]
       }
+    } else {
+      // remove roth_basis since after 59.5 it isn't special
+      const withoutPenalty = order.filter((type) => type != 'roth_basis')
+      if (withoutPenalty.length > 0) {
+        order = withoutPenalty
+      }
     }
     const gainTarget = Math.max(
       withdrawal.taxableGainHarvestTarget,

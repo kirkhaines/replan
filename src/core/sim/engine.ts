@@ -506,7 +506,9 @@ const resolveIntents = (
   const sorted = [...intents].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
   return sorted.map((intent) => {
     if (intent.kind === 'withdraw') {
-      const available = sumHoldings(state)
+      const available = intent.sourceHoldingId
+        ? state.holdings.find((holding) => holding.id === intent.sourceHoldingId)?.balance ?? 0
+        : sumHoldings(state)
       return { ...intent, resolvedAmount: Math.min(intent.amount, available) }
     }
     return { ...intent, resolvedAmount: intent.amount }
