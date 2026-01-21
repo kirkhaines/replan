@@ -147,23 +147,37 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
         return []
       }
 
-      const sourceHolding = state.holdings.find((holding) => holding.taxType === 'traditional')
+      const sourceHoldings = state.holdings
+        .filter((holding) => holding.taxType === 'traditional' && holding.balance > 0)
+        .sort((a, b) => b.balance - a.balance)
       const targetHolding = state.holdings.find((holding) => holding.taxType === 'roth')
-      if (!sourceHolding || !targetHolding) {
+      if (sourceHoldings.length === 0 || !targetHolding) {
         return []
       }
 
-      const intents: ActionIntent[] = [
-        {
-          id: `conversion-${context.yearIndex}`,
+      const intents: ActionIntent[] = []
+      let remaining = conversionAmount
+      let priority = 40
+      sourceHoldings.forEach((holding) => {
+        if (remaining <= 0) {
+          return
+        }
+        const amount = Math.min(remaining, holding.balance)
+        if (amount <= 0) {
+          return
+        }
+        intents.push({
+          id: `conversion-${context.yearIndex}-${holding.id}`,
           kind: 'convert',
-          amount: conversionAmount,
-          sourceHoldingId: sourceHolding.id,
+          amount,
+          sourceHoldingId: holding.id,
           targetHoldingId: targetHolding.id,
-          priority: 40,
+          priority,
           label: 'Roth conversion',
-        },
-      ]
+        })
+        remaining -= amount
+        priority += 1
+      })
 
       return intents
     },
