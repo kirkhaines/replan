@@ -341,10 +341,9 @@ describe('cashBufferModule', () => {
     const module = createCashBufferModule(snapshot)
     const actions = module.getActionIntents?.(makeState(0, holdings), makeContext(snapshot, 60))
     expect(actions).toBeDefined()
-    expect(actions?.map((action) => action.amount)).toEqual([200, 150])
+    expect(actions?.map((action) => action.amount)).toEqual([350])
     expect(actions?.map((action) => action.label)).toEqual([
-      'Refill cash buffer (roth basis)',
-      'Refill cash buffer',
+      'Refill cash buffer'
     ])
   })
 
