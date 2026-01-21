@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import type { FutureWorkPeriod, InvestmentAccountHolding } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
+
+const addMonthsToIsoDate = (isoDate: string, months: number) => {
+  const base = new Date(isoDate)
+  const next = new Date(base)
+  next.setMonth(next.getMonth() + months)
+  return next.toISOString().slice(0, 10)
+}
+
+const ageToIsoDate = (dateOfBirth: string, age: number) =>
+  addMonthsToIsoDate(dateOfBirth, Math.round(age * 12))
 
 const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
   const birth = new Date(dateOfBirth)
@@ -24,7 +34,10 @@ const FutureWorkPeriodDetailPage = () => {
   const [period, setPeriod] = useState<FutureWorkPeriod | null>(null)
   const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
   const [personDateOfBirth, setPersonDateOfBirth] = useState<string | null>(null)
+  const [scenarioId, setScenarioId] = useState<string | null>(null)
+  const [socialSecurityStrategyId, setSocialSecurityStrategyId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const originalPeriodRef = useRef<FutureWorkPeriod | null>(null)
 
   const normalizePeriod = (value: FutureWorkPeriod): FutureWorkPeriod => {
     const contributionType = value['401kContributionType']
@@ -60,7 +73,9 @@ const FutureWorkPeriodDetailPage = () => {
       storage.personStrategyRepo.list(),
       storage.personRepo.list(),
     ])
-    setPeriod(data ? normalizePeriod(data) : null)
+    const normalized = data ? normalizePeriod(data) : null
+    setPeriod(normalized)
+    originalPeriodRef.current = normalized
     if (data) {
       const personStrategy = personStrategies.find(
         (strategy) => strategy.futureWorkStrategyId === data.futureWorkStrategyId,
@@ -71,6 +86,8 @@ const FutureWorkPeriodDetailPage = () => {
       const scenario = personStrategy
         ? await storage.scenarioRepo.get(personStrategy.scenarioId)
         : undefined
+      setScenarioId(scenario?.id ?? null)
+      setSocialSecurityStrategyId(personStrategy?.socialSecurityStrategyId ?? null)
       const scenarioAccountIds = scenario?.investmentAccountIds ?? []
       const filteredHoldings =
         scenarioAccountIds.length > 0
@@ -83,6 +100,8 @@ const FutureWorkPeriodDetailPage = () => {
     } else {
       setHoldings([])
       setPersonDateOfBirth(null)
+      setScenarioId(null)
+      setSocialSecurityStrategyId(null)
     }
     setIsLoading(false)
   }, [id, storage])
@@ -103,10 +122,93 @@ const FutureWorkPeriodDetailPage = () => {
     if (!period || validationErrors.length > 0) {
       return
     }
+    const previous = originalPeriodRef.current
     const now = Date.now()
     const next = { ...period, updatedAt: now }
     await storage.futureWorkPeriodRepo.upsert(next)
     setPeriod(next)
+    originalPeriodRef.current = next
+
+    if (!previous || !scenarioId) {
+      return
+    }
+
+    const startChanged = previous.startDate !== next.startDate
+    const endChanged = previous.endDate !== next.endDate
+    if (!startChanged && !endChanged) {
+      return
+    }
+
+    const scenario = await storage.scenarioRepo.get(scenarioId)
+    if (!scenario) {
+      return
+    }
+
+    const updates: Promise<unknown>[] = []
+    const nextStart = next.startDate ?? ''
+    const nextEnd = next.endDate ?? ''
+    const spendingItems = await storage.spendingLineItemRepo.listForStrategy(
+      scenario.spendingStrategyId,
+    )
+    spendingItems
+      .filter((item) => item.futureWorkPeriodId === next.id)
+      .forEach((item) => {
+        updates.push(
+          storage.spendingLineItemRepo.upsert({
+            ...item,
+            startDate: nextStart,
+            endDate: nextEnd,
+            updatedAt: now,
+          }),
+        )
+      })
+
+    if (endChanged && previous.endDate && next.endDate && socialSecurityStrategyId) {
+      const ssStrategy = await storage.socialSecurityStrategyRepo.get(
+        socialSecurityStrategyId,
+      )
+      if (ssStrategy && ssStrategy.startDate === previous.endDate) {
+        updates.push(
+          storage.socialSecurityStrategyRepo.upsert({
+            ...ssStrategy,
+            startDate: next.endDate,
+            updatedAt: now,
+          }),
+        )
+      }
+    }
+
+    if (endChanged && previous.endDate && next.endDate && personDateOfBirth) {
+      const ladder = scenario.strategies.rothLadder
+      const conversionStartAge = ladder.startAge - ladder.leadTimeYears
+      if (conversionStartAge > 0) {
+        const conversionStartDate = ageToIsoDate(personDateOfBirth, conversionStartAge)
+        if (conversionStartDate === previous.endDate) {
+          const newConversionStartAge = getAgeInYearsAtDate(personDateOfBirth, next.endDate)
+          const nextStartAge = Math.max(
+            0,
+            Math.round((newConversionStartAge + ladder.leadTimeYears) * 10) / 10,
+          )
+          updates.push(
+            storage.scenarioRepo.upsert({
+              ...scenario,
+              updatedAt: now,
+              strategies: {
+                ...scenario.strategies,
+                rothLadder: {
+                  ...ladder,
+                  startAge: nextStartAge,
+                },
+              },
+            }),
+          )
+        }
+      }
+    }
+
+    if (updates.length > 0) {
+      await Promise.all(updates)
+    }
   }
 
   const scenarioHoldingsById = useMemo(
