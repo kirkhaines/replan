@@ -34,8 +34,9 @@ export const holdingTypeDefaultsSeed: Array<
 export const contributionLimitDefaultsSeed: Array<
   Pick<ContributionLimitDefault, 'type' | 'year' | 'amount'>
 > = [
-  { type: '401k', year: 2024, amount: 23000 },
-  { type: 'hsa', year: 2024, amount: 4150 },
+  { type: '401k', year: 2026, amount: 24500 },
+  { type: 'hsa', year: 2026, amount: 4400 },
+  { type: 'ira', year: 2026, amount: 7500 },
 ]
 
 export const ssaWageIndexSeed: Array<Pick<SsaWageIndex, 'year' | 'index'>> = [

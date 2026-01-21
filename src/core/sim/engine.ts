@@ -301,6 +301,13 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
       taxPaid: 0,
       earnedIncome: 0,
     },
+    yearContributionsByTaxType: {
+      cash: 0,
+      taxable: 0,
+      traditional: 0,
+      roth: 0,
+      hsa: 0,
+    },
     magiHistory: {},
     initialBalance,
   }
@@ -556,6 +563,10 @@ const applyActions = (
           }
           holding.balance += action.resolvedAmount
           addContributionBasisEntry(holding, action.resolvedAmount, context.dateIso)
+          if (action.fromCash !== false) {
+            const bucket = holding.taxType
+            state.yearContributionsByTaxType[bucket] += action.resolvedAmount
+          }
           totals.contributions += action.resolvedAmount
         }
       } else {
@@ -685,6 +696,13 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
         penalties: 0,
         taxPaid: 0,
         earnedIncome: 0,
+      }
+      state.yearContributionsByTaxType = {
+        cash: 0,
+        taxable: 0,
+        traditional: 0,
+        roth: 0,
+        hsa: 0,
       }
       yearTotals = createEmptyTotals()
     }

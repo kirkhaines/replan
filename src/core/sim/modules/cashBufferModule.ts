@@ -7,7 +7,7 @@ import type {
   SimulationModule,
   SimulationState,
 } from '../types'
-import { getHoldingGain, sumMonthlySpending } from './utils'
+import { getHoldingGain, inflateAmount, sumMonthlySpending } from './utils'
 
 const sumSeasonedBasis = (
   entries: SimulationState['holdings'][number]['contributionBasisEntries'],
@@ -38,10 +38,31 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   const withdrawal = scenario.strategies.withdrawal
   const early = scenario.strategies.earlyRetirement
   const taxableLot = scenario.strategies.taxableLot
+  const contributionLimits = snapshot.contributionLimits ?? []
+  const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId && !item.isPreTax,
   )
   const explain = createExplainTracker()
+
+  const getContributionLimit = (
+    type: (typeof contributionLimits)[number]['type'],
+    context: SimulationContext,
+  ) => {
+    if (contributionLimits.length === 0) {
+      return 0
+    }
+    const year = context.date.getFullYear()
+    const sorted = [...contributionLimits]
+      .filter((limit) => limit.type === type)
+      .sort((a, b) => b.year - a.year)
+    if (sorted.length === 0) {
+      return 0
+    }
+    const base = sorted.find((limit) => limit.year <= year) ?? sorted[0]
+    const baseIso = `${base.year}-01-01`
+    return inflateAmount(base.amount, baseIso, context.dateIso, cpiRate)
+  }
 
   const buildWithdrawalOrder = (state: SimulationState, age: number) => {
     const baseOrder = withdrawal.order
@@ -276,21 +297,55 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
 
       if (cashBalance > max) {
         const excess = Math.max(0, cashBalance - target)
-        const targetHolding = [...state.holdings].sort((a, b) => b.balance - a.balance)[0]
-        if (!targetHolding) {
-          return []
+        const iraLimit = getContributionLimit('ira', context)
+        const iraUsed =
+          state.yearContributionsByTaxType.roth + state.yearContributionsByTaxType.traditional
+        const iraRemaining = Math.max(0, iraLimit - iraUsed)
+        explain.addInput('IRA limit', iraLimit)
+        explain.addCheckpoint('IRA used', iraUsed)
+        explain.addCheckpoint('IRA remaining', iraRemaining)
+
+        const intents: ActionIntent[] = []
+        let remaining = excess
+        if (iraRemaining > 0) {
+          const iraTarget = [...state.holdings]
+            .filter((holding) => holding.taxType === 'roth' || holding.taxType === 'traditional')
+            .sort((a, b) => b.balance - a.balance)[0]
+          if (iraTarget) {
+            const amount = Math.min(remaining, iraRemaining)
+            if (amount > 0) {
+              intents.push({
+                id: `cash-buffer-invest-ira-${context.monthIndex}`,
+                kind: 'deposit',
+                amount,
+                targetHoldingId: iraTarget.id,
+                fromCash: true,
+                priority: 70,
+                label: 'Invest excess cash',
+              })
+              remaining -= amount
+            }
+          }
         }
-        return [
-          {
-            id: `cash-buffer-invest-${context.monthIndex}`,
-            kind: 'deposit',
-            amount: excess,
-            targetHoldingId: targetHolding.id,
-            fromCash: true,
-            priority: 70,
-            label: 'Invest excess cash',
-          },
-        ]
+
+        if (remaining > 0) {
+          const taxableTarget = [...state.holdings]
+            .filter((holding) => holding.taxType === 'taxable')
+            .sort((a, b) => b.balance - a.balance)[0]
+          if (taxableTarget) {
+            intents.push({
+              id: `cash-buffer-invest-taxable-${context.monthIndex}`,
+              kind: 'deposit',
+              amount: remaining,
+              targetHoldingId: taxableTarget.id,
+              fromCash: true,
+              priority: 71,
+              label: 'Invest excess cash',
+            })
+          }
+        }
+
+        return intents
       }
 
       return []

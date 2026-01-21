@@ -180,6 +180,13 @@ const makeState = (
     taxPaid: 0,
     earnedIncome: 0,
   },
+  yearContributionsByTaxType: {
+    cash: 0,
+    taxable: 0,
+    traditional: 0,
+    roth: 0,
+    hsa: 0,
+  },
   magiHistory: {},
   initialBalance: cashBalance + holdings.reduce((sum, holding) => sum + holding.balance, 0),
 })

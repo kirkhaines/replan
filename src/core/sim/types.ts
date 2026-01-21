@@ -133,6 +133,7 @@ export type SimulationState = {
   cashAccounts: SimCashAccount[]
   holdings: SimHolding[]
   yearLedger: TaxLedger
+  yearContributionsByTaxType: Record<CashflowSeriesBucket, number>
   magiHistory: Record<number, number>
   initialBalance: number
 }

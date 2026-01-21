@@ -31,7 +31,7 @@ export const holdingTypeDefaultSchema = baseEntitySchema.extend({
   returnStdDev: z.number(),
 })
 
-export const contributionLimitTypeSchema = z.enum(['401k', 'hsa'])
+export const contributionLimitTypeSchema = z.enum(['401k', 'hsa', 'ira'])
 
 export const contributionLimitDefaultSchema = baseEntitySchema.extend({
   type: contributionLimitTypeSchema,
