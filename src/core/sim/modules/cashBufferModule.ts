@@ -45,25 +45,25 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
 
   const buildWithdrawalOrder = (state: SimulationState, age: number) => {
     const baseOrder = withdrawal.order
-    const penalizedTypes = new Set<string>()
+    let order = baseOrder
     if (age < 59.5) {
+      const penalizedTypes = new Set<string>()
       if (!early.use72t) {
         penalizedTypes.add('traditional')
       }
       penalizedTypes.add('roth')
       penalizedTypes.add('hsa')
-    }
-    let order = baseOrder
-    if (withdrawal.avoidEarlyPenalty && age < 59.5) {
-      order = [
-        ...order.filter((type) => !penalizedTypes.has(type)),
-        ...order.filter((type) => penalizedTypes.has(type)),
-      ]
-    }
-    if (!early.allowPenalty && age < 59.5) {
-      const withoutPenalty = order.filter((type) => !penalizedTypes.has(type))
-      if (withoutPenalty.length > 0) {
-        order = withoutPenalty
+      
+      if (!early.allowPenalty) {
+        const withoutPenalty = order.filter((type) => !penalizedTypes.has(type))
+        if (withoutPenalty.length > 0) {
+          order = withoutPenalty
+        }
+      } else if (withdrawal.avoidEarlyPenalty) {
+        order = [
+          ...order.filter((type) => !penalizedTypes.has(type)),
+          ...order.filter((type) => penalizedTypes.has(type)),
+        ]
       }
     }
     const gainTarget = Math.max(
@@ -162,9 +162,12 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
     return intents
   }
 
+  const exposeForTests = { buildWithdrawalOrder }
+
   return {
     id: 'cash-buffer',
     explain,
+    ...(process.env.NODE_ENV === 'test' ? { __test: exposeForTests } : {}),
     getCashflowSeries: ({ actions, holdingTaxTypeById }) => {
       let cashDelta = 0
       const investmentByKey: Record<string, number> = {}

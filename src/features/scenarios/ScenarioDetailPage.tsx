@@ -1816,39 +1816,50 @@ const ScenarioDetailPage = () => {
               </label>
             </div>
 
-            <div className="form-grid">
-              <label className="field">
-                <span>Cash buffer target (months)</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.cashBuffer.targetMonths', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Cash buffer min (months)</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.cashBuffer.minMonths', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Cash buffer max (months)</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.cashBuffer.maxMonths', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-            </div>
           </div>
 
           <div className="stack">
-            <h3>Withdrawals and conversions</h3>
+            <h3>Withdrawals</h3>
+            <div className="stack">
+              <h4>Cash buffer</h4>
+              <div className="form-grid">
+                <label className="field">
+                  <span>Cash buffer target (months)</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.cashBuffer.targetMonths', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field checkbox">
+                  <input
+                    type="checkbox"
+                    {...register('scenario.strategies.withdrawal.useCashFirst')}
+                  />
+                  <span>Use cash first</span>
+                </label>
+                <label className="field">
+                  <span>Cash buffer min (months)</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.cashBuffer.minMonths', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+                <label className="field">
+                  <span>Cash buffer max (months)</span>
+                  <input
+                    type="number"
+                    {...register('scenario.strategies.cashBuffer.maxMonths', {
+                      valueAsNumber: true,
+                    })}
+                  />
+                </label>
+              </div>
+            </div>
+
             <div className="stack">
               <h4>Withdrawal order</h4>
               <div className="form-grid">
@@ -1908,13 +1919,6 @@ const ScenarioDetailPage = () => {
             <div className="stack">
               <h4>Withdrawal guardrails</h4>
               <div className="form-grid">
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.withdrawal.useCashFirst')}
-                  />
-                  <span>Use cash first</span>
-                </label>
                 <label className="field checkbox">
                   <input
                     type="checkbox"
@@ -2012,6 +2016,10 @@ const ScenarioDetailPage = () => {
                 </label>
               </div>
             </div>
+          </div>
+
+          <div className="stack">
+            <h3>Conversions</h3>
 
             <div className="stack">
               <h4>Roth conversions</h4>
