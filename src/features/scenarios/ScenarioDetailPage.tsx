@@ -80,7 +80,10 @@ type SpendingIntervalRow = {
   wantTotal: number
 }
 
-const buildSpendingIntervals = (items: SpendingLineItem[]): SpendingIntervalRow[] => {
+const buildSpendingIntervals = (
+  items: SpendingLineItem[],
+  extraBoundaries: number[] = [],
+): SpendingIntervalRow[] => {
   if (items.length === 0) {
     return []
   }
@@ -103,6 +106,11 @@ const buildSpendingIntervals = (items: SpendingLineItem[]): SpendingIntervalRow[
     }
     if (end !== null) {
       boundaries.add(end)
+    }
+  })
+  extraBoundaries.forEach((boundary) => {
+    if (!Number.isNaN(boundary)) {
+      boundaries.add(boundary)
     }
   })
 
@@ -415,6 +423,7 @@ const ScenarioDetailPage = () => {
     [],
   )
   const [futureWorkStrategies, setFutureWorkStrategies] = useState<FutureWorkStrategy[]>([])
+  const [futureWorkPeriods, setFutureWorkPeriods] = useState<FutureWorkPeriod[]>([])
   const [spendingStrategies, setSpendingStrategies] = useState<SpendingStrategy[]>([])
   const [spendingLineItems, setSpendingLineItems] = useState<SpendingLineItem[]>([])
   const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
@@ -524,7 +533,7 @@ const ScenarioDetailPage = () => {
   }, [peopleById, scenarioPersonStrategies])
 
   const ladderSpendingRows = useMemo(() => {
-    if (!scenario || spendingSummaryRows.length === 0) {
+    if (!scenario || spendingLineItems.length === 0) {
       return []
     }
     if (ladderStartAge <= 0 && ladderEndAge <= 0) {
@@ -533,6 +542,28 @@ const ScenarioDetailPage = () => {
     if (!primaryPerson) {
       return []
     }
+    const retirementEndMs = futureWorkPeriods
+      .map((period) => {
+        if (!period.endDate) {
+          return null
+        }
+        const end = new Date(period.endDate)
+        return Number.isNaN(end.getTime()) ? null : end.getTime()
+      })
+      .filter((value): value is number => value !== null)
+      .reduce((latest, value) => Math.max(latest, value), Number.NEGATIVE_INFINITY)
+    const hasRetirementEnd = Number.isFinite(retirementEndMs)
+    const age65Ms = new Date(addYearsToIsoDate(primaryPerson.dateOfBirth, 65)).getTime()
+    const preMedicareMonthly = scenario.strategies.healthcare.preMedicareMonthly
+    const medicareMonthly =
+      scenario.strategies.healthcare.medicarePartBMonthly +
+      scenario.strategies.healthcare.medicarePartDMonthly +
+      scenario.strategies.healthcare.medigapMonthly
+    const extraBoundaries = [
+      ...(hasRetirementEnd ? [retirementEndMs] : []),
+      ...(Number.isNaN(age65Ms) ? [] : [age65Ms]),
+    ]
+    const intervalRows = buildSpendingIntervals(spendingLineItems, extraBoundaries)
     const startMs =
       ladderStartAge > 0
         ? new Date(addYearsToIsoDate(primaryPerson.dateOfBirth, ladderStartAge)).getTime()
@@ -551,29 +582,46 @@ const ScenarioDetailPage = () => {
       const date = new Date(timestamp + offsetDays * dayMs).toISOString().slice(0, 10)
       return getAgeInYearsAtDate(primaryPerson.dateOfBirth, date).toFixed(1)
     }
-    return spendingSummaryRows
+    return intervalRows
       .filter((row) => {
         const intervalStart = row.startMs ?? Number.NEGATIVE_INFINITY
         const intervalEnd = row.endMs ?? Number.POSITIVE_INFINITY
         return intervalStart < rangeEnd && intervalEnd > rangeStart
       })
       .map((row) => {
+        const sample =
+          row.startMs !== null
+            ? row.startMs
+            : row.endMs !== null
+              ? row.endMs - dayMs
+              : null
         const annualNeed = row.needTotal * 12
         const annualWant = row.wantTotal * 12
+        let monthlyHealthcare = 0
+        if (hasRetirementEnd && sample !== null) {
+          if (sample >= retirementEndMs && sample < age65Ms) {
+            monthlyHealthcare = preMedicareMonthly
+          } else if (sample >= Math.max(retirementEndMs, age65Ms)) {
+            monthlyHealthcare = medicareMonthly
+          }
+        }
+        const annualHealthcare = monthlyHealthcare * 12
         return {
           startAgeLabel: formatAgeLabel(row.startMs),
           endAgeLabel: formatAgeLabel(row.endMs, -1),
           annualNeed,
           annualWant,
-          annualTotal: annualNeed + annualWant,
+          annualHealthcare,
+          annualTotal: annualNeed + annualWant + annualHealthcare,
         }
       })
   }, [
+    futureWorkPeriods,
     ladderEndAge,
     ladderStartAge,
     primaryPerson,
     scenario,
-    spendingSummaryRows,
+    spendingLineItems,
   ])
 
   const formatAgeDate = (age: number) => {
@@ -780,6 +828,7 @@ const ScenarioDetailPage = () => {
     ) {
       setLoadError('Scenario is missing linked data. Create a new scenario to continue.')
       setScenario(null)
+      setFutureWorkPeriods([])
       setIsLoading(false)
       return
     }
@@ -803,6 +852,7 @@ const ScenarioDetailPage = () => {
     replaceGlidepathTargets(normalizedScenario.strategies.glidepath.targets)
     replaceEvents(normalizedScenario.strategies.events)
     replacePensions(normalizedScenario.strategies.pensions)
+    setFutureWorkPeriods(futureWorkPeriods.map(normalizeFutureWorkPeriod))
     setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
     setSelectionError(null)
     setIsLoading(false)
@@ -2162,6 +2212,7 @@ const ScenarioDetailPage = () => {
                           <th>End age</th>
                           <th>Need total (annual)</th>
                           <th>Want total (annual)</th>
+                          <th>Healthcare total (annual)</th>
                           <th>Total (annual)</th>
                         </tr>
                       </thead>
@@ -2172,6 +2223,7 @@ const ScenarioDetailPage = () => {
                             <td>{row.endAgeLabel}</td>
                             <td>{formatCurrency(row.annualNeed)}</td>
                             <td>{formatCurrency(row.annualWant)}</td>
+                            <td>{formatCurrency(row.annualHealthcare)}</td>
                             <td>{formatCurrency(row.annualTotal)}</td>
                           </tr>
                         ))}
