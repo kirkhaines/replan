@@ -2,6 +2,14 @@ import { z } from 'zod'
 
 export const taxTypeSchema = z.enum(['roth', 'traditional', 'hsa', 'taxable'])
 
+export const withdrawalOrderTypeSchema = z.enum([
+  'taxable',
+  'traditional',
+  'roth_basis',
+  'roth',
+  'hsa',
+])
+
 export const holdingTypeSchema = z.enum([
   'bonds',
   'sp500',

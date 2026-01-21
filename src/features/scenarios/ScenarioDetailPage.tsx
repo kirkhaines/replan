@@ -8,6 +8,7 @@ import {
   inflationTypeSchema,
   taxTypeSchema,
   taxTreatmentSchema,
+  withdrawalOrderTypeSchema,
   normalizeScenarioStrategies,
   type InflationDefault,
   type Scenario,
@@ -41,6 +42,19 @@ import { selectTaxPolicy } from '../../core/sim/tax'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+
+const withdrawalOrderLabels: Record<string, string> = {
+  taxable: 'Taxable',
+  traditional: 'Traditional',
+  roth_basis: 'Roth basis',
+  roth: 'Roth',
+  hsa: 'HSA',
+}
+
+const withdrawalOrderOptions = withdrawalOrderTypeSchema.options.map((option) => ({
+  value: option,
+  label: withdrawalOrderLabels[option] ?? option.replace('_', ' '),
+}))
 
 const addYearsToIsoDate = (isoDate: string, years: number) => {
   const date = new Date(isoDate)
@@ -1841,9 +1855,9 @@ const ScenarioDetailPage = () => {
                 <label className="field">
                   <span>Withdrawal order 1</span>
                   <select {...register('scenario.strategies.withdrawal.order.0')}>
-                    {taxTypeSchema.options.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {withdrawalOrderOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1851,9 +1865,9 @@ const ScenarioDetailPage = () => {
                 <label className="field">
                   <span>Withdrawal order 2</span>
                   <select {...register('scenario.strategies.withdrawal.order.1')}>
-                    {taxTypeSchema.options.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {withdrawalOrderOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1861,9 +1875,9 @@ const ScenarioDetailPage = () => {
                 <label className="field">
                   <span>Withdrawal order 3</span>
                   <select {...register('scenario.strategies.withdrawal.order.2')}>
-                    {taxTypeSchema.options.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {withdrawalOrderOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1871,9 +1885,19 @@ const ScenarioDetailPage = () => {
                 <label className="field">
                   <span>Withdrawal order 4</span>
                   <select {...register('scenario.strategies.withdrawal.order.3')}>
-                    {taxTypeSchema.options.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                    {withdrawalOrderOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Withdrawal order 5</span>
+                  <select {...register('scenario.strategies.withdrawal.order.4')}>
+                    {withdrawalOrderOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -1953,13 +1977,6 @@ const ScenarioDetailPage = () => {
             <div className="stack">
               <h4>Early retirement</h4>
               <div className="form-grid">
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.earlyRetirement.useRothBasisFirst')}
-                  />
-                  <span>Use Roth basis first</span>
-                </label>
                 <label className="field checkbox">
                   <input
                     type="checkbox"

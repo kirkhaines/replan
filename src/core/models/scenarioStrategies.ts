@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { filingStatusSchema, inflationTypeSchema, taxTreatmentSchema, taxTypeSchema } from './enums'
+import {
+  filingStatusSchema,
+  inflationTypeSchema,
+  taxTreatmentSchema,
+  taxTypeSchema,
+  withdrawalOrderTypeSchema,
+} from './enums'
 import { isoDateStringSchema } from './common'
 
 const inflationAssumptionsSchema = z.object(
@@ -48,7 +54,7 @@ export const cashBufferStrategySchema = z.object({
 })
 
 export const withdrawalStrategySchema = z.object({
-  order: z.array(taxTypeSchema).min(1),
+  order: z.array(withdrawalOrderTypeSchema).min(1),
   useCashFirst: z.boolean(),
   guardrailPct: z.number().min(0).max(1),
   avoidEarlyPenalty: z.boolean(),
@@ -62,7 +68,6 @@ export const taxableLotStrategySchema = z.object({
 })
 
 export const earlyRetirementStrategySchema = z.object({
-  useRothBasisFirst: z.boolean(),
   allowPenalty: z.boolean(),
   penaltyRate: z.number().min(0).max(1),
   use72t: z.boolean(),
@@ -193,7 +198,7 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     maxMonths: 24,
   },
   withdrawal: {
-    order: ['taxable', 'traditional', 'roth', 'hsa'],
+    order: ['taxable', 'traditional', 'roth_basis', 'roth', 'hsa'],
     useCashFirst: true,
     guardrailPct: 0,
     avoidEarlyPenalty: true,
@@ -205,7 +210,6 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     gainRealizationTarget: 0,
   },
   earlyRetirement: {
-    useRothBasisFirst: true,
     allowPenalty: false,
     penaltyRate: 0.1,
     use72t: false,
@@ -266,6 +270,13 @@ export const normalizeScenarioStrategies = (
   strategies?: Partial<ScenarioStrategies> | null,
 ): ScenarioStrategies => {
   const defaults = createDefaultScenarioStrategies()
+  const withdrawalOrder = (() => {
+    const provided = strategies?.withdrawal?.order ?? defaults.withdrawal.order
+    const remaining = defaults.withdrawal.order.filter((type) => !provided.includes(type))
+    return provided.length < defaults.withdrawal.order.length
+      ? [...provided, ...remaining]
+      : provided
+  })()
   return {
     ...defaults,
     ...strategies,
@@ -273,7 +284,7 @@ export const normalizeScenarioStrategies = (
     glidepath: { ...defaults.glidepath, ...strategies?.glidepath },
     rebalancing: { ...defaults.rebalancing, ...strategies?.rebalancing },
     cashBuffer: { ...defaults.cashBuffer, ...strategies?.cashBuffer },
-    withdrawal: { ...defaults.withdrawal, ...strategies?.withdrawal },
+    withdrawal: { ...defaults.withdrawal, ...strategies?.withdrawal, order: withdrawalOrder },
     taxableLot: { ...defaults.taxableLot, ...strategies?.taxableLot },
     earlyRetirement: { ...defaults.earlyRetirement, ...strategies?.earlyRetirement },
     rothConversion: { ...defaults.rothConversion, ...strategies?.rothConversion },

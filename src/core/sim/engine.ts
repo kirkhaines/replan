@@ -180,9 +180,6 @@ const sumSeasonedBasis = (
     const months =
       (current.getFullYear() - entryDate.getFullYear()) * 12 +
       (current.getMonth() - entryDate.getMonth())
-    if (current.getDate() < entryDate.getDate()) {
-      return sum
-    }
     return months >= 60 ? sum + entry.amount : sum
   }, 0)
 }
@@ -198,18 +195,38 @@ const addContributionBasisEntry = (
   holding.contributionBasisEntries.push({ date: dateIso, amount })
 }
 
-const buildAccountBalances = (state: SimulationState): AccountBalanceSnapshot[] => [
+const buildAccountBalances = (
+  state: SimulationState,
+  dateIso: string,
+): AccountBalanceSnapshot[] => [
   ...state.cashAccounts.map((account) => ({
     id: account.id,
     kind: 'cash' as const,
     balance: account.balance,
   })),
-  ...state.holdings.map((holding) => ({
-    id: holding.id,
-    kind: 'holding' as const,
-    balance: holding.balance,
-    investmentAccountId: holding.investmentAccountId,
-  })),
+  ...state.holdings.map((holding) => {
+    if (holding.taxType !== 'roth') {
+      return {
+        id: holding.id,
+        kind: 'holding' as const,
+        balance: holding.balance,
+        investmentAccountId: holding.investmentAccountId,
+      }
+    }
+    const totalBasis = sumContributionBasisEntries(holding.contributionBasisEntries)
+    const seasonedBasis = sumSeasonedBasis(holding.contributionBasisEntries, dateIso)
+    const cappedTotal = Math.min(holding.balance, Math.max(0, totalBasis))
+    const cappedSeasoned = Math.min(cappedTotal, Math.max(0, seasonedBasis))
+    const unseasoned = Math.max(0, cappedTotal - cappedSeasoned)
+    return {
+      id: holding.id,
+      kind: 'holding' as const,
+      balance: holding.balance,
+      investmentAccountId: holding.investmentAccountId,
+      basisSeasoned: cappedSeasoned,
+      basisUnseasoned: unseasoned,
+    }
+  }),
 ]
 
 const buildMarketReturns = (
@@ -435,11 +452,7 @@ const applyHoldingWithdrawal = (
       penaltyAmount = withdrawal
     }
     if (holding.taxType === 'roth') {
-      if (early.useRothBasisFirst) {
-        penaltyAmount = Math.max(0, withdrawal - seasonedRothBasis)
-      } else {
-        penaltyAmount = withdrawal
-      }
+      penaltyAmount = Math.max(0, withdrawal - seasonedRothBasis)
     }
   }
   if (penaltyAmount > 0) {
@@ -803,7 +816,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       monthIndex,
       date: dateIso,
       modules: moduleRuns,
-      accounts: buildAccountBalances(state),
+      accounts: buildAccountBalances(state, dateIso),
     })
 
     const monthRecord = buildMonthlyRecord(monthIndex, dateIso, age, monthTotals, state)

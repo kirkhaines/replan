@@ -1,7 +1,36 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import type { ActionIntent, SimulationContext, SimulationModule, SimulationState } from '../types'
-import { buildActionCashflowSeries, getHoldingGain, sumMonthlySpending } from './utils'
+import type {
+  ActionIntent,
+  CashflowSeriesEntry,
+  SimulationContext,
+  SimulationModule,
+  SimulationState,
+} from '../types'
+import { getHoldingGain, sumMonthlySpending } from './utils'
+
+const sumSeasonedBasis = (
+  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+  dateIso: string,
+) => {
+  const current = new Date(dateIso)
+  if (Number.isNaN(current.getTime())) {
+    return 0
+  }
+  return entries.reduce((sum, entry) => {
+    const entryDate = new Date(entry.date)
+    if (Number.isNaN(entryDate.getTime())) {
+      return sum
+    }
+    const months =
+      (current.getFullYear() - entryDate.getFullYear()) * 12 +
+      (current.getMonth() - entryDate.getMonth())
+    if (current.getDate() < entryDate.getDate()) {
+      return sum
+    }
+    return months >= 60 ? sum + entry.amount : sum
+  }, 0)
+}
 
 export const createCashBufferModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const scenario = snapshot.scenario
@@ -21,9 +50,8 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
       if (!early.use72t) {
         penalizedTypes.add('traditional')
       }
-      if (!early.useRothBasisFirst) {
-        penalizedTypes.add('roth')
-      }
+      penalizedTypes.add('roth')
+      penalizedTypes.add('hsa')
     }
     let order = baseOrder
     if (withdrawal.avoidEarlyPenalty && age < 59.5) {
@@ -52,25 +80,36 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   const buildWithdrawIntents = (
     state: SimulationState,
     amount: number,
-    age: number,
+    context: SimulationContext,
     label: string,
     priorityBase: number,
   ) => {
     if (amount <= 0) {
       return []
     }
-    const { order, shouldHarvestGains } = buildWithdrawalOrder(state, age)
+    const { order, shouldHarvestGains } = buildWithdrawalOrder(state, context.age)
     const intents: ActionIntent[] = []
     let remaining = amount
     let priority = priorityBase
+    const holdingBalances = new Map(state.holdings.map((holding) => [holding.id, holding.balance]))
+    const basisRemaining = new Map(
+      state.holdings
+        .filter((holding) => holding.taxType === 'roth')
+        .map((holding) => [
+          holding.id,
+          sumSeasonedBasis(holding.contributionBasisEntries, context.dateIso),
+        ]),
+    )
 
     order.forEach((taxType) => {
       if (remaining <= 0) {
         return
       }
-      const holdings = state.holdings.filter((holding) => holding.taxType === taxType)
+      const isRothBasis = taxType === 'roth_basis'
+      const resolvedTaxType = isRothBasis ? 'roth' : taxType
+      const holdings = state.holdings.filter((holding) => holding.taxType === resolvedTaxType)
       const sortedHoldings =
-        taxType === 'taxable'
+        resolvedTaxType === 'taxable'
           ? [...holdings].sort((a, b) => {
               const gainDelta = getHoldingGain(b) - getHoldingGain(a)
               if (shouldHarvestGains) {
@@ -86,7 +125,9 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
         if (remaining <= 0) {
           return
         }
-        const withdrawAmount = Math.min(remaining, holding.balance)
+        const balanceRemaining = holdingBalances.get(holding.id) ?? holding.balance
+        const basisLimit = isRothBasis ? basisRemaining.get(holding.id) ?? 0 : balanceRemaining
+        const withdrawAmount = Math.min(remaining, balanceRemaining, basisLimit)
         if (withdrawAmount <= 0) {
           return
         }
@@ -96,10 +137,15 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
           amount: withdrawAmount,
           sourceHoldingId: holding.id,
           priority,
-          label,
+          label: isRothBasis ? `${label} (roth basis)` : label,
         })
         priority += 1
         remaining -= withdrawAmount
+        holdingBalances.set(holding.id, balanceRemaining - withdrawAmount)
+        if (holding.taxType === 'roth') {
+          const remainingBasis = basisRemaining.get(holding.id) ?? 0
+          basisRemaining.set(holding.id, Math.max(0, remainingBasis - withdrawAmount))
+        }
       })
     })
 
@@ -119,13 +165,64 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   return {
     id: 'cash-buffer',
     explain,
-    getCashflowSeries: ({ actions, holdingTaxTypeById }) =>
-      buildActionCashflowSeries({
-        moduleId: 'cash-buffer',
-        moduleLabel: 'Cash buffer',
-        actions,
-        holdingTaxTypeById,
-      }),
+    getCashflowSeries: ({ actions, holdingTaxTypeById }) => {
+      let cashDelta = 0
+      const investmentByKey: Record<string, number> = {}
+      const isRothBasisLabel = (label?: string) =>
+        typeof label === 'string' && label.toLowerCase().includes('roth basis')
+
+      actions.forEach((action) => {
+        const amount = action.resolvedAmount ?? action.amount
+        if (action.kind === 'deposit') {
+          if (action.fromCash) {
+            cashDelta -= amount
+          }
+          const taxType = action.targetHoldingId
+            ? holdingTaxTypeById.get(action.targetHoldingId)
+            : undefined
+          if (taxType) {
+            investmentByKey[taxType] = (investmentByKey[taxType] ?? 0) + amount
+          }
+          return
+        }
+        if (action.kind === 'withdraw' || action.kind === 'rmd') {
+          cashDelta += amount
+          const taxType = action.sourceHoldingId
+            ? holdingTaxTypeById.get(action.sourceHoldingId)
+            : undefined
+          if (taxType) {
+            const key =
+              taxType === 'roth' && isRothBasisLabel(action.label)
+                ? 'roth_basis'
+                : taxType
+            investmentByKey[key] = (investmentByKey[key] ?? 0) - amount
+          }
+        }
+      })
+
+      const entries: CashflowSeriesEntry[] = []
+      if (cashDelta !== 0) {
+        entries.push({
+          key: 'cash-buffer:cash',
+          label: 'Cash buffer - cash',
+          value: cashDelta,
+          bucket: 'cash',
+        })
+      }
+      Object.entries(investmentByKey).forEach(([key, value]) => {
+        if (!value) {
+          return
+        }
+        const bucket = key === 'roth_basis' ? 'roth' : key
+        entries.push({
+          key: `cash-buffer:${key}`,
+          label: `Cash buffer - ${key.replace('_', ' ')}`,
+          value,
+          bucket: bucket as CashflowSeriesEntry['bucket'],
+        })
+      })
+      return entries
+    },
     getActionIntents: (state: SimulationState, context: SimulationContext) => {
       const cashBalance = state.cashAccounts.reduce((sum, account) => sum + account.balance, 0)
       const monthlySpending = sumMonthlySpending(
@@ -161,11 +258,11 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
         if (cashBalance >= 0) {
           return []
         }
-        return buildWithdrawIntents(state, -cashBalance, context.age, 'Cover cash deficit', 100)
+        return buildWithdrawIntents(state, -cashBalance, context, 'Cover cash deficit', 100)
       }
       if (cashBalance < min) {
         const needed = Math.max(0, target - cashBalance)
-        return buildWithdrawIntents(state, needed, context.age, 'Refill cash buffer', 60)
+        return buildWithdrawIntents(state, needed, context, 'Refill cash buffer', 60)
       }
 
       if (cashBalance > max) {

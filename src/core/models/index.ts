@@ -13,6 +13,7 @@ export {
   inflationTypeSchema,
   filingStatusSchema,
   taxTreatmentSchema,
+  withdrawalOrderTypeSchema,
 } from './enums'
 export type { Person } from './person'
 export { personSchema } from './person'

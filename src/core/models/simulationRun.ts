@@ -86,6 +86,8 @@ const accountBalanceSchema = z.object({
   kind: z.enum(['cash', 'holding']),
   balance: z.number(),
   investmentAccountId: z.string().optional(),
+  basisSeasoned: z.number().optional(),
+  basisUnseasoned: z.number().optional(),
 })
 
 const moduleRunSchema = z.object({

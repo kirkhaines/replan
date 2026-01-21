@@ -371,7 +371,15 @@ const RunResultsPage = () => {
     const holdingTaxType = new Map(
       run.snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
     )
-    const seriesKeys = ['cash', 'taxable', 'traditional', 'roth', 'hsa'] as const
+    const seriesKeys = [
+      'cash',
+      'taxable',
+      'traditional',
+      'rothSeasoned',
+      'rothUnseasoned',
+      'rothNonBasis',
+      'hsa',
+    ] as const
     const data = filteredTimeline.map((point) => {
       const year = point.date ? new Date(point.date).getFullYear() : undefined
       const monthly = monthlyByYear.get(point.yearIndex)
@@ -383,7 +391,9 @@ const RunResultsPage = () => {
         cash: 0,
         taxable: 0,
         traditional: 0,
-        roth: 0,
+        rothSeasoned: 0,
+        rothUnseasoned: 0,
+        rothNonBasis: 0,
         hsa: 0,
       }
       if (accounts) {
@@ -393,9 +403,20 @@ const RunResultsPage = () => {
             return
           }
           const taxType = holdingTaxType.get(account.id)
-          if (taxType) {
-            totals[taxType] += adjustForInflation(account.balance, lastMonth?.date ?? point.date)
+          if (!taxType) {
+            return
           }
+          if (taxType === 'roth') {
+            const seasoned = account.basisSeasoned ?? 0
+            const unseasoned = account.basisUnseasoned ?? 0
+            const basisTotal = Math.min(account.balance, Math.max(0, seasoned + unseasoned))
+            const nonBasis = Math.max(0, account.balance - basisTotal)
+            totals.rothSeasoned += adjustForInflation(seasoned, lastMonth?.date ?? point.date)
+            totals.rothUnseasoned += adjustForInflation(unseasoned, lastMonth?.date ?? point.date)
+            totals.rothNonBasis += adjustForInflation(nonBasis, lastMonth?.date ?? point.date)
+            return
+          }
+          totals[taxType] += adjustForInflation(account.balance, lastMonth?.date ?? point.date)
         })
       }
       return { ...point, year, ...totals }
@@ -854,11 +875,27 @@ const RunResultsPage = () => {
               />
               <Area
                 type="monotone"
-                dataKey="roth"
+                dataKey="rothSeasoned"
                 stackId="balance"
-                name="Roth holdings"
-                stroke="#8b5cf6"
-                fill="color-mix(in srgb, #8b5cf6 35%, transparent)"
+                name="Roth seasoned basis"
+                stroke="#7c3aed"
+                fill="color-mix(in srgb, #7c3aed 35%, transparent)"
+              />
+              <Area
+                type="monotone"
+                dataKey="rothUnseasoned"
+                stackId="balance"
+                name="Roth unseasoned basis"
+                stroke="#a855f7"
+                fill="color-mix(in srgb, #a855f7 35%, transparent)"
+              />
+              <Area
+                type="monotone"
+                dataKey="rothNonBasis"
+                stackId="balance"
+                name="Roth non-basis"
+                stroke="#d8b4fe"
+                fill="color-mix(in srgb, #d8b4fe 35%, transparent)"
               />
               <Area
                 type="monotone"

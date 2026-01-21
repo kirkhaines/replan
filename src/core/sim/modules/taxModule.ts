@@ -3,7 +3,7 @@ import { createExplainTracker } from '../explain'
 import { computeTax, selectTaxPolicy } from '../tax'
 import { computePayrollTaxes, selectPayrollTaxPolicy } from '../payrollTaxes'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
-import type { SimulationModule } from '../types'
+import type { CashflowSeriesEntry, SimulationModule } from '../types'
 
 export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const taxStrategy = snapshot.scenario.strategies.tax
