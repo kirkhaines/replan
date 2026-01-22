@@ -1,4 +1,4 @@
-import type { SimulationSnapshot } from '../../models'
+import type { ScenarioStrategies, SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type {
   ActionIntent,
@@ -30,6 +30,121 @@ const sumSeasonedBasis = (
     }
     return months >= 60 ? sum + entry.amount : sum
   }, 0)
+}
+
+const buildWithdrawalOrderForStrategy = (
+  state: SimulationState,
+  age: number,
+  strategy: Pick<ScenarioStrategies, 'withdrawal' | 'earlyRetirement' | 'taxableLot'>,
+) => {
+  const { withdrawal, earlyRetirement: early, taxableLot } = strategy
+  const baseOrder = withdrawal.order
+  let order = baseOrder
+  if (age < 59.5) {
+    const penalizedTypes = new Set<string>()
+    if (!early.use72t) {
+      penalizedTypes.add('traditional')
+    }
+    penalizedTypes.add('roth')
+    penalizedTypes.add('hsa')
+    if (!early.allowPenalty) {
+      const withoutPenalty = order.filter((type) => !penalizedTypes.has(type))
+      if (withoutPenalty.length > 0) {
+        order = withoutPenalty
+      }
+    } else if (withdrawal.avoidEarlyPenalty) {
+      order = [
+        ...order.filter((type) => !penalizedTypes.has(type)),
+        ...order.filter((type) => penalizedTypes.has(type)),
+      ]
+    }
+  } else {
+    const withoutPenalty = order.filter((type) => type !== 'roth_basis')
+    if (withoutPenalty.length > 0) {
+      order = withoutPenalty
+    }
+  }
+  const gainTarget = Math.max(withdrawal.taxableGainHarvestTarget, taxableLot.gainRealizationTarget)
+  const shouldHarvestGains = gainTarget > 0 && state.yearLedger.capitalGains < gainTarget
+  if (shouldHarvestGains && order.includes('taxable')) {
+    order = ['taxable', ...order.filter((type) => type !== 'taxable')]
+  }
+  return { order, shouldHarvestGains }
+}
+
+export type CashBufferWithdrawalEstimate = {
+  total: number
+  byTaxType: Record<string, number>
+}
+
+export const estimateCashBufferWithdrawals = (
+  snapshot: SimulationSnapshot,
+  state: SimulationState,
+  context: SimulationContext,
+  amount: number,
+): CashBufferWithdrawalEstimate => {
+  if (amount <= 0) {
+    return { total: 0, byTaxType: {} }
+  }
+  const { withdrawal, earlyRetirement, taxableLot } = snapshot.scenario.strategies
+  const { order, shouldHarvestGains } = buildWithdrawalOrderForStrategy(state, context.age, {
+    withdrawal,
+    earlyRetirement,
+    taxableLot,
+  })
+  const holdingBalances = new Map(state.holdings.map((holding) => [holding.id, holding.balance]))
+  const basisRemaining = new Map(
+    state.holdings
+      .filter((holding) => holding.taxType === 'roth')
+      .map((holding) => [
+        holding.id,
+        sumSeasonedBasis(holding.contributionBasisEntries, context.dateIso),
+      ]),
+  )
+  const byTaxType: Record<string, number> = {}
+  let remaining = amount
+
+  order.forEach((taxType) => {
+    if (remaining <= 0) {
+      return
+    }
+    const isRothBasis = taxType === 'roth_basis'
+    const resolvedTaxType = isRothBasis ? 'roth' : taxType
+    const holdings = state.holdings.filter((holding) => holding.taxType === resolvedTaxType)
+    const sortedHoldings =
+      resolvedTaxType === 'taxable'
+        ? [...holdings].sort((a, b) => {
+            const gainDelta = getHoldingGain(b) - getHoldingGain(a)
+            if (shouldHarvestGains) {
+              return gainDelta
+            }
+            if (taxableLot.harvestLosses) {
+              return -gainDelta
+            }
+            return b.balance - a.balance
+          })
+        : [...holdings].sort((a, b) => b.balance - a.balance)
+    sortedHoldings.forEach((holding) => {
+      if (remaining <= 0) {
+        return
+      }
+      const balanceRemaining = holdingBalances.get(holding.id) ?? holding.balance
+      const basisLimit = isRothBasis ? basisRemaining.get(holding.id) ?? 0 : balanceRemaining
+      const withdrawAmount = Math.min(remaining, balanceRemaining, basisLimit)
+      if (withdrawAmount <= 0) {
+        return
+      }
+      byTaxType[taxType] = (byTaxType[taxType] ?? 0) + withdrawAmount
+      remaining -= withdrawAmount
+      holdingBalances.set(holding.id, balanceRemaining - withdrawAmount)
+      if (holding.taxType === 'roth') {
+        const remainingBasis = basisRemaining.get(holding.id) ?? 0
+        basisRemaining.set(holding.id, Math.max(0, remainingBasis - withdrawAmount))
+      }
+    })
+  })
+
+  return { total: amount - remaining, byTaxType }
 }
 
 export const createCashBufferModule = (snapshot: SimulationSnapshot): SimulationModule => {
@@ -64,46 +179,6 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
     return inflateAmount(base.amount, baseIso, context.dateIso, cpiRate)
   }
 
-  const buildWithdrawalOrder = (state: SimulationState, age: number) => {
-    const baseOrder = withdrawal.order
-    let order = baseOrder
-    if (age < 59.5) {
-      const penalizedTypes = new Set<string>()
-      if (!early.use72t) {
-        penalizedTypes.add('traditional')
-      }
-      penalizedTypes.add('roth')
-      penalizedTypes.add('hsa')
-      
-      if (!early.allowPenalty) {
-        const withoutPenalty = order.filter((type) => !penalizedTypes.has(type))
-        if (withoutPenalty.length > 0) {
-          order = withoutPenalty
-        }
-      } else if (withdrawal.avoidEarlyPenalty) {
-        order = [
-          ...order.filter((type) => !penalizedTypes.has(type)),
-          ...order.filter((type) => penalizedTypes.has(type)),
-        ]
-      }
-    } else {
-      // remove roth_basis since after 59.5 it isn't special
-      const withoutPenalty = order.filter((type) => type != 'roth_basis')
-      if (withoutPenalty.length > 0) {
-        order = withoutPenalty
-      }
-    }
-    const gainTarget = Math.max(
-      withdrawal.taxableGainHarvestTarget,
-      taxableLot.gainRealizationTarget,
-    )
-    const shouldHarvestGains = gainTarget > 0 && state.yearLedger.capitalGains < gainTarget
-    if (shouldHarvestGains && order.includes('taxable')) {
-      order = ['taxable', ...order.filter((type) => type !== 'taxable')]
-    }
-    return { order, shouldHarvestGains }
-  }
-
   const buildWithdrawIntents = (
     state: SimulationState,
     amount: number,
@@ -114,7 +189,11 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
     if (amount <= 0) {
       return []
     }
-    const { order, shouldHarvestGains } = buildWithdrawalOrder(state, context.age)
+    const { order, shouldHarvestGains } = buildWithdrawalOrderForStrategy(state, context.age, {
+      withdrawal,
+      earlyRetirement: early,
+      taxableLot,
+    })
     const intents: ActionIntent[] = []
     let remaining = amount
     let priority = priorityBase
@@ -189,7 +268,14 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
     return intents
   }
 
-  const exposeForTests = { buildWithdrawalOrder }
+  const exposeForTests = {
+    buildWithdrawalOrder: (state: SimulationState, age: number) =>
+      buildWithdrawalOrderForStrategy(state, age, {
+        withdrawal,
+        earlyRetirement: early,
+        taxableLot,
+      }),
+  }
 
   return {
     id: 'cash-buffer',
