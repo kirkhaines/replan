@@ -14,6 +14,7 @@ import { createDefaultScenarioBundle } from './scenarioDefaults'
 import PageHeader from '../../components/PageHeader'
 import { inflationDefaultsSeed } from '../../core/defaults/defaultData'
 import type { LocalScenarioSeed } from '../../core/defaults/localSeedTypes'
+import { remapScenarioSeed } from '../../core/defaults/remapScenarioSeed'
 
 const formatDate = (value: number) =>
   new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -219,58 +220,59 @@ const ScenarioListPage = () => {
       window.alert('Invalid scenario seed file.')
       return
     }
-    await Promise.all(parsed.people.map((record) => storage.personRepo.upsert(record)))
+    const remapped = remapScenarioSeed(parsed)
+    await Promise.all(remapped.people.map((record) => storage.personRepo.upsert(record)))
     await Promise.all(
-      parsed.socialSecurityEarnings.map((record) =>
+      remapped.socialSecurityEarnings.map((record) =>
         storage.socialSecurityEarningsRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.socialSecurityStrategies.map((record) =>
+      remapped.socialSecurityStrategies.map((record) =>
         storage.socialSecurityStrategyRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.futureWorkStrategies.map((record) =>
+      remapped.futureWorkStrategies.map((record) =>
         storage.futureWorkStrategyRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.futureWorkPeriods.map((record) =>
+      remapped.futureWorkPeriods.map((record) =>
         storage.futureWorkPeriodRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.spendingStrategies.map((record) =>
+      remapped.spendingStrategies.map((record) =>
         storage.spendingStrategyRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.spendingLineItems.map((record) =>
+      remapped.spendingLineItems.map((record) =>
         storage.spendingLineItemRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.nonInvestmentAccounts.map((record) =>
+      remapped.nonInvestmentAccounts.map((record) =>
         storage.nonInvestmentAccountRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.investmentAccounts.map((record) =>
+      remapped.investmentAccounts.map((record) =>
         storage.investmentAccountRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.investmentAccountHoldings.map((record) =>
+      remapped.investmentAccountHoldings.map((record) =>
         storage.investmentAccountHoldingRepo.upsert(record),
       ),
     )
     await Promise.all(
-      parsed.personStrategies.map((record) =>
+      remapped.personStrategies.map((record) =>
         storage.personStrategyRepo.upsert(record),
       ),
     )
-    await storage.scenarioRepo.upsert(parsed.scenario)
+    await storage.scenarioRepo.upsert(remapped.scenario)
     await loadScenarios()
   }
 

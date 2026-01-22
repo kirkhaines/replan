@@ -10,6 +10,7 @@ import {
 } from './defaultData'
 import { now } from '../utils/time'
 import { createUuid } from '../utils/uuid'
+import { remapScenarioSeed } from './remapScenarioSeed'
 
 const loadLocalScenarioSeed = (): LocalScenarioSeed | null => {
   const jsonModules = import.meta.glob('./localSeed.json', { eager: true })
@@ -33,63 +34,64 @@ const seedLocalScenario = async (storage: StorageClient) => {
   if (!localSeed) {
     return
   }
-  const existing = await storage.scenarioRepo.get(localSeed.scenario.id)
-  if (existing) {
+  const existing = await storage.scenarioRepo.list()
+  if (existing.length > 0) {
     return
   }
 
-  await Promise.all(localSeed.people.map((record) => storage.personRepo.upsert(record)))
+  const remapped = remapScenarioSeed(localSeed)
+  await Promise.all(remapped.people.map((record) => storage.personRepo.upsert(record)))
   await Promise.all(
-    localSeed.socialSecurityEarnings.map((record) =>
+    remapped.socialSecurityEarnings.map((record) =>
       storage.socialSecurityEarningsRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.socialSecurityStrategies.map((record) =>
+    remapped.socialSecurityStrategies.map((record) =>
       storage.socialSecurityStrategyRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.futureWorkStrategies.map((record) =>
+    remapped.futureWorkStrategies.map((record) =>
       storage.futureWorkStrategyRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.futureWorkPeriods.map((record) =>
+    remapped.futureWorkPeriods.map((record) =>
       storage.futureWorkPeriodRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.spendingStrategies.map((record) =>
+    remapped.spendingStrategies.map((record) =>
       storage.spendingStrategyRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.spendingLineItems.map((record) =>
+    remapped.spendingLineItems.map((record) =>
       storage.spendingLineItemRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.nonInvestmentAccounts.map((record) =>
+    remapped.nonInvestmentAccounts.map((record) =>
       storage.nonInvestmentAccountRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.investmentAccounts.map((record) =>
+    remapped.investmentAccounts.map((record) =>
       storage.investmentAccountRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.investmentAccountHoldings.map((record) =>
+    remapped.investmentAccountHoldings.map((record) =>
       storage.investmentAccountHoldingRepo.upsert(record),
     ),
   )
   await Promise.all(
-    localSeed.personStrategies.map((record) =>
+    remapped.personStrategies.map((record) =>
       storage.personStrategyRepo.upsert(record),
     ),
   )
-  await storage.scenarioRepo.upsert(localSeed.scenario)
+  await storage.scenarioRepo.upsert(remapped.scenario)
 }
 
 export const seedDefaults = async (storage: StorageClient) => {

@@ -22,6 +22,7 @@ import HelpPage from '../features/about/HelpPage'
 import { useAppStore } from '../state/appStore'
 import { demoScenarios } from '../core/defaults/demo'
 import type { LocalScenarioSeed } from '../core/defaults/localSeedTypes'
+import { remapScenarioSeed } from '../core/defaults/remapScenarioSeed'
 
 const NotFound = () => (
   <section className="stack">
@@ -54,46 +55,49 @@ const AppShell = () => {
   }
 
   const importScenarioSeed = async (seed: LocalScenarioSeed) => {
-    await Promise.all(seed.people.map((record) => storage.personRepo.upsert(record)))
+    const remapped = remapScenarioSeed(seed)
+    await Promise.all(remapped.people.map((record) => storage.personRepo.upsert(record)))
     await Promise.all(
-      seed.socialSecurityEarnings.map((record) =>
+      remapped.socialSecurityEarnings.map((record) =>
         storage.socialSecurityEarningsRepo.upsert(record),
       ),
     )
     await Promise.all(
-      seed.socialSecurityStrategies.map((record) =>
+      remapped.socialSecurityStrategies.map((record) =>
         storage.socialSecurityStrategyRepo.upsert(record),
       ),
     )
     await Promise.all(
-      seed.futureWorkStrategies.map((record) =>
+      remapped.futureWorkStrategies.map((record) =>
         storage.futureWorkStrategyRepo.upsert(record),
       ),
     )
     await Promise.all(
-      seed.futureWorkPeriods.map((record) => storage.futureWorkPeriodRepo.upsert(record)),
+      remapped.futureWorkPeriods.map((record) => storage.futureWorkPeriodRepo.upsert(record)),
     )
     await Promise.all(
-      seed.spendingStrategies.map((record) => storage.spendingStrategyRepo.upsert(record)),
+      remapped.spendingStrategies.map((record) => storage.spendingStrategyRepo.upsert(record)),
     )
     await Promise.all(
-      seed.spendingLineItems.map((record) => storage.spendingLineItemRepo.upsert(record)),
+      remapped.spendingLineItems.map((record) => storage.spendingLineItemRepo.upsert(record)),
     )
     await Promise.all(
-      seed.nonInvestmentAccounts.map((record) => storage.nonInvestmentAccountRepo.upsert(record)),
+      remapped.nonInvestmentAccounts.map((record) =>
+        storage.nonInvestmentAccountRepo.upsert(record),
+      ),
     )
     await Promise.all(
-      seed.investmentAccounts.map((record) => storage.investmentAccountRepo.upsert(record)),
+      remapped.investmentAccounts.map((record) => storage.investmentAccountRepo.upsert(record)),
     )
     await Promise.all(
-      seed.investmentAccountHoldings.map((record) =>
+      remapped.investmentAccountHoldings.map((record) =>
         storage.investmentAccountHoldingRepo.upsert(record),
       ),
     )
     await Promise.all(
-      seed.personStrategies.map((record) => storage.personStrategyRepo.upsert(record)),
+      remapped.personStrategies.map((record) => storage.personStrategyRepo.upsert(record)),
     )
-    await storage.scenarioRepo.upsert(seed.scenario)
+    await storage.scenarioRepo.upsert(remapped.scenario)
   }
 
   const handleAddDemoScenario = async (seed: LocalScenarioSeed) => {
