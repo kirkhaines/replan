@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   AreaChart,
@@ -141,8 +141,8 @@ const RunResultsPage = () => {
   const [showCashflowChart, setShowCashflowChart] = useState(true)
   const [rangeKey, setRangeKey] = useState('all')
 
-  const monthlyTimeline = run?.result.monthlyTimeline ?? []
-  const explanations = run?.result.explanations ?? []
+  const monthlyTimeline = useMemo(() => run?.result.monthlyTimeline ?? [], [run])
+  const explanations = useMemo(() => run?.result.explanations ?? [], [run])
   const explanationsByMonth = useMemo(() => {
     return explanations.reduce<Map<number, (typeof explanations)[number]>>((acc, entry) => {
       acc.set(entry.monthIndex, entry)
@@ -255,7 +255,7 @@ const RunResultsPage = () => {
       })
     }
     return options
-  }, [run?.result.timeline, run?.snapshot])
+  }, [run])
   const selectedRange = rangeOptions.find((option) => option.key === rangeKey) ?? rangeOptions[0]
   const rangeYearBounds = useMemo(() => {
     if (!selectedRange.start || !selectedRange.end) {
@@ -300,7 +300,7 @@ const RunResultsPage = () => {
       }
       return year >= rangeYearBounds.startYear && year <= rangeYearBounds.endYear
     })
-  }, [rangeYearBounds, run?.result.timeline])
+  }, [rangeYearBounds, run])
   const monthlyByYear = useMemo(() => {
     return filteredMonthlyTimeline.reduce<Map<number, typeof monthlyTimeline>>((acc, entry) => {
       const yearIndex = Math.floor(entry.monthIndex / 12)
@@ -309,7 +309,7 @@ const RunResultsPage = () => {
       acc.set(yearIndex, list)
       return acc
     }, new Map())
-  }, [filteredMonthlyTimeline, monthlyTimeline])
+  }, [filteredMonthlyTimeline])
   const accountLookup = useMemo(() => {
     const cashById = new Map<string, string>()
     const investmentById = new Map<string, string>()
@@ -329,7 +329,7 @@ const RunResultsPage = () => {
       })
     }
     return { cashById, investmentById, holdingById }
-  }, [run?.snapshot])
+  }, [run])
   const initialBalances = useMemo(() => {
     const balances = new Map<string, number>()
     if (!run?.snapshot) {
@@ -342,11 +342,11 @@ const RunResultsPage = () => {
       balances.set(`holding:${holding.id}`, holding.balance)
     })
     return balances
-  }, [run?.snapshot])
+  }, [run])
 
-  const baseYear = new Date().getFullYear()
+  const baseYear = useMemo(() => new Date().getFullYear(), [])
   const cpiRate = run?.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-  const adjustForInflation = (value: number, dateIso?: string | null) => {
+  const adjustForInflation = useCallback((value: number, dateIso?: string | null) => {
     if (!showPresentDay || !dateIso || cpiRate === 0) {
       return value
     }
@@ -359,7 +359,7 @@ const RunResultsPage = () => {
       return value
     }
     return value / Math.pow(1 + cpiRate, yearDelta)
-  }
+  }, [baseYear, cpiRate, showPresentDay])
 
   const formatCurrencyForDate = (value: number, dateIso?: string | null) =>
     formatCurrency(adjustForInflation(value, dateIso))
@@ -424,7 +424,7 @@ const RunResultsPage = () => {
       return { ...point, year, ...totals }
     })
     return { data, seriesKeys }
-  }, [adjustForInflation, explanationsByMonth, filteredTimeline, monthlyByYear, run?.snapshot])
+  }, [adjustForInflation, explanationsByMonth, filteredTimeline, monthlyByYear, run])
 
   const ordinaryIncomeChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -571,7 +571,7 @@ const RunResultsPage = () => {
     }, 0)
 
     return { data, bracketLines, maxValue }
-  }, [adjustForInflation, explanations, filteredTimeline, run?.finishedAt, run?.snapshot])
+  }, [adjustForInflation, explanations, filteredTimeline, run])
 
   const cashflowChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -673,7 +673,7 @@ const RunResultsPage = () => {
     })
 
     return { data: normalizedData, series }
-  }, [adjustForInflation, explanationsByMonth, filteredMonthlyTimeline, filteredTimeline, run?.snapshot])
+  }, [adjustForInflation, explanationsByMonth, filteredMonthlyTimeline, filteredTimeline, run])
 
   const visibleCashflowSeries = useMemo(() => {
     if (bucketFilter === 'all') {

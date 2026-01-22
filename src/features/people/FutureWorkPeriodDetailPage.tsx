@@ -215,7 +215,7 @@ const FutureWorkPeriodDetailPage = () => {
     () => new Map(holdings.map((holding) => [holding.id, holding])),
     [holdings],
   )
-  const validationErrors = useMemo(() => {
+  const validationErrors = (() => {
     if (!period) {
       return []
     }
@@ -266,7 +266,7 @@ const FutureWorkPeriodDetailPage = () => {
     }
 
     return errors
-  }, [period, scenarioHoldingsById])
+  })()
 
   if (isLoading) {
     return <p className="muted">Loading future work period...</p>

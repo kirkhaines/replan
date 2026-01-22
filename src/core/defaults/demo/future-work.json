@@ -81,7 +81,6 @@
         "gainRealizationTarget": 0
       },
       "earlyRetirement": {
-        "useRothBasisFirst": true,
         "allowPenalty": false,
         "penaltyRate": 0.1,
         "use72t": false,

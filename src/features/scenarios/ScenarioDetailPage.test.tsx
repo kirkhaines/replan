@@ -738,8 +738,8 @@ test('saving persists strategy scalars, events, and pensions', async () => {
   const eventsTable = within(eventsSection).getByRole('table')
   const eventRow = within(eventsTable).getAllByRole('row')[1]
   const eventNameInput = eventRow.querySelector('input:not([type])')
-  const eventDateInput = eventRow.querySelector('input[type=\"date\"]')
-  const eventAmountInput = eventRow.querySelector('input[type=\"number\"]')
+  const eventDateInput = eventRow.querySelector('input[type="date"]')
+  const eventAmountInput = eventRow.querySelector('input[type="number"]')
   const eventTaxSelect = eventRow.querySelector('select')
   if (!eventNameInput || !eventDateInput || !eventAmountInput || !eventTaxSelect) {
     throw new Error('Missing event row inputs')
@@ -758,8 +758,8 @@ test('saving persists strategy scalars, events, and pensions', async () => {
   const pensionsTable = within(pensionsSection).getByRole('table')
   const pensionRow = within(pensionsTable).getAllByRole('row')[1]
   const pensionNameInput = pensionRow.querySelector('input:not([type])')
-  const pensionDateInputs = pensionRow.querySelectorAll('input[type=\"date\"]')
-  const pensionAmountInput = pensionRow.querySelector('input[type=\"number\"]')
+  const pensionDateInputs = pensionRow.querySelectorAll('input[type="date"]')
+  const pensionAmountInput = pensionRow.querySelector('input[type="number"]')
   const pensionSelects = pensionRow.querySelectorAll('select')
   if (
     !pensionNameInput ||
@@ -807,8 +807,10 @@ test('prompts before navigating away with unsaved changes', async () => {
   renderScenarioWithNav(scenario.id)
 
   await screen.findByText('Edit scenario')
+  await screen.findByDisplayValue(scenario.name)
 
   fireEvent.change(screen.getByLabelText('Scenario name'), { target: { value: 'Dirty plan' } })
+  await screen.findByDisplayValue('Dirty plan')
   fireEvent.click(screen.getByText('Back'))
 
   await waitFor(() => {
@@ -828,8 +830,10 @@ test('allows navigation when confirming unsaved changes', async () => {
   renderScenarioWithNav(scenario.id)
 
   await screen.findByText('Edit scenario')
+  await screen.findByDisplayValue(scenario.name)
 
   fireEvent.change(screen.getByLabelText('Scenario name'), { target: { value: 'Dirty plan' } })
+  await screen.findByDisplayValue('Dirty plan')
   fireEvent.click(screen.getByText('Back'))
 
   await waitFor(() => {
