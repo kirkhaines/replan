@@ -40,6 +40,8 @@ import {
   rmdTableSeed,
   longTermCareAnnualCostsByLevel,
 } from '../../core/defaults/defaultData'
+import { remapScenarioSeed } from '../../core/defaults/remapScenarioSeed'
+import type { LocalScenarioSeed } from '../../core/defaults/localSeedTypes'
 import { selectTaxPolicy } from '../../core/sim/tax'
 
 const formatCurrency = (value: number) =>
@@ -404,6 +406,76 @@ const persistBundle = async (
   setScenario(normalized.scenario)
   reset(normalized)
   return normalized
+}
+
+const buildScenarioSeedFromSnapshot = (snapshot: SimulationSnapshot): LocalScenarioSeed => ({
+  scenario: snapshot.scenario,
+  people: snapshot.people,
+  personStrategies: snapshot.personStrategies,
+  socialSecurityStrategies: snapshot.socialSecurityStrategies,
+  socialSecurityEarnings: snapshot.socialSecurityEarnings,
+  futureWorkStrategies: snapshot.futureWorkStrategies,
+  futureWorkPeriods: snapshot.futureWorkPeriods,
+  spendingStrategies: snapshot.spendingStrategies,
+  spendingLineItems: snapshot.spendingLineItems,
+  nonInvestmentAccounts: snapshot.nonInvestmentAccounts,
+  investmentAccounts: snapshot.investmentAccounts,
+  investmentAccountHoldings: snapshot.investmentAccountHoldings,
+})
+
+const saveScenarioSeed = async (seed: LocalScenarioSeed, storage: StorageClient) => {
+  await Promise.all(seed.people.map((record) => storage.personRepo.upsert(record)))
+  await Promise.all(
+    seed.socialSecurityEarnings.map((record) =>
+      storage.socialSecurityEarningsRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.socialSecurityStrategies.map((record) =>
+      storage.socialSecurityStrategyRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.futureWorkStrategies.map((record) =>
+      storage.futureWorkStrategyRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.futureWorkPeriods.map((record) =>
+      storage.futureWorkPeriodRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.spendingStrategies.map((record) =>
+      storage.spendingStrategyRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.spendingLineItems.map((record) =>
+      storage.spendingLineItemRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.nonInvestmentAccounts.map((record) =>
+      storage.nonInvestmentAccountRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.investmentAccounts.map((record) =>
+      storage.investmentAccountRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.investmentAccountHoldings.map((record) =>
+      storage.investmentAccountHoldingRepo.upsert(record),
+    ),
+  )
+  await Promise.all(
+    seed.personStrategies.map((record) =>
+      storage.personStrategyRepo.upsert(record),
+    ),
+  )
+  await storage.scenarioRepo.upsert(seed.scenario)
 }
 
 const ScenarioDetailPage = () => {
@@ -1252,6 +1324,68 @@ const ScenarioDetailPage = () => {
     }
     await storage.runRepo.remove(runId)
     setRuns((current) => current.filter((run) => run.id !== runId))
+  }
+
+  const handleRunImport = async (run: SimulationRun) => {
+    if (!run.snapshot) {
+      window.alert('This run does not include the scenario snapshot needed for import.')
+      return
+    }
+    const seed = buildScenarioSeedFromSnapshot(run.snapshot)
+    const remapped = remapScenarioSeed(seed)
+    const now = Date.now()
+    const runName = formatRunTitle(run)
+    const suffix = `from ${runName}`
+    const appendSuffix = (value: string) => `${value} ${suffix}`
+    const scenarioName = appendSuffix(remapped.scenario.name)
+    const scenario = {
+      ...remapped.scenario,
+      name: scenarioName,
+      createdAt: now,
+      updatedAt: now,
+      strategies: {
+        ...remapped.scenario.strategies,
+        events: remapped.scenario.strategies.events.map((event) => ({
+          ...event,
+          name: appendSuffix(event.name),
+        })),
+        pensions: remapped.scenario.strategies.pensions.map((pension) => ({
+          ...pension,
+          name: appendSuffix(pension.name),
+        })),
+      },
+    }
+    const remappedSeed = {
+      ...remapped,
+      scenario,
+      people: remapped.people.map((person) => ({
+        ...person,
+        name: appendSuffix(person.name),
+      })),
+      futureWorkStrategies: remapped.futureWorkStrategies.map((strategy) => ({
+        ...strategy,
+        name: appendSuffix(strategy.name),
+      })),
+      spendingStrategies: remapped.spendingStrategies.map((strategy) => ({
+        ...strategy,
+        name: appendSuffix(strategy.name),
+      })),
+      nonInvestmentAccounts: remapped.nonInvestmentAccounts.map((account) => ({
+        ...account,
+        name: appendSuffix(account.name),
+      })),
+      investmentAccounts: remapped.investmentAccounts.map((account) => ({
+        ...account,
+        name: appendSuffix(account.name),
+      })),
+      investmentAccountHoldings: remapped.investmentAccountHoldings.map((holding) => ({
+        ...holding,
+        name: appendSuffix(holding.name),
+      })),
+    }
+    await saveScenarioSeed(remappedSeed, storage)
+    await loadReferenceData()
+    navigate(`/scenarios/${remappedSeed.scenario.id}`)
   }
 
   if (isLoading) {
@@ -2819,13 +2953,23 @@ const ScenarioDetailPage = () => {
                   <td>{run.status}</td>
                   <td>{formatRunEndingBalance(run).toLocaleString()}</td>
                   <td>
-                    <button
-                      className="link-button"
-                      type="button"
-                      onClick={() => handleRunRemove(run.id)}
-                    >
-                      Remove
-                    </button>
+                    <div className="button-row">
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={() => handleRunImport(run)}
+                        disabled={!run.snapshot}
+                      >
+                        Import as scenario
+                      </button>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={() => handleRunRemove(run.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
