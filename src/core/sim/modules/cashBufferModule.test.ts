@@ -208,6 +208,7 @@ const makeContext = (snapshot: SimulationSnapshot, age: number): SimulationConte
     dateIso,
     isStartOfYear: true,
     isEndOfYear: false,
+    planMode: 'apply',
   }
 }
 

@@ -148,12 +148,19 @@ export type SimulationContext = {
   dateIso: string
   isStartOfYear: boolean
   isEndOfYear: boolean
+  planMode: 'preview' | 'apply'
+  yearPlan?: SimulationYearPlan
+}
+
+export type SimulationYearPlan = {
+  conversionAmount?: number
 }
 
 export type SimulationModule = {
   id: string
   explain?: ModuleExplainTracker
   buildPlan?: (snapshot: SimulationSnapshot, settings: SimulationSettings) => void
+  planYear?: (state: SimulationState, context: SimulationContext) => SimulationYearPlan | null
   onStartOfYear?: (state: SimulationState, context: SimulationContext) => void
   onStartOfMonth?: (state: SimulationState, context: SimulationContext) => void
   getCashflows?: (state: SimulationState, context: SimulationContext) => CashflowItem[]

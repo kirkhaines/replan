@@ -14,6 +14,7 @@ import type {
   CashflowItem,
   MonthlyRecord,
   SimulationContext,
+  SimulationModule,
   SimulationState,
   YearRecord,
 } from './types'
@@ -312,6 +313,18 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     initialBalance,
   }
 }
+
+const cloneState = (state: SimulationState): SimulationState => ({
+  cashAccounts: state.cashAccounts.map((account) => ({ ...account })),
+  holdings: state.holdings.map((holding) => ({
+    ...holding,
+    contributionBasisEntries: holding.contributionBasisEntries.map((entry) => ({ ...entry })),
+  })),
+  yearLedger: { ...state.yearLedger },
+  yearContributionsByTaxType: { ...state.yearContributionsByTaxType },
+  magiHistory: { ...state.magiHistory },
+  initialBalance: state.initialBalance,
+})
 
 const getPrimaryPerson = (snapshot: SimulationInput['snapshot']): Person | null => {
   const primaryStrategyId = snapshot.scenario.personStrategyIds[0]
@@ -658,13 +671,15 @@ const buildYearRecord = (
 
 export const runSimulation = (input: SimulationInput): SimulationResult => {
   const { snapshot, settings } = input
-  const modules = createSimulationModules(snapshot, settings)
+  const previewModules = createSimulationModules(snapshot, settings)
+  const runModules = createSimulationModules(snapshot, settings)
   const holdingTaxTypeById = new Map(
     snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
   )
-  modules.forEach((module) => module.buildPlan?.(snapshot, settings))
+  previewModules.forEach((module) => module.buildPlan?.(snapshot, settings))
+  runModules.forEach((module) => module.buildPlan?.(snapshot, settings))
 
-  const state = createInitialState(snapshot)
+  let state = createInitialState(snapshot)
   const monthlyTimeline: MonthlyRecord[] = []
   const timeline: YearRecord[] = []
   const explanations: MonthExplanation[] = []
@@ -675,196 +690,278 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
   let minBalance = Number.POSITIVE_INFINITY
   let maxBalance = Number.NEGATIVE_INFINITY
 
-  let yearTotals = createEmptyTotals()
+  const runYearPass = ({
+    startMonthIndex,
+    monthsInYear,
+    yearIndex,
+    planMode,
+    yearPlan,
+    record,
+    modules,
+  }: {
+    startMonthIndex: number
+    monthsInYear: number
+    yearIndex: number
+    planMode: SimulationContext['planMode']
+    yearPlan?: SimulationContext['yearPlan']
+    record: boolean
+    modules: SimulationModule[]
+  }) => {
+    let yearTotals = createEmptyTotals()
+    for (let offset = 0; offset < monthsInYear; offset += settings.stepMonths) {
+      const monthIndex = startMonthIndex + offset
+      const date = addMonths(start, monthIndex)
+      const dateIso = toIsoDate(date)
+      const isStartOfYear = offset === 0
+      const isEndOfYear = offset + settings.stepMonths >= monthsInYear
+      const age = primaryPerson
+        ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, dateIso)
+        : yearIndex
 
-  for (let monthIndex = 0; monthIndex < totalMonths; monthIndex += settings.stepMonths) {
-    const date = addMonths(start, monthIndex)
-    const dateIso = toIsoDate(date)
-    const yearIndex = Math.floor(monthIndex / 12)
-    const isStartOfYear = monthIndex % 12 === 0
-    const isEndOfYear = monthIndex % 12 === 11 || monthIndex + 1 >= totalMonths
-    const age = primaryPerson
-      ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, dateIso)
-      : yearIndex
+      if (isStartOfYear) {
+        state.yearLedger = {
+          ordinaryIncome: 0,
+          capitalGains: 0,
+          deductions: 0,
+          taxExemptIncome: 0,
+          penalties: 0,
+          taxPaid: 0,
+          earnedIncome: 0,
+        }
+        state.yearContributionsByTaxType = {
+          cash: 0,
+          taxable: 0,
+          traditional: 0,
+          roth: 0,
+          hsa: 0,
+        }
+        yearTotals = createEmptyTotals()
+      }
 
-    if (isStartOfYear) {
-      state.yearLedger = {
-        ordinaryIncome: 0,
-        capitalGains: 0,
-        deductions: 0,
-        taxExemptIncome: 0,
-        penalties: 0,
-        taxPaid: 0,
-        earnedIncome: 0,
+      const context: SimulationContext = {
+        snapshot,
+        settings,
+        monthIndex,
+        yearIndex,
+        age,
+        date,
+        dateIso,
+        isStartOfYear,
+        isEndOfYear,
+        planMode,
+        yearPlan,
       }
-      state.yearContributionsByTaxType = {
-        cash: 0,
-        taxable: 0,
-        traditional: 0,
-        roth: 0,
-        hsa: 0,
+
+      modules.forEach((module) => module.explain?.reset())
+
+      if (isStartOfYear) {
+        modules.forEach((module) => module.onStartOfYear?.(state, context))
       }
-      yearTotals = createEmptyTotals()
+      modules.forEach((module) => module.onStartOfMonth?.(state, context))
+
+      const monthTotals = createEmptyTotals()
+      const cashflowsByModule = modules.map((module) => ({
+        moduleId: module.id,
+        cashflows: module.getCashflows?.(state, context) ?? [],
+      }))
+      const cashflows = cashflowsByModule.flatMap((entry) => entry.cashflows)
+      applyCashflows(state, cashflows, monthTotals)
+      const extraCashflowsByModule = new Map<string, CashflowItem[]>()
+      const extraCashflows = modules.flatMap((module) => {
+        const extras = module.onAfterCashflows?.(cashflows, state, context) ?? []
+        if (extras.length > 0) {
+          extraCashflowsByModule.set(module.id, extras)
+        }
+        return extras
+      })
+      if (extraCashflows.length > 0) {
+        applyCashflows(state, extraCashflows, monthTotals)
+      }
+
+      const intentsByModule = modules.map((module) => ({
+        moduleId: module.id,
+        intents: (module.getActionIntents?.(state, context) ?? []).map((intent) => ({
+          ...intent,
+          moduleId: module.id,
+        })),
+      }))
+      const intents = intentsByModule.flatMap((entry) => entry.intents)
+      const actions = resolveIntents(intents, state)
+      applyActions(state, actions, monthTotals, context)
+
+      const cashflowsByModuleId = new Map<string, CashflowItem[]>()
+      cashflowsByModule.forEach((entry) => {
+        cashflowsByModuleId.set(entry.moduleId, entry.cashflows)
+      })
+      extraCashflowsByModule.forEach((extras, moduleId) => {
+        const list = cashflowsByModuleId.get(moduleId) ?? []
+        cashflowsByModuleId.set(moduleId, [...list, ...extras])
+      })
+
+      const actionsByModuleId = new Map<string, ActionRecord[]>()
+      actions.forEach((action) => {
+        const { moduleId, ...rest } = action
+        const list = actionsByModuleId.get(moduleId) ?? []
+        list.push(rest)
+        actionsByModuleId.set(moduleId, list)
+      })
+      modules.forEach((module) => {
+        const moduleActions = actionsByModuleId.get(module.id) ?? []
+        module.onActionsResolved?.(moduleActions, state, context)
+      })
+
+      const marketReturnsByModuleId = new Map<string, MarketReturn[]>()
+      modules.forEach((module) => {
+        if (!module.onEndOfMonth) {
+          return
+        }
+        if (module.id === 'returns-core') {
+          const beforeCash = new Map(
+            state.cashAccounts.map((account) => [account.id, account.balance]),
+          )
+          const beforeHoldings = new Map(
+            state.holdings.map((holding) => [holding.id, holding.balance]),
+          )
+          module.onEndOfMonth(state, context)
+          const marketReturns = buildMarketReturns(state, beforeCash, beforeHoldings)
+          marketReturnsByModuleId.set(module.id, marketReturns)
+          if (record) {
+            module.onMarketReturns?.(marketReturns, state, context)
+          }
+          return
+        }
+        module.onEndOfMonth(state, context)
+      })
+
+      yearTotals = {
+        income: yearTotals.income + monthTotals.income,
+        spending: yearTotals.spending + monthTotals.spending,
+        contributions: yearTotals.contributions + monthTotals.contributions,
+        withdrawals: yearTotals.withdrawals + monthTotals.withdrawals,
+        taxes: yearTotals.taxes + monthTotals.taxes,
+        ordinaryIncome: yearTotals.ordinaryIncome + monthTotals.ordinaryIncome,
+        capitalGains: yearTotals.capitalGains + monthTotals.capitalGains,
+        deductions: yearTotals.deductions + monthTotals.deductions,
+      }
+
+      if (record) {
+        const moduleRuns: ModuleRunExplanation[] = modules.map((module) => {
+          const moduleCashflows = cashflowsByModuleId.get(module.id) ?? []
+          const moduleActions = actionsByModuleId.get(module.id) ?? []
+          const moduleMarketReturns = marketReturnsByModuleId.get(module.id) ?? []
+          const cashflowTotals = sumCashflowTotals(moduleCashflows)
+          const actionTotals = sumActionTotals(moduleActions)
+          const marketTotals =
+            moduleMarketReturns.length > 0 ? sumMarketTotals(moduleMarketReturns) : undefined
+          const inputs = module.explain?.inputs ? [...module.explain.inputs] : undefined
+          const checkpoints = module.explain?.checkpoints
+            ? [...module.explain.checkpoints]
+            : undefined
+          const cashflowSeries =
+            module.getCashflowSeries?.({
+              moduleId: module.id,
+              moduleLabel: module.id,
+              cashflows: moduleCashflows,
+              actions: moduleActions,
+              marketTotal: marketTotals?.total,
+              marketReturns: moduleMarketReturns,
+              checkpoints,
+              holdingTaxTypeById,
+            }) ?? []
+          return {
+            moduleId: module.id,
+            cashflows: moduleCashflows,
+            actions: moduleActions,
+            marketReturns: moduleMarketReturns.length > 0 ? moduleMarketReturns : undefined,
+            cashflowSeries: cashflowSeries.length > 0 ? cashflowSeries : undefined,
+            totals: {
+              cashflows: cashflowTotals,
+              actions: actionTotals,
+              market: marketTotals,
+            },
+            inputs: inputs && inputs.length > 0 ? inputs : undefined,
+            checkpoints: checkpoints && checkpoints.length > 0 ? checkpoints : undefined,
+          }
+        })
+
+        explanations.push({
+          monthIndex,
+          date: dateIso,
+          modules: moduleRuns,
+          accounts: buildAccountBalances(state, dateIso),
+        })
+
+        const monthRecord = buildMonthlyRecord(monthIndex, dateIso, age, monthTotals, state)
+        monthlyTimeline.push(monthRecord)
+
+        const totalBalance = monthRecord.totalBalance
+        minBalance = Math.min(minBalance, totalBalance)
+        maxBalance = Math.max(maxBalance, totalBalance)
+      }
+
+      if (isEndOfYear) {
+        modules.forEach((module) => module.onEndOfYear?.(state, context))
+        if (record) {
+          const yearRecord = buildYearRecord(yearIndex, age, dateIso, yearTotals, state)
+          timeline.push(yearRecord)
+        }
+      }
     }
+  }
 
-    const context: SimulationContext = {
+  const totalYears = Math.ceil(totalMonths / 12)
+  for (let yearIndex = 0; yearIndex < totalYears; yearIndex += 1) {
+    const startMonthIndex = yearIndex * 12
+    if (startMonthIndex >= totalMonths) {
+      break
+    }
+    const monthsInYear = Math.min(12, totalMonths - startMonthIndex)
+    const yearStartState = cloneState(state)
+    const yearStartDate = addMonths(start, startMonthIndex)
+    const yearStartIso = toIsoDate(yearStartDate)
+    const yearStartAge = primaryPerson
+      ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, yearStartIso)
+      : yearIndex
+    const yearStartContext: SimulationContext = {
       snapshot,
       settings,
-      monthIndex,
+      monthIndex: startMonthIndex,
       yearIndex,
-      age,
-      date,
-      dateIso,
-      isStartOfYear,
-      isEndOfYear,
+      age: yearStartAge,
+      date: yearStartDate,
+      dateIso: yearStartIso,
+      isStartOfYear: true,
+      isEndOfYear: monthsInYear <= settings.stepMonths,
+      planMode: 'preview',
     }
 
-    modules.forEach((module) => module.explain?.reset())
-
-    if (isStartOfYear) {
-      modules.forEach((module) => module.onStartOfYear?.(state, context))
-    }
-    modules.forEach((module) => module.onStartOfMonth?.(state, context))
-
-    const monthTotals = createEmptyTotals()
-    const cashflowsByModule = modules.map((module) => ({
-      moduleId: module.id,
-      cashflows: module.getCashflows?.(state, context) ?? [],
-    }))
-    const cashflows = cashflowsByModule.flatMap((entry) => entry.cashflows)
-    applyCashflows(state, cashflows, monthTotals)
-    const extraCashflowsByModule = new Map<string, CashflowItem[]>()
-    const extraCashflows = modules.flatMap((module) => {
-      const extras = module.onAfterCashflows?.(cashflows, state, context) ?? []
-      if (extras.length > 0) {
-        extraCashflowsByModule.set(module.id, extras)
-      }
-      return extras
-    })
-    if (extraCashflows.length > 0) {
-      applyCashflows(state, extraCashflows, monthTotals)
-    }
-
-    const intentsByModule = modules.map((module) => ({
-      moduleId: module.id,
-      intents: (module.getActionIntents?.(state, context) ?? []).map((intent) => ({
-        ...intent,
-        moduleId: module.id,
-      })),
-    }))
-    const intents = intentsByModule.flatMap((entry) => entry.intents)
-    const actions = resolveIntents(intents, state)
-    applyActions(state, actions, monthTotals, context)
-
-    const cashflowsByModuleId = new Map<string, CashflowItem[]>()
-    cashflowsByModule.forEach((entry) => {
-      cashflowsByModuleId.set(entry.moduleId, entry.cashflows)
-    })
-    extraCashflowsByModule.forEach((extras, moduleId) => {
-      const list = cashflowsByModuleId.get(moduleId) ?? []
-      cashflowsByModuleId.set(moduleId, [...list, ...extras])
+    runYearPass({
+      startMonthIndex,
+      monthsInYear,
+      yearIndex,
+      planMode: 'preview',
+      record: false,
+      modules: previewModules,
     })
 
-    const actionsByModuleId = new Map<string, ActionRecord[]>()
-    actions.forEach((action) => {
-      const { moduleId, ...rest } = action
-      const list = actionsByModuleId.get(moduleId) ?? []
-      list.push(rest)
-      actionsByModuleId.set(moduleId, list)
+    const yearPlan = runModules.reduce<SimulationContext['yearPlan']>(
+      (plan, module) => {
+        const next = module.planYear?.(state, yearStartContext)
+        return next ? { ...plan, ...next } : plan
+      },
+      {},
+    )
+
+    state = cloneState(yearStartState)
+    runYearPass({
+      startMonthIndex,
+      monthsInYear,
+      yearIndex,
+      planMode: 'apply',
+      yearPlan,
+      record: true,
+      modules: runModules,
     })
-    modules.forEach((module) => {
-      const moduleActions = actionsByModuleId.get(module.id) ?? []
-      module.onActionsResolved?.(moduleActions, state, context)
-    })
-
-    const marketReturnsByModuleId = new Map<string, MarketReturn[]>()
-    modules.forEach((module) => {
-      if (!module.onEndOfMonth) {
-        return
-      }
-      if (module.id === 'returns-core') {
-        const beforeCash = new Map(
-          state.cashAccounts.map((account) => [account.id, account.balance]),
-        )
-        const beforeHoldings = new Map(
-          state.holdings.map((holding) => [holding.id, holding.balance]),
-        )
-        module.onEndOfMonth(state, context)
-        const marketReturns = buildMarketReturns(state, beforeCash, beforeHoldings)
-        marketReturnsByModuleId.set(module.id, marketReturns)
-        module.onMarketReturns?.(marketReturns, state, context)
-        return
-      }
-      module.onEndOfMonth(state, context)
-    })
-
-    const moduleRuns: ModuleRunExplanation[] = modules.map((module) => {
-      const moduleCashflows = cashflowsByModuleId.get(module.id) ?? []
-      const moduleActions = actionsByModuleId.get(module.id) ?? []
-      const moduleMarketReturns = marketReturnsByModuleId.get(module.id) ?? []
-      const cashflowTotals = sumCashflowTotals(moduleCashflows)
-      const actionTotals = sumActionTotals(moduleActions)
-      const marketTotals =
-        moduleMarketReturns.length > 0 ? sumMarketTotals(moduleMarketReturns) : undefined
-      const inputs = module.explain?.inputs ? [...module.explain.inputs] : undefined
-      const checkpoints = module.explain?.checkpoints ? [...module.explain.checkpoints] : undefined
-      const cashflowSeries =
-        module.getCashflowSeries?.({
-          moduleId: module.id,
-          moduleLabel: module.id,
-          cashflows: moduleCashflows,
-          actions: moduleActions,
-          marketTotal: marketTotals?.total,
-          marketReturns: moduleMarketReturns,
-          checkpoints,
-          holdingTaxTypeById,
-        }) ?? []
-      return {
-        moduleId: module.id,
-        cashflows: moduleCashflows,
-        actions: moduleActions,
-        marketReturns: moduleMarketReturns.length > 0 ? moduleMarketReturns : undefined,
-        cashflowSeries: cashflowSeries.length > 0 ? cashflowSeries : undefined,
-        totals: {
-          cashflows: cashflowTotals,
-          actions: actionTotals,
-          market: marketTotals,
-        },
-        inputs: inputs && inputs.length > 0 ? inputs : undefined,
-        checkpoints: checkpoints && checkpoints.length > 0 ? checkpoints : undefined,
-      }
-    })
-
-    explanations.push({
-      monthIndex,
-      date: dateIso,
-      modules: moduleRuns,
-      accounts: buildAccountBalances(state, dateIso),
-    })
-
-    const monthRecord = buildMonthlyRecord(monthIndex, dateIso, age, monthTotals, state)
-    monthlyTimeline.push(monthRecord)
-
-    const totalBalance = monthRecord.totalBalance
-    minBalance = Math.min(minBalance, totalBalance)
-    maxBalance = Math.max(maxBalance, totalBalance)
-
-    yearTotals = {
-      income: yearTotals.income + monthTotals.income,
-      spending: yearTotals.spending + monthTotals.spending,
-      contributions: yearTotals.contributions + monthTotals.contributions,
-      withdrawals: yearTotals.withdrawals + monthTotals.withdrawals,
-      taxes: yearTotals.taxes + monthTotals.taxes,
-      ordinaryIncome: yearTotals.ordinaryIncome + monthTotals.ordinaryIncome,
-      capitalGains: yearTotals.capitalGains + monthTotals.capitalGains,
-      deductions: yearTotals.deductions + monthTotals.deductions,
-    }
-
-    if (isEndOfYear) {
-      modules.forEach((module) => module.onEndOfYear?.(state, context))
-      const yearRecord = buildYearRecord(yearIndex, age, dateIso, yearTotals, state)
-      timeline.push(yearRecord)
-    }
   }
 
   const endingBalance =
