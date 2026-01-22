@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {
   AreaChart,
@@ -130,6 +130,7 @@ const RunResultsPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [run, setRun] = useState<SimulationRun | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
   const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set())
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
@@ -697,6 +698,44 @@ const RunResultsPage = () => {
     void load()
   }, [id, storage])
 
+  useEffect(() => {
+    if (titleInputRef.current) {
+      titleInputRef.current.value = run?.title ?? ''
+    }
+  }, [run])
+
+  const handleTitleCommit = useCallback(async (rawValue: string) => {
+    if (!run) {
+      return
+    }
+    const trimmed = rawValue.trim()
+    const nextTitle = trimmed.length > 0 ? trimmed : undefined
+    if (nextTitle === run.title) {
+      return
+    }
+    const updated = { ...run, title: nextTitle }
+    await storage.runRepo.upsert(updated)
+    setRun(updated)
+  }, [run, storage])
+
+  const handleTitleBlur = useCallback(
+    (event: React.FocusEvent<HTMLInputElement>) => {
+      void handleTitleCommit(event.target.value)
+    },
+    [handleTitleCommit],
+  )
+
+  const handleTitleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== 'Enter') {
+        return
+      }
+      event.preventDefault()
+      event.currentTarget.blur()
+    },
+    [],
+  )
+
   const summary = useMemo(() => {
     if (!run) {
       return {
@@ -776,6 +815,19 @@ const RunResultsPage = () => {
           <p className="error">{run.errorMessage ?? 'Simulation failed.'}</p>
         </div>
       ) : null}
+
+      <div className="card">
+        <label className="field">
+          <span>Run title</span>
+          <input
+            ref={titleInputRef}
+            defaultValue={run.title ?? ''}
+            onBlur={handleTitleBlur}
+            onKeyDown={handleTitleKeyDown}
+            placeholder="Untitled run"
+          />
+        </label>
+      </div>
 
       <div className="card stack">
         <div className="row" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>

@@ -74,8 +74,16 @@ class DexieRunRepo implements RunRepo {
     await db.runs.add(run)
   }
 
+  async upsert(run: SimulationRun) {
+    await db.runs.put(run)
+  }
+
   async get(id: string) {
     return db.runs.get(id)
+  }
+
+  async remove(id: string) {
+    await db.runs.delete(id)
   }
 }
 

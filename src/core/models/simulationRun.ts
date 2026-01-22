@@ -166,6 +166,7 @@ export const simulationResultSchema = z.object({
 export const simulationRunSchema = z.object({
   id: z.string().uuid(),
   scenarioId: z.string().uuid(),
+  title: z.string().optional(),
   startedAt: z.number(),
   finishedAt: z.number(),
   status: z.enum(['success', 'error']),

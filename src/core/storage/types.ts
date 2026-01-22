@@ -145,7 +145,9 @@ export interface SsaRetirementAdjustmentRepo {
 export interface RunRepo {
   listForScenario: (scenarioId: string) => Promise<SimulationRun[]>
   add: (run: SimulationRun) => Promise<void>
+  upsert: (run: SimulationRun) => Promise<void>
   get: (id: string) => Promise<SimulationRun | undefined>
+  remove: (id: string) => Promise<void>
 }
 
 export interface StorageClient {

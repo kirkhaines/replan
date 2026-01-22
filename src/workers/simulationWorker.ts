@@ -79,6 +79,7 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
       issue,
       summary: summarizeSnapshot(input?.snapshot),
     })
+    const finishedAt = Date.now()
     const response: RunScenarioResponse = {
       type: 'runScenarioResult',
       requestId,
@@ -86,11 +87,12 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
         id: createUuid(),
         scenarioId: input?.snapshot?.scenario?.id ?? createUuid(),
         startedAt,
-        finishedAt: Date.now(),
+        finishedAt,
         status: 'error',
         errorMessage: formatZodError(issue),
         result: emptyResult,
         snapshot: input?.snapshot,
+        title: new Date(finishedAt).toLocaleString(),
       },
     }
     self.postMessage(response)
@@ -111,6 +113,7 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
       requestId,
       summary: summarizeSnapshot(parsed.data.snapshot),
     })
+    const finishedAt = Date.now()
     const response: RunScenarioResponse = {
       type: 'runScenarioResult',
       requestId,
@@ -118,11 +121,12 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
         id: createUuid(),
         scenarioId: parsed.data.snapshot.scenario.id,
         startedAt,
-        finishedAt: Date.now(),
+        finishedAt,
         status: 'error',
         errorMessage: `${reason} ${summarizeSnapshot(parsed.data.snapshot)}`,
         result: emptyResult,
         snapshot: parsed.data.snapshot,
+        title: new Date(finishedAt).toLocaleString(),
       },
     }
     self.postMessage(response)
@@ -143,6 +147,7 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
     timelinePoints: result.timeline.length,
     monthlyTimelinePoints: result.monthlyTimeline?.length ?? 0,
   })
+  const finishedAt = Date.now()
   const response: RunScenarioResponse = {
     type: 'runScenarioResult',
     requestId,
@@ -150,10 +155,11 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest>) => {
       id: createUuid(),
       scenarioId: parsed.data.snapshot.scenario.id,
       startedAt,
-      finishedAt: Date.now(),
+      finishedAt,
       status: 'success',
       result,
       snapshot: parsed.data.snapshot,
+      title: new Date(finishedAt).toLocaleString(),
     },
   }
   self.postMessage(response)

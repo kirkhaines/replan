@@ -1227,6 +1227,33 @@ const ScenarioDetailPage = () => {
     navigate(`/runs/${run.id}`)
   }
 
+  const formatRunTitle = (run: SimulationRun) =>
+    run.title?.trim() ? run.title.trim() : new Date(run.finishedAt).toLocaleString()
+
+  const formatRunEndingBalance = (run: SimulationRun) => {
+    const endingBalance = run.result.summary.endingBalance
+    const dateIso = run.result.timeline.at(-1)?.date
+    const cpiRate = run.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+    if (!dateIso || cpiRate === 0) {
+      return endingBalance
+    }
+    const year = new Date(dateIso).getFullYear()
+    const baseYear = new Date().getFullYear()
+    if (Number.isNaN(year)) {
+      return endingBalance
+    }
+    const yearDelta = year - baseYear
+    return endingBalance / Math.pow(1 + cpiRate, yearDelta)
+  }
+
+  const handleRunRemove = async (runId: string) => {
+    if (!window.confirm('Remove this run?')) {
+      return
+    }
+    await storage.runRepo.remove(runId)
+    setRuns((current) => current.filter((run) => run.id !== runId))
+  }
+
   if (isLoading) {
     return <p className="muted">Loading scenario...</p>
   }
@@ -2770,24 +2797,40 @@ const ScenarioDetailPage = () => {
         {runs.length === 0 ? (
           <p className="muted">No runs yet. Save and run to generate results.</p>
         ) : (
-          <div className="runs">
-            {runs.map((run) => (
-              <Link
-                className="run-item"
-                key={run.id}
-                to={`/runs/${run.id}`}
-                state={{ from: location.pathname }}
-              >
-                <div>
-                  <strong>{new Date(run.finishedAt).toLocaleString()}</strong>
-                  <span className="muted">{run.status}</span>
-                </div>
-                <span className="muted">
-                  Ending balance {run.result.summary.endingBalance.toLocaleString()}
-                </span>
-              </Link>
-            ))}
-          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Run</th>
+                <th>Finished</th>
+                <th>Status</th>
+                <th>Ending balance (today)</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {runs.map((run) => (
+                <tr key={run.id}>
+                  <td>
+                    <Link className="link" to={`/runs/${run.id}`} state={{ from: location.pathname }}>
+                      {formatRunTitle(run)}
+                    </Link>
+                  </td>
+                  <td>{new Date(run.finishedAt).toLocaleString()}</td>
+                  <td>{run.status}</td>
+                  <td>{formatRunEndingBalance(run).toLocaleString()}</td>
+                  <td>
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={() => handleRunRemove(run.id)}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </section>
