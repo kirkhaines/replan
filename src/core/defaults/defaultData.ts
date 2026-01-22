@@ -39,6 +39,13 @@ export const contributionLimitDefaultsSeed: Array<
   { type: 'ira', year: 2026, amount: 7500 },
 ]
 
+export const longTermCareAnnualCostsByLevel = {
+  home_aides: 36000,
+  assisted_living: 60000,
+  memory_nursing: 120000,
+  other: 0,
+} as const
+
 export const ssaWageIndexSeed: Array<Pick<SsaWageIndex, 'year' | 'index'>> = [
   { year: 1951, index: 2799.16 },
   { year: 1952, index: 2973.32 },

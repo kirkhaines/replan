@@ -11,6 +11,14 @@ export const createHealthcareModule = (
   const scenario = snapshot.scenario
   const strategy = scenario.strategies.healthcare
   const taxStrategy = scenario.strategies.tax
+  const primaryStrategyId = scenario.personStrategyIds[0]
+  const primaryStrategy = snapshot.personStrategies.find(
+    (entry) => entry.id === primaryStrategyId,
+  )
+  const primaryPerson = primaryStrategy
+    ? snapshot.people.find((person) => person.id === primaryStrategy.personId)
+    : snapshot.people[0]
+  const lifeExpectancy = primaryPerson?.lifeExpectancy ?? 0
   const activeStrategyIds = new Set(scenario.personStrategyIds)
   const futureWorkStrategyIds = new Set(
     snapshot.personStrategies
@@ -68,18 +76,73 @@ export const createHealthcareModule = (
       const baseMonthly = isMedicare
         ? strategy.medicarePartBMonthly + strategy.medicarePartDMonthly + strategy.medigapMonthly
         : strategy.preMedicareMonthly
-      if (baseMonthly <= 0) {
+      const inflationRate =
+        scenario.strategies.returnModel.inflationAssumptions[strategy.inflationType] ?? 0
+      const longTermCareDuration = strategy.longTermCareDurationYears ?? 0
+      const longTermCareStartAge =
+        lifeExpectancy > 0 && longTermCareDuration > 0
+          ? Math.max(0, lifeExpectancy - longTermCareDuration)
+          : null
+      const longTermCareEndAge = lifeExpectancy > 0 ? lifeExpectancy : null
+      const decliningStartAge = strategy.decliningHealthStartAge ?? 0
+      const decliningDuration = strategy.decliningHealthTreatmentDurationYears ?? 0
+
+      let extraMonthly = 0
+      let longTermCareMonthly = 0
+      let decliningMonthly = 0
+      if (longTermCareStartAge !== null) {
+        const inLongTermCare =
+          context.age >= longTermCareStartAge &&
+          (longTermCareEndAge === null || context.age <= longTermCareEndAge)
+        if (inLongTermCare && strategy.longTermCareAnnualExpense > 0) {
+          longTermCareMonthly =
+            inflateAmount(
+              strategy.longTermCareAnnualExpense,
+              settings.startDate,
+              context.dateIso,
+              inflationRate,
+            ) / 12
+          extraMonthly += longTermCareMonthly
+        }
+      }
+
+      if (decliningStartAge > 0 && context.age >= decliningStartAge) {
+        const treatmentEndAge = decliningStartAge + Math.max(0, decliningDuration)
+        if (decliningDuration > 0 && context.age < treatmentEndAge) {
+          if (strategy.decliningHealthAnnualExpense > 0) {
+            decliningMonthly =
+              inflateAmount(
+                strategy.decliningHealthAnnualExpense,
+                settings.startDate,
+                context.dateIso,
+                inflationRate,
+              ) / 12
+            extraMonthly += decliningMonthly
+          }
+        } else if (strategy.decliningHealthPostTreatmentAnnualExpense > 0) {
+          decliningMonthly =
+            inflateAmount(
+              strategy.decliningHealthPostTreatmentAnnualExpense,
+              settings.startDate,
+              context.dateIso,
+              inflationRate,
+            ) / 12
+          extraMonthly += decliningMonthly
+        }
+      }
+
+      if (baseMonthly <= 0 && extraMonthly <= 0) {
         explain.addInput('Is Medicare', isMedicare)
         explain.addInput('Inflation type', strategy.inflationType)
         explain.addInput('Apply IRMAA', strategy.applyIrmaa)
         explain.addInput('Base monthly', baseMonthly)
         explain.addCheckpoint('Inflated base', 0)
         explain.addCheckpoint('IRMAA surcharge', 0)
+        explain.addCheckpoint('Long-term care', 0)
+        explain.addCheckpoint('Declining health', 0)
         explain.addCheckpoint('Total', 0)
         return []
       }
-      const inflationRate =
-        scenario.strategies.returnModel.inflationAssumptions[strategy.inflationType] ?? 0
       const inflatedBase = inflateAmount(
         baseMonthly,
         settings.startDate,
@@ -100,16 +163,28 @@ export const createHealthcareModule = (
         const surcharge = computeIrmaaSurcharge(table, magi)
         irmaaSurcharge = surcharge.partBMonthly + surcharge.partDMonthly
       }
-      const total = inflatedBase + irmaaSurcharge
+      const total = inflatedBase + irmaaSurcharge + extraMonthly
       explain.addInput('Is Medicare', isMedicare)
       explain.addInput('Inflation type', strategy.inflationType)
       explain.addInput('Apply IRMAA', strategy.applyIrmaa)
       explain.addInput('Base monthly', baseMonthly)
+      explain.addInput('Long-term care level', strategy.longTermCareLevel)
+      explain.addInput('Long-term care duration (years)', longTermCareDuration)
+      if (longTermCareStartAge !== null) {
+        explain.addInput('Long-term care start age', longTermCareStartAge)
+      }
+      if (longTermCareEndAge !== null) {
+        explain.addInput('Long-term care end age', longTermCareEndAge)
+      }
+      explain.addInput('Declining health start age', decliningStartAge)
+      explain.addInput('Declining health duration (years)', decliningDuration)
       if (magiLookback !== null) {
         explain.addInput('IRMAA lookback years', magiLookback)
       }
       explain.addCheckpoint('Inflated base', inflatedBase)
       explain.addCheckpoint('IRMAA surcharge', irmaaSurcharge)
+      explain.addCheckpoint('Long-term care', longTermCareMonthly)
+      explain.addCheckpoint('Declining health', decliningMonthly)
       explain.addCheckpoint('Total', total)
       if (strategy.applyIrmaa) {
         explain.addCheckpoint('MAGI', magi)

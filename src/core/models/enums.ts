@@ -30,6 +30,13 @@ export const inflationTypeSchema = z.enum([
   'education',
 ])
 
+export const longTermCareLevelSchema = z.enum([
+  'home_aides',
+  'assisted_living',
+  'memory_nursing',
+  'other',
+])
+
 export const filingStatusSchema = z.enum([
   'single',
   'married_joint',

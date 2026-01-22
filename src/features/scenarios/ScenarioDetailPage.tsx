@@ -9,6 +9,7 @@ import {
   taxTypeSchema,
   taxTreatmentSchema,
   withdrawalOrderTypeSchema,
+  longTermCareLevelSchema,
   normalizeScenarioStrategies,
   type InflationDefault,
   type Scenario,
@@ -37,6 +38,7 @@ import {
   taxPolicySeed,
   irmaaTableSeed,
   rmdTableSeed,
+  longTermCareAnnualCostsByLevel,
 } from '../../core/defaults/defaultData'
 import { selectTaxPolicy } from '../../core/sim/tax'
 
@@ -466,6 +468,10 @@ const ScenarioDetailPage = () => {
   const ladderLeadTimeYears = watch('scenario.strategies.rothLadder.leadTimeYears')
   const ladderStartAge = watch('scenario.strategies.rothLadder.startAge')
   const ladderEndAge = watch('scenario.strategies.rothLadder.endAge')
+  const longTermCareLevel = watch('scenario.strategies.healthcare.longTermCareLevel')
+  const longTermCareAnnualExpense = watch(
+    'scenario.strategies.healthcare.longTermCareAnnualExpense',
+  )
   const rothConversionBrackets = useMemo(() => {
     const policy = selectTaxPolicy(
       taxPolicySeed,
@@ -713,6 +719,18 @@ const ScenarioDetailPage = () => {
     () => new Map(inflationDefaults.map((item) => [item.type, item])),
     [inflationDefaults],
   )
+
+  useEffect(() => {
+    if (!longTermCareLevel || longTermCareLevel === 'other') {
+      return
+    }
+    const nextValue = longTermCareAnnualCostsByLevel[longTermCareLevel] ?? 0
+    if (nextValue !== longTermCareAnnualExpense) {
+      setValue('scenario.strategies.healthcare.longTermCareAnnualExpense', nextValue, {
+        shouldDirty: true,
+      })
+    }
+  }, [longTermCareAnnualExpense, longTermCareLevel, setValue])
 
   const handleInflationChange = (type: InflationDefault['type'], value: number) => {
     setValue(`scenario.strategies.returnModel.inflationAssumptions.${type}`, value, {
@@ -2404,6 +2422,77 @@ const ScenarioDetailPage = () => {
               <label className="field checkbox">
                 <input type="checkbox" {...register('scenario.strategies.healthcare.applyIrmaa')} />
                 <span>Apply IRMAA</span>
+              </label>
+            </div>
+            <div className="form-grid">
+              <label className="field">
+                <span>Long-term care duration (years)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.healthcare.longTermCareDurationYears', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Long-term care level</span>
+                <select {...register('scenario.strategies.healthcare.longTermCareLevel')}>
+                  {longTermCareLevelSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option.replace('_', ' ')}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Long-term care annual expense</span>
+                <input
+                  type="number"
+                  readOnly={longTermCareLevel !== 'other'}
+                  {...register('scenario.strategies.healthcare.longTermCareAnnualExpense', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+            <div className="form-grid">
+              <label className="field">
+                <span>Declining health start age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.healthcare.decliningHealthStartAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Treatment duration (years)</span>
+                <input
+                  type="number"
+                  {...register(
+                    'scenario.strategies.healthcare.decliningHealthTreatmentDurationYears',
+                    { valueAsNumber: true },
+                  )}
+                />
+              </label>
+              <label className="field">
+                <span>Annual expense during treatment</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.healthcare.decliningHealthAnnualExpense', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Annual expense after treatment</span>
+                <input
+                  type="number"
+                  {...register(
+                    'scenario.strategies.healthcare.decliningHealthPostTreatmentAnnualExpense',
+                    { valueAsNumber: true },
+                  )}
+                />
               </label>
             </div>
           </div>

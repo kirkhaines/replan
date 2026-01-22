@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   filingStatusSchema,
   inflationTypeSchema,
+  longTermCareLevelSchema,
   taxTreatmentSchema,
   taxTypeSchema,
   withdrawalOrderTypeSchema,
@@ -116,6 +117,13 @@ export const healthcareStrategySchema = z.object({
   medigapMonthly: z.number().min(0),
   inflationType: inflationTypeSchema,
   applyIrmaa: z.boolean(),
+  longTermCareDurationYears: z.number().min(0),
+  longTermCareLevel: longTermCareLevelSchema,
+  longTermCareAnnualExpense: z.number().min(0),
+  decliningHealthStartAge: z.number().min(0),
+  decliningHealthTreatmentDurationYears: z.number().min(0),
+  decliningHealthAnnualExpense: z.number().min(0),
+  decliningHealthPostTreatmentAnnualExpense: z.number().min(0),
 })
 
 export const taxStrategySchema = z.object({
@@ -253,6 +261,13 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     medigapMonthly: 0,
     inflationType: 'medical',
     applyIrmaa: true,
+    longTermCareDurationYears: 0,
+    longTermCareLevel: 'home_aides',
+    longTermCareAnnualExpense: 0,
+    decliningHealthStartAge: 0,
+    decliningHealthTreatmentDurationYears: 0,
+    decliningHealthAnnualExpense: 0,
+    decliningHealthPostTreatmentAnnualExpense: 0,
   },
   tax: {
     filingStatus: 'single',
