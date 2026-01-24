@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { useFieldArray, useForm } from 'react-hook-form'
+import { useFieldArray, useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   investmentAccountSchema,
@@ -55,6 +55,8 @@ const InvestmentAccountDetailPage = () => {
     [],
   )
 
+  const resolver = zodResolver(investmentAccountSchema) as unknown as Resolver<InvestmentAccount>
+
   const {
     register,
     handleSubmit,
@@ -62,7 +64,7 @@ const InvestmentAccountDetailPage = () => {
     control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<InvestmentAccount>({
-    resolver: zodResolver(investmentAccountSchema),
+    resolver,
     defaultValues,
   })
 

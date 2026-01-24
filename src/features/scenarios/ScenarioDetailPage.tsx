@@ -533,6 +533,7 @@ const ScenarioDetailPage = () => {
 
   useUnsavedChangesWarning(isDirty)
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedSpendingStrategyId = watch('scenario.spendingStrategyId')
   const inflationAssumptions = watch('scenario.strategies.returnModel.inflationAssumptions')
   const personStrategyIds = watch('scenario.personStrategyIds')

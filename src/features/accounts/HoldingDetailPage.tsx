@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { useFieldArray, useForm, type SubmitHandler } from 'react-hook-form'
+import { useFieldArray, useForm, type Resolver, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import {
   investmentAccountHoldingSchema,
   holdingTypeSchema,
@@ -45,6 +46,10 @@ const HoldingDetailPage = () => {
     [],
   )
 
+  const resolver = (
+    zodResolver as unknown as (schema: z.ZodTypeAny) => Resolver<InvestmentAccountHolding>
+  )(investmentAccountHoldingSchema as z.ZodTypeAny)
+
   const {
     register,
     handleSubmit,
@@ -54,7 +59,7 @@ const HoldingDetailPage = () => {
     control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<InvestmentAccountHolding>({
-    resolver: zodResolver(investmentAccountHoldingSchema),
+    resolver,
     defaultValues,
   })
 
@@ -65,6 +70,7 @@ const HoldingDetailPage = () => {
 
   useUnsavedChangesWarning(isDirty)
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedHoldingType = watch('holdingType')
   const returnRate = watch('returnRate')
   const returnStdDev = watch('returnStdDev')

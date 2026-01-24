@@ -59,14 +59,14 @@ const ScenarioListPage = () => {
     }
   }, [loadScenarios])
 
-  const handleRemove = async (scenarioId: string) => {
+  const handleRemove = useCallback(async (scenarioId: string) => {
     const confirmed = window.confirm('Remove this scenario?')
     if (!confirmed) {
       return
     }
     await storage.scenarioRepo.remove(scenarioId)
     await loadScenarios()
-  }
+  }, [loadScenarios, storage.scenarioRepo])
 
   const buildLocalScenarioSeed = useCallback(
     async (scenarioId: string): Promise<LocalScenarioSeed | null> => {
