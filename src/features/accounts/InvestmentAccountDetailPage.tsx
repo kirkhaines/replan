@@ -112,6 +112,15 @@ const InvestmentAccountDetailPage = () => {
     await loadAccount()
   }
 
+  const handleRemoveHolding = async (holdingId: string) => {
+    const confirmed = window.confirm('Remove this holding?')
+    if (!confirmed) {
+      return
+    }
+    await storage.investmentAccountHoldingRepo.remove(holdingId)
+    await loadAccount()
+  }
+
   const onSubmit = async (values: InvestmentAccount) => {
     const timestamp = now()
     const next = {
@@ -281,6 +290,7 @@ const InvestmentAccountDetailPage = () => {
                 <th>Balance</th>
                 <th>Return</th>
                 <th>Std dev of return</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -299,6 +309,15 @@ const InvestmentAccountDetailPage = () => {
                   <td>{formatCurrency(holding.balance)}</td>
                   <td>{holding.returnRate}</td>
                   <td>{holding.returnStdDev}</td>
+                  <td>
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={() => void handleRemoveHolding(holding.id)}
+                    >
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
