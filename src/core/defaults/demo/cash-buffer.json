@@ -669,7 +669,14 @@
       "id": "f6c9484d-4d5e-405b-91c2-61d2d65255bf",
       "name": "Demo Brokerage",
       "createdAt": 1700000000000,
-      "updatedAt": 1700000000000
+      "updatedAt": 1700000000000,
+      "contributionEntries": [
+        {
+          "date": "2020-01-01",
+          "amount": 200000,
+          "taxType": "taxable"
+        }
+      ]
     }
   ],
   "investmentAccountHoldings": [
@@ -678,7 +685,12 @@
       "name": "Demo S&P 500",
       "taxType": "taxable",
       "balance": 200000,
-      "contributionBasisEntries": [{"date": "2020-01-01", "amount": 200000}],
+      "costBasisEntries": [
+        {
+          "date": "2020-01-01",
+          "amount": 200000
+        }
+      ],
       "holdingType": "sp500",
       "returnRate": 0.06,
       "returnStdDev": 0.12,

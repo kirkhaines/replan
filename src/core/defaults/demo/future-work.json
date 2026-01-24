@@ -579,7 +579,19 @@
       "id": "6d2df174-9200-46d1-8e29-ad66b699ae16",
       "name": "Demo Brokerage",
       "createdAt": 1700000000000,
-      "updatedAt": 1700000000000
+      "updatedAt": 1700000000000,
+      "contributionEntries": [
+        {
+          "date": "2020-01-01",
+          "amount": 120000,
+          "taxType": "traditional"
+        },
+        {
+          "date": "2020-01-01",
+          "amount": 5000,
+          "taxType": "hsa"
+        }
+      ]
     }
   ],
   "investmentAccountHoldings": [
@@ -588,7 +600,12 @@
       "name": "Demo S&P 500",
       "taxType": "traditional",
       "balance": 120000,
-      "contributionBasisEntries": [{"date": "2020-01-01", "amount": 120000}],
+      "costBasisEntries": [
+        {
+          "date": "2020-01-01",
+          "amount": 120000
+        }
+      ],
       "holdingType": "sp500",
       "returnRate": 0.06,
       "returnStdDev": 0.12,
@@ -601,7 +618,12 @@
       "name": "Demo HSA Holding",
       "taxType": "hsa",
       "balance": 5000,
-      "contributionBasisEntries": [{"date": "2020-01-01", "amount": 5000}],
+      "costBasisEntries": [
+        {
+          "date": "2020-01-01",
+          "amount": 5000
+        }
+      ],
       "holdingType": "cash",
       "returnRate": 0.02,
       "returnStdDev": 0.01,
