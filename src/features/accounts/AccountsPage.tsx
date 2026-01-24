@@ -29,6 +29,7 @@ const createInvestmentAccount = (): InvestmentAccount => {
   return {
     id: createUuid(),
     name: 'Brokerage',
+    contributionEntries: [],
     createdAt: now,
     updatedAt: now,
   }
@@ -42,7 +43,7 @@ const createHolding = (investmentAccountId: string): InvestmentAccountHolding =>
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 50000,
-    contributionBasisEntries: [{ date: nowIso, amount: 50000 }],
+    costBasisEntries: [{ date: nowIso, amount: 50000 }],
     holdingType: 'sp500',
     returnRate: 0.1,
     returnStdDev: 0.16,

@@ -1,4 +1,5 @@
 import type {
+  InvestmentAccount,
   InvestmentAccountHolding,
   MarketReturn,
   SimulationSnapshot,
@@ -17,12 +18,17 @@ export type SimHolding = {
   taxType: InvestmentAccountHolding['taxType']
   holdingType: InvestmentAccountHolding['holdingType']
   balance: number
-  contributionBasisEntries: Array<{
+  costBasisEntries: Array<{
     date: string
     amount: number
   }>
   returnRate: number
   returnStdDev: number
+}
+
+export type SimInvestmentAccount = {
+  id: string
+  contributionEntries: InvestmentAccount['contributionEntries']
 }
 
 export type SimulationSettings = {
@@ -131,6 +137,7 @@ export type YearRecord = {
 
 export type SimulationState = {
   cashAccounts: SimCashAccount[]
+  investmentAccounts: SimInvestmentAccount[]
   holdings: SimHolding[]
   yearLedger: TaxLedger
   yearContributionsByTaxType: Record<CashflowSeriesBucket, number>

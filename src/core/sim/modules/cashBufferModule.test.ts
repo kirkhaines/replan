@@ -17,7 +17,7 @@ const makeHolding = (
   id: string,
   taxType: InvestmentAccountHolding['taxType'],
   balance: number,
-  contributionBasisEntries: InvestmentAccountHolding['contributionBasisEntries'],
+  costBasisEntries: InvestmentAccountHolding['costBasisEntries'],
 ): InvestmentAccountHolding => ({
   id,
   name: `Holding ${id}`,
@@ -25,7 +25,7 @@ const makeHolding = (
   updatedAt: 0,
   taxType,
   balance,
-  contributionBasisEntries,
+  costBasisEntries,
   holdingType: 'sp500',
   returnRate: 0,
   returnStdDev: 0,
@@ -135,6 +135,7 @@ const makeSnapshot = ({
       {
         id: scenario.investmentAccountIds[0],
         name: 'Invest',
+        contributionEntries: [],
         createdAt: 0,
         updatedAt: 0,
       },
@@ -161,13 +162,26 @@ const makeState = (
       interestRate: 0,
     },
   ],
+  investmentAccounts: [
+    {
+      id: '00000000-0000-4000-8000-000000000003',
+      contributionEntries: holdings
+        .filter((holding) => holding.taxType === 'roth')
+        .flatMap((holding) =>
+          holding.costBasisEntries.map((entry) => ({
+            ...entry,
+            taxType: 'roth' as const,
+          })),
+        ),
+    },
+  ],
   holdings: holdings.map((holding) => ({
     id: holding.id,
     investmentAccountId: holding.investmentAccountId,
     taxType: holding.taxType,
     holdingType: holding.holdingType,
     balance: holding.balance,
-    contributionBasisEntries: holding.contributionBasisEntries.map((entry) => ({ ...entry })),
+    costBasisEntries: holding.costBasisEntries.map((entry) => ({ ...entry })),
     returnRate: holding.returnRate,
     returnStdDev: holding.returnStdDev,
   })),

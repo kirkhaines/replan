@@ -166,6 +166,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
   const investmentAccount: InvestmentAccount = {
     id: investmentAccountId,
     name: 'Brokerage',
+    contributionEntries: [],
     createdAt: now,
     updatedAt: now,
   }
@@ -176,7 +177,7 @@ export const createDefaultScenarioBundle = (): ScenarioBundle => {
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 150000,
-    contributionBasisEntries: [{ date: nowIso, amount: 150000 }],
+    costBasisEntries: [{ date: nowIso, amount: 150000 }],
     holdingType: 'sp500',
     returnRate: 0.1,
     returnStdDev: 0.16,

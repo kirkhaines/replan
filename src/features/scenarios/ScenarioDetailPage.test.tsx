@@ -372,12 +372,14 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
   const investmentAccount: InvestmentAccount = {
     id: '00000000-0000-4000-8000-000000000109',
     name: 'Brokerage',
+    contributionEntries: [],
     createdAt: now,
     updatedAt: now,
   }
   const investmentAccountTwo: InvestmentAccount = {
     id: '00000000-0000-4000-8000-000000000209',
     name: 'IRA',
+    contributionEntries: [],
     createdAt: now,
     updatedAt: now,
   }
@@ -386,7 +388,7 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 60000,
-    contributionBasisEntries: [{ date: '2020-01-01', amount: 60000 }],
+    costBasisEntries: [{ date: '2020-01-01', amount: 60000 }],
     holdingType: 'sp500',
     returnRate: 0.05,
     returnStdDev: 0.15,
@@ -399,7 +401,7 @@ const buildSeed = (options?: { includeSecondary?: boolean }) => {
     name: 'Bonds',
     taxType: 'traditional',
     balance: 25000,
-    contributionBasisEntries: [{ date: '2020-01-01', amount: 25000 }],
+    costBasisEntries: [{ date: '2020-01-01', amount: 25000 }],
     holdingType: 'bonds',
     returnRate: 0.03,
     returnStdDev: 0.1,
@@ -859,6 +861,7 @@ test('saving persists added person strategy, cash account, and investment accoun
   const extraInvestment: InvestmentAccount = {
     id: '00000000-0000-4000-8000-000000000309',
     name: 'Extra IRA',
+    contributionEntries: [],
     createdAt: now,
     updatedAt: now,
   }
@@ -867,7 +870,7 @@ test('saving persists added person strategy, cash account, and investment accoun
     name: 'Extra bonds',
     taxType: 'traditional',
     balance: 15000,
-    contributionBasisEntries: [{ date: '2020-01-01', amount: 15000 }],
+    costBasisEntries: [{ date: '2020-01-01', amount: 15000 }],
     holdingType: 'bonds',
     returnRate: 0.03,
     returnStdDev: 0.1,

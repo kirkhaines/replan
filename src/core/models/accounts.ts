@@ -8,25 +8,43 @@ export const nonInvestmentAccountSchema = baseEntitySchema.extend({
   interestRate: z.number(),
 })
 
-export const investmentAccountSchema = baseEntitySchema.extend({
-  name: z.string().min(1),
+const investmentAccountContributionEntrySchema = z.object({
+  date: isoDateStringSchema,
+  amount: z.number().min(0),
+  taxType: taxTypeSchema,
 })
 
-export const investmentAccountHoldingSchema = baseEntitySchema.extend({
+export const investmentAccountSchema = baseEntitySchema.extend({
+  name: z.string().min(1),
+  contributionEntries: z.array(investmentAccountContributionEntrySchema).default([]),
+})
+
+const costBasisEntrySchema = z.object({
+  date: isoDateStringSchema,
+  amount: z.number().min(0),
+})
+
+const investmentAccountHoldingSchemaBase = baseEntitySchema.extend({
   name: z.string().min(1),
   taxType: taxTypeSchema,
   balance: z.number().min(0),
-  contributionBasisEntries: z.array(
-    z.object({
-      date: isoDateStringSchema,
-      amount: z.number().min(0),
-    }),
-  ),
+  costBasisEntries: z.array(costBasisEntrySchema),
   holdingType: holdingTypeSchema,
   returnRate: z.number(),
   returnStdDev: z.number(),
   investmentAccountId: z.string().uuid(),
 })
+
+export const investmentAccountHoldingSchema = z.preprocess((input) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return input
+  }
+  const record = input as Record<string, unknown>
+  if (!('costBasisEntries' in record) && 'contributionBasisEntries' in record) {
+    return { ...record, costBasisEntries: record.contributionBasisEntries }
+  }
+  return input
+}, investmentAccountHoldingSchemaBase)
 
 export type NonInvestmentAccount = z.infer<typeof nonInvestmentAccountSchema>
 export type InvestmentAccount = z.infer<typeof investmentAccountSchema>

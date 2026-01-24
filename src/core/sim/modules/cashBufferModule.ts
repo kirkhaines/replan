@@ -9,15 +9,17 @@ import type {
 } from '../types'
 import { getHoldingGain, inflateAmount, sumMonthlySpending } from './utils'
 
-const sumSeasonedBasis = (
-  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+const sumSeasonedContributions = (
+  entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
   dateIso: string,
+  taxType: SimulationState['holdings'][number]['taxType'],
 ) => {
+  const filtered = entries.filter((entry) => entry.taxType === taxType)
   const current = new Date(`${dateIso}T00:00:00Z`)
   if (Number.isNaN(current.getTime())) {
     return 0
   }
-  return entries.reduce((sum, entry) => {
+  return filtered.reduce((sum, entry) => {
     const entryDate = new Date(`${entry.date}T00:00:00Z`)
     if (Number.isNaN(entryDate.getTime())) {
       return sum
@@ -94,12 +96,10 @@ export const estimateCashBufferWithdrawals = (
   })
   const holdingBalances = new Map(state.holdings.map((holding) => [holding.id, holding.balance]))
   const basisRemaining = new Map(
-    state.holdings
-      .filter((holding) => holding.taxType === 'roth')
-      .map((holding) => [
-        holding.id,
-        sumSeasonedBasis(holding.contributionBasisEntries, context.dateIso),
-      ]),
+    state.investmentAccounts.map((account) => [
+      account.id,
+      sumSeasonedContributions(account.contributionEntries, context.dateIso, 'roth'),
+    ]),
   )
   const byTaxType: Record<string, number> = {}
   let remaining = amount
@@ -129,7 +129,9 @@ export const estimateCashBufferWithdrawals = (
         return
       }
       const balanceRemaining = holdingBalances.get(holding.id) ?? holding.balance
-      const basisLimit = isRothBasis ? basisRemaining.get(holding.id) ?? 0 : balanceRemaining
+      const basisLimit = isRothBasis
+        ? basisRemaining.get(holding.investmentAccountId) ?? 0
+        : balanceRemaining
       const withdrawAmount = Math.min(remaining, balanceRemaining, basisLimit)
       if (withdrawAmount <= 0) {
         return
@@ -138,8 +140,11 @@ export const estimateCashBufferWithdrawals = (
       remaining -= withdrawAmount
       holdingBalances.set(holding.id, balanceRemaining - withdrawAmount)
       if (holding.taxType === 'roth') {
-        const remainingBasis = basisRemaining.get(holding.id) ?? 0
-        basisRemaining.set(holding.id, Math.max(0, remainingBasis - withdrawAmount))
+        const remainingBasis = basisRemaining.get(holding.investmentAccountId) ?? 0
+        basisRemaining.set(
+          holding.investmentAccountId,
+          Math.max(0, remainingBasis - withdrawAmount),
+        )
       }
     })
   })
@@ -199,12 +204,10 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
     let priority = priorityBase
     const holdingBalances = new Map(state.holdings.map((holding) => [holding.id, holding.balance]))
     const basisRemaining = new Map(
-      state.holdings
-        .filter((holding) => holding.taxType === 'roth')
-        .map((holding) => [
-          holding.id,
-          sumSeasonedBasis(holding.contributionBasisEntries, context.dateIso),
-        ]),
+      state.investmentAccounts.map((account) => [
+        account.id,
+        sumSeasonedContributions(account.contributionEntries, context.dateIso, 'roth'),
+      ]),
     )
 
     order.forEach((taxType) => {
@@ -231,9 +234,11 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
         if (remaining <= 0) {
           return
         }
-        const balanceRemaining = holdingBalances.get(holding.id) ?? holding.balance
-        const basisLimit = isRothBasis ? basisRemaining.get(holding.id) ?? 0 : balanceRemaining
-        const withdrawAmount = Math.min(remaining, balanceRemaining, basisLimit)
+      const balanceRemaining = holdingBalances.get(holding.id) ?? holding.balance
+      const basisLimit = isRothBasis
+        ? basisRemaining.get(holding.investmentAccountId) ?? 0
+        : balanceRemaining
+      const withdrawAmount = Math.min(remaining, balanceRemaining, basisLimit)
         if (withdrawAmount <= 0) {
           return
         }
@@ -249,8 +254,11 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
         remaining -= withdrawAmount
         holdingBalances.set(holding.id, balanceRemaining - withdrawAmount)
         if (holding.taxType === 'roth') {
-          const remainingBasis = basisRemaining.get(holding.id) ?? 0
-          basisRemaining.set(holding.id, Math.max(0, remainingBasis - withdrawAmount))
+          const remainingBasis = basisRemaining.get(holding.investmentAccountId) ?? 0
+          basisRemaining.set(
+            holding.investmentAccountId,
+            Math.max(0, remainingBasis - withdrawAmount),
+          )
         }
       })
     })

@@ -43,6 +43,33 @@ import type {
   SsaRetirementAdjustmentRepo,
 } from './types'
 
+const normalizeInvestmentAccount = (
+  account: InvestmentAccount | undefined,
+): InvestmentAccount | undefined => {
+  if (!account) {
+    return account
+  }
+  return {
+    ...account,
+    contributionEntries: account.contributionEntries ?? [],
+  }
+}
+
+const normalizeInvestmentAccountHolding = (
+  holding: InvestmentAccountHolding | undefined,
+): InvestmentAccountHolding | undefined => {
+  if (!holding) {
+    return holding
+  }
+  const record = holding as InvestmentAccountHolding & {
+    contributionBasisEntries?: InvestmentAccountHolding['costBasisEntries']
+  }
+  return {
+    ...holding,
+    costBasisEntries: record.costBasisEntries ?? record.contributionBasisEntries ?? [],
+  }
+}
+
 class DexieScenarioRepo implements ScenarioRepo {
   async list() {
     return db.scenarios.orderBy('updatedAt').reverse().toArray()
@@ -153,11 +180,13 @@ class DexieNonInvestmentAccountRepo implements NonInvestmentAccountRepo {
 
 class DexieInvestmentAccountRepo implements InvestmentAccountRepo {
   async list() {
-    return db.investmentAccounts.orderBy('updatedAt').reverse().toArray()
+    const accounts = await db.investmentAccounts.orderBy('updatedAt').reverse().toArray()
+    return accounts.map((account) => normalizeInvestmentAccount(account)!)
   }
 
   async get(id: string) {
-    return db.investmentAccounts.get(id)
+    const account = await db.investmentAccounts.get(id)
+    return normalizeInvestmentAccount(account)
   }
 
   async upsert(account: InvestmentAccount) {
@@ -171,18 +200,21 @@ class DexieInvestmentAccountRepo implements InvestmentAccountRepo {
 
 class DexieInvestmentAccountHoldingRepo implements InvestmentAccountHoldingRepo {
   async listForAccount(accountId: string) {
-    return db.investmentAccountHoldings
+    const holdings = await db.investmentAccountHoldings
       .where('investmentAccountId')
       .equals(accountId)
       .toArray()
+    return holdings.map((holding) => normalizeInvestmentAccountHolding(holding)!)
   }
 
   async list() {
-    return db.investmentAccountHoldings.orderBy('updatedAt').reverse().toArray()
+    const holdings = await db.investmentAccountHoldings.orderBy('updatedAt').reverse().toArray()
+    return holdings.map((holding) => normalizeInvestmentAccountHolding(holding)!)
   }
 
   async get(id: string) {
-    return db.investmentAccountHoldings.get(id)
+    const holding = await db.investmentAccountHoldings.get(id)
+    return normalizeInvestmentAccountHolding(holding)
   }
 
   async upsert(holding: InvestmentAccountHolding) {

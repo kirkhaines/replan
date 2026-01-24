@@ -123,20 +123,19 @@ const sumMarketTotals = (marketReturns: MarketReturn[]) => {
   return totals
 }
 
-const sumContributionBasisEntries = (
-  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
-) => entries.reduce((sum, entry) => sum + entry.amount, 0)
+const sumCostBasisEntries = (entries: SimulationState['holdings'][number]['costBasisEntries']) =>
+  entries.reduce((sum, entry) => sum + entry.amount, 0)
 
-const scaleContributionBasisEntries = (
-  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+const scaleCostBasisEntries = (
+  entries: SimulationState['holdings'][number]['costBasisEntries'],
   ratio: number,
 ) =>
   entries
     .map((entry) => ({ ...entry, amount: Math.max(0, entry.amount * ratio) }))
     .filter((entry) => entry.amount > 0)
 
-const consumeContributionBasisEntries = (
-  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
+const consumeCostBasisEntries = (
+  entries: SimulationState['holdings'][number]['costBasisEntries'],
   amount: number,
   order: 'fifo' | 'lifo',
 ) => {
@@ -165,10 +164,7 @@ const consumeContributionBasisEntries = (
   return { used, entries: updated }
 }
 
-const sumSeasonedBasis = (
-  entries: SimulationState['holdings'][number]['contributionBasisEntries'],
-  dateIso: string,
-) => {
+const sumSeasonedEntries = (entries: Array<{ date: string; amount: number }>, dateIso: string) => {
   const current = new Date(`${dateIso}T00:00:00Z`)
   if (Number.isNaN(current.getTime())) {
     return 0
@@ -188,7 +184,7 @@ const sumSeasonedBasis = (
   }, 0)
 }
 
-const addContributionBasisEntry = (
+const addCostBasisEntry = (
   holding: SimulationState['holdings'][number],
   amount: number,
   dateIso: string,
@@ -196,42 +192,149 @@ const addContributionBasisEntry = (
   if (amount <= 0) {
     return
   }
-  holding.contributionBasisEntries.push({ date: dateIso, amount })
+  holding.costBasisEntries.push({ date: dateIso, amount })
+}
+
+const getAccountContributionEntries = (
+  state: SimulationState,
+  accountId: string,
+) =>
+  state.investmentAccounts.find((account) => account.id === accountId)?.contributionEntries ??
+  []
+
+const addAccountContributionEntry = (
+  state: SimulationState,
+  accountId: string,
+  amount: number,
+  dateIso: string,
+  taxType: SimulationState['holdings'][number]['taxType'],
+) => {
+  if (amount <= 0) {
+    return
+  }
+  const account = state.investmentAccounts.find((entry) => entry.id === accountId)
+  if (!account) {
+    return
+  }
+  account.contributionEntries.push({ date: dateIso, amount, taxType })
+}
+
+const sumAccountContributionEntries = (
+  entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
+  taxType: SimulationState['holdings'][number]['taxType'],
+) => entries.filter((entry) => entry.taxType === taxType)
+
+const sumSeasonedContributions = (
+  entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
+  dateIso: string,
+  taxType: SimulationState['holdings'][number]['taxType'],
+) => sumSeasonedEntries(sumAccountContributionEntries(entries, taxType), dateIso)
+
+const sumContributionAmounts = (
+  entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
+  taxType: SimulationState['holdings'][number]['taxType'],
+) => sumAccountContributionEntries(entries, taxType).reduce((sum, entry) => sum + entry.amount, 0)
+
+const consumeAccountContributionEntries = (
+  entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
+  amount: number,
+  order: 'fifo' | 'lifo',
+  taxType: SimulationState['holdings'][number]['taxType'],
+) => {
+  if (amount <= 0) {
+    return { used: 0, entries }
+  }
+  const matching = entries.filter((entry) => entry.taxType === taxType)
+  if (matching.length === 0) {
+    return { used: 0, entries }
+  }
+  const sorted = [...matching].sort((a, b) =>
+    order === 'fifo' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date),
+  )
+  let remaining = amount
+  const updated: typeof matching = []
+  let used = 0
+  sorted.forEach((entry) => {
+    if (remaining <= 0) {
+      updated.push(entry)
+      return
+    }
+    const applied = Math.min(remaining, entry.amount)
+    used += applied
+    remaining -= applied
+    const leftover = entry.amount - applied
+    if (leftover > 0) {
+      updated.push({ ...entry, amount: leftover })
+    }
+  })
+  const nonMatching = entries.filter((entry) => entry.taxType !== taxType)
+  return { used, entries: [...nonMatching, ...updated] }
 }
 
 const buildAccountBalances = (
   state: SimulationState,
   dateIso: string,
-): AccountBalanceSnapshot[] => [
-  ...state.cashAccounts.map((account) => ({
-    id: account.id,
-    kind: 'cash' as const,
-    balance: account.balance,
-  })),
-  ...state.holdings.map((holding) => {
+): AccountBalanceSnapshot[] => {
+  const rothHoldingsByAccount = new Map<string, SimulationState['holdings']>()
+  state.holdings.forEach((holding) => {
     if (holding.taxType !== 'roth') {
+      return
+    }
+    const list = rothHoldingsByAccount.get(holding.investmentAccountId) ?? []
+    list.push(holding)
+    rothHoldingsByAccount.set(holding.investmentAccountId, list)
+  })
+
+  const rothBasisByAccount = new Map<
+    string,
+    { balance: number; totalBasis: number; seasonedBasis: number }
+  >()
+  rothHoldingsByAccount.forEach((holdings, accountId) => {
+    const balance = holdings.reduce((sum, holding) => sum + holding.balance, 0)
+    const entries = getAccountContributionEntries(state, accountId)
+    const totalBasis = sumContributionAmounts(entries, 'roth')
+    const seasonedBasis = sumSeasonedContributions(entries, dateIso, 'roth')
+    const cappedTotal = Math.min(balance, Math.max(0, totalBasis))
+    const cappedSeasoned = Math.min(cappedTotal, Math.max(0, seasonedBasis))
+    rothBasisByAccount.set(accountId, {
+      balance,
+      totalBasis: cappedTotal,
+      seasonedBasis: cappedSeasoned,
+    })
+  })
+
+  return [
+    ...state.cashAccounts.map((account) => ({
+      id: account.id,
+      kind: 'cash' as const,
+      balance: account.balance,
+    })),
+    ...state.holdings.map((holding) => {
+      if (holding.taxType !== 'roth') {
+        return {
+          id: holding.id,
+          kind: 'holding' as const,
+          balance: holding.balance,
+          investmentAccountId: holding.investmentAccountId,
+        }
+      }
+      const basis = rothBasisByAccount.get(holding.investmentAccountId)
+      const ratio =
+        basis && basis.balance > 0 ? holding.balance / basis.balance : 0
+      const holdingTotal = (basis?.totalBasis ?? 0) * ratio
+      const holdingSeasoned = (basis?.seasonedBasis ?? 0) * ratio
+      const unseasoned = Math.max(0, holdingTotal - holdingSeasoned)
       return {
         id: holding.id,
         kind: 'holding' as const,
         balance: holding.balance,
         investmentAccountId: holding.investmentAccountId,
+        basisSeasoned: holdingSeasoned,
+        basisUnseasoned: unseasoned,
       }
-    }
-    const totalBasis = sumContributionBasisEntries(holding.contributionBasisEntries)
-    const seasonedBasis = sumSeasonedBasis(holding.contributionBasisEntries, dateIso)
-    const cappedTotal = Math.min(holding.balance, Math.max(0, totalBasis))
-    const cappedSeasoned = Math.min(cappedTotal, Math.max(0, seasonedBasis))
-    const unseasoned = Math.max(0, cappedTotal - cappedSeasoned)
-    return {
-      id: holding.id,
-      kind: 'holding' as const,
-      balance: holding.balance,
-      investmentAccountId: holding.investmentAccountId,
-      basisSeasoned: cappedSeasoned,
-      basisUnseasoned: unseasoned,
-    }
-  }),
-]
+    }),
+  ]
+}
 
 const buildMarketReturns = (
   state: SimulationState,
@@ -277,13 +380,35 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     balance: account.balance,
     interestRate: account.interestRate,
   }))
+  const investmentAccounts = snapshot.investmentAccounts.map((account) => {
+    const baseEntries = account.contributionEntries ?? []
+    // Legacy fallback: treat Roth holding cost basis entries as contributions.
+    const fallbackEntries =
+      baseEntries.length > 0
+        ? baseEntries
+        : snapshot.investmentAccountHoldings
+            .filter(
+              (holding) =>
+                holding.investmentAccountId === account.id && holding.taxType === 'roth',
+            )
+            .flatMap((holding) =>
+              holding.costBasisEntries.map((entry) => ({
+                ...entry,
+                taxType: 'roth' as const,
+              })),
+            )
+    return {
+      id: account.id,
+      contributionEntries: fallbackEntries.map((entry) => ({ ...entry })),
+    }
+  })
   const holdings = snapshot.investmentAccountHoldings.map((holding) => ({
     id: holding.id,
     investmentAccountId: holding.investmentAccountId,
     taxType: holding.taxType,
     holdingType: holding.holdingType,
     balance: holding.balance,
-    contributionBasisEntries: holding.contributionBasisEntries.map((entry) => ({ ...entry })),
+    costBasisEntries: holding.costBasisEntries.map((entry) => ({ ...entry })),
     returnRate: holding.returnRate,
     returnStdDev: holding.returnStdDev,
   }))
@@ -292,6 +417,7 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     holdings.reduce((sum, holding) => sum + holding.balance, 0)
   return {
     cashAccounts,
+    investmentAccounts,
     holdings,
     yearLedger: {
       ordinaryIncome: 0,
@@ -316,9 +442,13 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
 
 const cloneState = (state: SimulationState): SimulationState => ({
   cashAccounts: state.cashAccounts.map((account) => ({ ...account })),
+  investmentAccounts: state.investmentAccounts.map((account) => ({
+    ...account,
+    contributionEntries: account.contributionEntries.map((entry) => ({ ...entry })),
+  })),
   holdings: state.holdings.map((holding) => ({
     ...holding,
-    contributionBasisEntries: holding.contributionBasisEntries.map((entry) => ({ ...entry })),
+    costBasisEntries: holding.costBasisEntries.map((entry) => ({ ...entry })),
   })),
   yearLedger: { ...state.yearLedger },
   yearContributionsByTaxType: { ...state.yearContributionsByTaxType },
@@ -405,6 +535,7 @@ const applyHoldingWithdrawal = (
   context: SimulationContext,
   taxTreatmentOverride?: ActionIntent['taxTreatment'],
   skipPenalty?: boolean,
+  skipRothContributionConsumption?: boolean,
 ) => {
   const holding = state.holdings.find((entry) => entry.id === holdingId)
   if (!holding || amount <= 0) {
@@ -415,9 +546,13 @@ const applyHoldingWithdrawal = (
   if (withdrawal <= 0) {
     return 0
   }
+  const accountContributionEntries =
+    holding.taxType === 'roth'
+      ? getAccountContributionEntries(state, holding.investmentAccountId)
+      : []
   const seasonedRothBasis =
     holding.taxType === 'roth'
-      ? sumSeasonedBasis(holding.contributionBasisEntries, context.dateIso)
+      ? sumSeasonedContributions(accountContributionEntries, context.dateIso, 'roth')
       : 0
   holding.balance -= withdrawal
   if (taxTreatmentOverride === 'ordinary') {
@@ -430,26 +565,26 @@ const applyHoldingWithdrawal = (
     state.yearLedger.taxExemptIncome += withdrawal
   } else if (holding.taxType === 'taxable') {
     const basisMethod = context.snapshot.scenario.strategies.taxableLot.costBasisMethod
-    const totalBasis = sumContributionBasisEntries(holding.contributionBasisEntries)
+    const totalBasis = sumCostBasisEntries(holding.costBasisEntries)
     let basisUsed = 0
     if (basisMethod === 'average') {
       const basisRatio = startingBalance > 0 ? totalBasis / startingBalance : 0
       basisUsed = withdrawal * basisRatio
       if (basisRatio > 0 && startingBalance > 0) {
         const scale = Math.max(0, (startingBalance - withdrawal) / startingBalance)
-        holding.contributionBasisEntries = scaleContributionBasisEntries(
-          holding.contributionBasisEntries,
+        holding.costBasisEntries = scaleCostBasisEntries(
+          holding.costBasisEntries,
           scale,
         )
       }
     } else {
-      const { used, entries } = consumeContributionBasisEntries(
-        holding.contributionBasisEntries,
+      const { used, entries } = consumeCostBasisEntries(
+        holding.costBasisEntries,
         withdrawal,
         basisMethod === 'fifo' ? 'fifo' : 'lifo',
       )
       basisUsed = used
-      holding.contributionBasisEntries = entries
+      holding.costBasisEntries = entries
     }
     const gain = Math.max(0, withdrawal - basisUsed)
     state.yearLedger.capitalGains += gain
@@ -458,11 +593,19 @@ const applyHoldingWithdrawal = (
     state.yearLedger.ordinaryIncome += withdrawal
     totals.ordinaryIncome += withdrawal
   } else if (holding.taxType === 'roth') {
-    holding.contributionBasisEntries = consumeContributionBasisEntries(
-      holding.contributionBasisEntries,
-      withdrawal,
-      'fifo',
-    ).entries
+    if (!skipRothContributionConsumption) {
+      const account = state.investmentAccounts.find(
+        (entry) => entry.id === holding.investmentAccountId,
+      )
+      if (account) {
+        account.contributionEntries = consumeAccountContributionEntries(
+          account.contributionEntries,
+          withdrawal,
+          'fifo',
+          'roth',
+        ).entries
+      }
+    }
     state.yearLedger.taxExemptIncome += withdrawal
   } else {
     state.yearLedger.taxExemptIncome += withdrawal
@@ -492,6 +635,7 @@ const withdrawProRata = (
   context: SimulationContext,
   taxTreatmentOverride?: ActionIntent['taxTreatment'],
   skipPenalty?: boolean,
+  skipRothContributionConsumption?: boolean,
 ) => {
   const totalHoldings = sumHoldings(state)
   if (totalHoldings <= 0 || amount <= 0) {
@@ -513,6 +657,7 @@ const withdrawProRata = (
       context,
       taxTreatmentOverride,
       skipPenalty,
+      skipRothContributionConsumption,
     )
     remaining -= applied
   })
@@ -541,8 +686,13 @@ const applyActions = (
   totals: MonthTotals,
   context: SimulationContext,
 ) => {
+  const shouldTrackAccountContribution = (action: ActionRecordWithModule) =>
+    action.moduleId === 'work' || action.moduleId === 'cashBuffer'
+
   actions.forEach((action) => {
     if (action.kind === 'withdraw') {
+      const skipPenalty = action.skipPenalty || action.moduleId === 'rebalancing'
+      const skipRothContributionConsumption = action.moduleId === 'rebalancing'
       const applied =
         action.sourceHoldingId
           ? applyHoldingWithdrawal(
@@ -552,7 +702,8 @@ const applyActions = (
               totals,
               context,
               action.taxTreatment,
-              action.skipPenalty,
+              skipPenalty,
+              skipRothContributionConsumption,
             )
           : withdrawProRata(
               state,
@@ -560,7 +711,8 @@ const applyActions = (
               totals,
               context,
               action.taxTreatment,
-              action.skipPenalty,
+              skipPenalty,
+              skipRothContributionConsumption,
             )
       if (applied > 0) {
         applyCashToAccounts(state, applied)
@@ -575,7 +727,16 @@ const applyActions = (
             applyCashToAccounts(state, -action.resolvedAmount)
           }
           holding.balance += action.resolvedAmount
-          addContributionBasisEntry(holding, action.resolvedAmount, context.dateIso)
+          addCostBasisEntry(holding, action.resolvedAmount, context.dateIso)
+          if (shouldTrackAccountContribution(action)) {
+            addAccountContributionEntry(
+              state,
+              holding.investmentAccountId,
+              action.resolvedAmount,
+              context.dateIso,
+              holding.taxType,
+            )
+          }
           if (action.fromCash !== false) {
             const bucket = holding.taxType
             state.yearContributionsByTaxType[bucket] += action.resolvedAmount
@@ -611,7 +772,14 @@ const applyActions = (
         const holding = state.holdings.find((entry) => entry.id === targetHolding)
         if (holding) {
           holding.balance += applied
-          addContributionBasisEntry(holding, applied, context.dateIso)
+          addCostBasisEntry(holding, applied, context.dateIso)
+          addAccountContributionEntry(
+            state,
+            holding.investmentAccountId,
+            applied,
+            context.dateIso,
+            holding.taxType,
+          )
         }
       }
     }

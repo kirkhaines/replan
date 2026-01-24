@@ -34,7 +34,7 @@ const HoldingDetailPage = () => {
       name: '',
       taxType: 'taxable' as const,
       balance: 0,
-      contributionBasisEntries: [],
+      costBasisEntries: [],
       holdingType: 'sp500' as const,
       returnRate: 0,
       returnStdDev: 0,
@@ -60,7 +60,7 @@ const HoldingDetailPage = () => {
 
   const { fields: basisFields, append: appendBasis, remove: removeBasis } = useFieldArray({
     control,
-    name: 'contributionBasisEntries',
+    name: 'costBasisEntries',
   })
 
   useUnsavedChangesWarning(isDirty)
@@ -251,7 +251,7 @@ const HoldingDetailPage = () => {
 
         <div className="stack">
           <div className="row">
-            <h3>Contribution basis</h3>
+            <h3>Cost basis</h3>
             <button
               className="button secondary"
               type="button"
@@ -277,7 +277,7 @@ const HoldingDetailPage = () => {
               {basisFields.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="muted">
-                    No contribution basis entries yet.
+                    No cost basis entries yet.
                   </td>
                 </tr>
               ) : (
@@ -286,11 +286,11 @@ const HoldingDetailPage = () => {
                     <td>
                       <input
                         type="date"
-                        {...register(`contributionBasisEntries.${index}.date`)}
+                        {...register(`costBasisEntries.${index}.date`)}
                       />
-                      {errors.contributionBasisEntries?.[index]?.date ? (
+                      {errors.costBasisEntries?.[index]?.date ? (
                         <span className="error">
-                          {errors.contributionBasisEntries[index]?.date?.message}
+                          {errors.costBasisEntries[index]?.date?.message}
                         </span>
                       ) : null}
                     </td>
@@ -298,13 +298,13 @@ const HoldingDetailPage = () => {
                       <input
                         type="number"
                         step="0.01"
-                        {...register(`contributionBasisEntries.${index}.amount`, {
+                        {...register(`costBasisEntries.${index}.amount`, {
                           valueAsNumber: true,
                         })}
                       />
-                      {errors.contributionBasisEntries?.[index]?.amount ? (
+                      {errors.costBasisEntries?.[index]?.amount ? (
                         <span className="error">
-                          {errors.contributionBasisEntries[index]?.amount?.message}
+                          {errors.costBasisEntries[index]?.amount?.message}
                         </span>
                       ) : null}
                     </td>

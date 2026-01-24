@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   investmentAccountSchema,
+  taxTypeSchema,
   type InvestmentAccount,
   type InvestmentAccountHolding,
 } from '../../core/models'
@@ -24,7 +25,7 @@ const createHolding = (investmentAccountId: string): InvestmentAccountHolding =>
     name: 'S&P 500',
     taxType: 'taxable',
     balance: 50000,
-    contributionBasisEntries: [{ date: nowIso, amount: 50000 }],
+    costBasisEntries: [{ date: nowIso, amount: 50000 }],
     holdingType: 'sp500',
     returnRate: 0.1,
     returnStdDev: 0.16,
@@ -47,6 +48,7 @@ const InvestmentAccountDetailPage = () => {
     () => ({
       id: '',
       name: '',
+      contributionEntries: [],
       createdAt: 0,
       updatedAt: 0,
     }),
@@ -57,10 +59,20 @@ const InvestmentAccountDetailPage = () => {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<InvestmentAccount>({
     resolver: zodResolver(investmentAccountSchema),
     defaultValues,
+  })
+
+  const {
+    fields: contributionFields,
+    append: appendContribution,
+    remove: removeContribution,
+  } = useFieldArray({
+    control,
+    name: 'contributionEntries',
   })
 
   useUnsavedChangesWarning(isDirty)
@@ -102,6 +114,7 @@ const InvestmentAccountDetailPage = () => {
     const timestamp = now()
     const next = {
       ...values,
+      contributionEntries: values.contributionEntries ?? account?.contributionEntries ?? [],
       createdAt: values.createdAt || timestamp,
       updatedAt: timestamp,
     }
@@ -147,6 +160,97 @@ const InvestmentAccountDetailPage = () => {
             <input {...register('name')} />
             {errors.name ? <span className="error">{errors.name.message}</span> : null}
           </label>
+        </div>
+
+        <div className="stack">
+          <div className="row">
+            <h3>Contribution entries</h3>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() =>
+                appendContribution({
+                  date: new Date().toISOString().slice(0, 10),
+                  amount: 0,
+                  taxType: 'roth',
+                })
+              }
+            >
+              Add entry
+            </button>
+          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Tax type</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contributionFields.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    No contribution entries yet.
+                  </td>
+                </tr>
+              ) : (
+                contributionFields.map((field, index) => (
+                  <tr key={field.id}>
+                    <td>
+                      <input
+                        type="date"
+                        {...register(`contributionEntries.${index}.date`)}
+                      />
+                      {errors.contributionEntries?.[index]?.date ? (
+                        <span className="error">
+                          {errors.contributionEntries[index]?.date?.message}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        step="0.01"
+                        {...register(`contributionEntries.${index}.amount`, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                      {errors.contributionEntries?.[index]?.amount ? (
+                        <span className="error">
+                          {errors.contributionEntries[index]?.amount?.message}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <select {...register(`contributionEntries.${index}.taxType`)}>
+                        {taxTypeSchema.options.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.contributionEntries?.[index]?.taxType ? (
+                        <span className="error">
+                          {errors.contributionEntries[index]?.taxType?.message}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>
+                      <button
+                        className="link-button"
+                        type="button"
+                        onClick={() => removeContribution(index)}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
         <div className="button-row">

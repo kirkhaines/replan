@@ -295,7 +295,12 @@ const buildSimulationSnapshot = async (
         storage.investmentAccountRepo.get(id),
       ),
     )
-  ).filter(isDefined)
+  )
+    .filter(isDefined)
+    .map((account) => ({
+      ...account,
+      contributionEntries: account.contributionEntries ?? [],
+    }))
 
   const investmentAccountHoldings = (
     await Promise.all(
@@ -305,7 +310,7 @@ const buildSimulationSnapshot = async (
     )
   ).flat().map((holding) => ({
     ...holding,
-    contributionBasisEntries: holding.contributionBasisEntries ?? [],
+    costBasisEntries: holding.costBasisEntries ?? [],
   }))
 
   const [ssaWageIndex, ssaBendPoints, ssaRetirementAdjustments] = await Promise.all([
