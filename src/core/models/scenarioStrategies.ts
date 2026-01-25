@@ -29,7 +29,6 @@ export const allocationTargetSchema = z.object({
   age: z.number().min(0),
   equity: z.number().min(0),
   bonds: z.number().min(0),
-  cash: z.number().min(0),
   realEstate: z.number().min(0),
   other: z.number().min(0),
 })
@@ -37,7 +36,7 @@ export const allocationTargetSchema = z.object({
 export const glidepathStrategySchema = z.object({
   mode: z.enum(['age', 'year']),
   scope: z.enum(['global', 'per_account']),
-  targets: z.array(allocationTargetSchema).min(1),
+  targets: z.array(allocationTargetSchema).min(0),
 })
 
 export const rebalancingStrategySchema = z.object({
@@ -189,8 +188,8 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     mode: 'age',
     scope: 'global',
     targets: [
-      { age: 40, equity: 0.8, bonds: 0.15, cash: 0.03, realEstate: 0.02, other: 0 },
-      { age: 60, equity: 0.6, bonds: 0.3, cash: 0.05, realEstate: 0.05, other: 0 },
+      { age: 40, equity: 0.8, bonds: 0.18, realEstate: 0.02, other: 0 },
+      { age: 60, equity: 0.6, bonds: 0.35, realEstate: 0.05, other: 0 },
     ],
   },
   rebalancing: {
@@ -296,7 +295,7 @@ export const normalizeScenarioStrategies = (
     ...defaults,
     ...strategies,
     returnModel: { ...defaults.returnModel, ...strategies?.returnModel },
-    glidepath: { ...defaults.glidepath, ...strategies?.glidepath },
+    glidepath: { ...defaults.glidepath, ...strategies?.glidepath, scope: 'global' },
     rebalancing: { ...defaults.rebalancing, ...strategies?.rebalancing },
     cashBuffer: { ...defaults.cashBuffer, ...strategies?.cashBuffer },
     withdrawal: { ...defaults.withdrawal, ...strategies?.withdrawal, order: withdrawalOrder },

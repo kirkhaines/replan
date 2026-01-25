@@ -1,4 +1,6 @@
 import type { SimulationSnapshot } from '../../models'
+import { holdingTypeDefaultsSeed } from '../../defaults/defaultData'
+import { createUuid } from '../../utils/uuid'
 import { createExplainTracker } from '../explain'
 import type { ActionIntent, SimulationContext, SimulationModule, SimHolding } from '../types'
 import {
@@ -8,22 +10,96 @@ import {
   toAssetClass,
 } from './utils'
 
+const nonCashAssets = ['equity', 'bonds', 'realEstate', 'other'] as const
+type NonCashAsset = (typeof nonCashAssets)[number]
+type TargetWeights = Record<NonCashAsset, number>
+
+const assetHoldingType: Record<NonCashAsset, SimHolding['holdingType']> = {
+  equity: 'sp500',
+  bonds: 'bonds',
+  realEstate: 'real_estate',
+  other: 'other',
+}
+
+const taxTypeRank: Record<SimHolding['taxType'], number> = {
+  traditional: 0,
+  roth: 1,
+  hsa: 2,
+  taxable: 3,
+}
+
+const holdingTypeDefaultsByType = new Map(
+  holdingTypeDefaultsSeed.map((seed) => [seed.type, seed]),
+)
+
+const emptyTotals = (): TargetWeights => ({
+  equity: 0,
+  bonds: 0,
+  realEstate: 0,
+  other: 0,
+})
+
+const getNonCashAsset = (holding: SimHolding): NonCashAsset | null => {
+  const asset = toAssetClass(holding)
+  if (asset === 'cash') {
+    return null
+  }
+  return asset
+}
+
+const normalizeWeights = (weights: TargetWeights): TargetWeights | null => {
+  const sum =
+    weights.equity + weights.bonds + weights.realEstate + weights.other
+  if (sum <= 0) {
+    return null
+  }
+  return {
+    equity: weights.equity / sum,
+    bonds: weights.bonds / sum,
+    realEstate: weights.realEstate / sum,
+    other: weights.other / sum,
+  }
+}
+
+const computeWeightsFromHoldings = (holdings: SimHolding[]): TargetWeights | null => {
+  const totals = emptyTotals()
+  let totalBalance = 0
+  holdings.forEach((holding) => {
+    const asset = getNonCashAsset(holding)
+    if (!asset) {
+      return
+    }
+    totals[asset] += holding.balance
+    totalBalance += holding.balance
+  })
+  if (totalBalance <= 0) {
+    return null
+  }
+  return {
+    equity: totals.equity / totalBalance,
+    bonds: totals.bonds / totalBalance,
+    realEstate: totals.realEstate / totalBalance,
+    other: totals.other / totalBalance,
+  }
+}
+
+const formatTargetWeights = (target: TargetWeights | null) => {
+  if (!target) {
+    return 'none'
+  }
+  return [
+    `equity ${(target.equity * 100).toFixed(1)}%`,
+    `bonds ${(target.bonds * 100).toFixed(1)}%`,
+    `realEstate ${(target.realEstate * 100).toFixed(1)}%`,
+    `other ${(target.other * 100).toFixed(1)}%`,
+  ].join(', ')
+}
+
 export const createRebalancingModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const { glidepath, rebalancing } = snapshot.scenario.strategies
   const explain = createExplainTracker()
-
-  const formatTargetWeights = (target: ReturnType<typeof interpolateTargets> | null) => {
-    if (!target) {
-      return 'none'
-    }
-    return [
-      `equity ${(target.equity * 100).toFixed(1)}%`,
-      `bonds ${(target.bonds * 100).toFixed(1)}%`,
-      `cash ${(target.cash * 100).toFixed(1)}%`,
-      `realEstate ${(target.realEstate * 100).toFixed(1)}%`,
-      `other ${(target.other * 100).toFixed(1)}%`,
-    ].join(', ')
-  }
+  let baselineTarget: TargetWeights | null = null
+  const createdHoldingIds = new Map<string, string>()
 
   const shouldRebalance = (context: SimulationContext) => {
     if (rebalancing.frequency === 'monthly') {
@@ -50,6 +126,49 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
     return sorted.sort((a, b) => b.balance - a.balance)
   }
 
+  const resolveTargetWeights = (
+    holdings: SimHolding[],
+    context: SimulationContext,
+  ): TargetWeights | null => {
+    if (glidepath.targets.length > 0) {
+      const key = glidepath.mode === 'year' ? context.yearIndex : context.age
+      const target = interpolateTargets(glidepath.targets, key)
+      if (!target) {
+        return null
+      }
+      return normalizeWeights({
+        equity: target.equity,
+        bonds: target.bonds,
+        realEstate: target.realEstate,
+        other: target.other,
+      })
+    }
+    if (!baselineTarget) {
+      baselineTarget = computeWeightsFromHoldings(holdings)
+    }
+    return baselineTarget
+  }
+
+  const getAccountRank = (holdings: SimHolding[]) => {
+    if (holdings.length === 0) {
+      return taxTypeRank.taxable
+    }
+    return holdings.reduce(
+      (rank, holding) => Math.min(rank, taxTypeRank[holding.taxType]),
+      taxTypeRank.taxable,
+    )
+  }
+
+  const getAccountTaxType = (holdings: SimHolding[]) => {
+    if (holdings.length === 0) {
+      return 'taxable' as const
+    }
+    const best = holdings.reduce((current, holding) =>
+      holding.balance > current.balance ? holding : current,
+    )
+    return best.taxType
+  }
+
   return {
     id: 'rebalancing',
     explain,
@@ -61,6 +180,10 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         holdingTaxTypeById,
       }),
     getActionIntents: (state, context) => {
+      const nonCashHoldings = state.holdings.filter((holding) => getNonCashAsset(holding))
+      const targetWeights = resolveTargetWeights(nonCashHoldings, context)
+      const targetLabel = formatTargetWeights(targetWeights)
+
       const canRebalance = shouldRebalance(context)
       if (!canRebalance) {
         explain.addInput('Frequency', rebalancing.frequency)
@@ -69,13 +192,12 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         explain.addInput('Drift threshold', rebalancing.driftThreshold)
         explain.addInput('Min trade', rebalancing.minTradeAmount)
         explain.addCheckpoint('Should rebalance', false)
-        explain.addCheckpoint('Target weights', 'none')
+        explain.addCheckpoint('Target weights', targetLabel)
         explain.addCheckpoint('Trades', 0)
         return []
       }
-      const key = glidepath.mode === 'year' ? context.yearIndex : context.age
-      const target = interpolateTargets(glidepath.targets, key)
-      if (!target) {
+
+      if (!targetWeights) {
         explain.addInput('Frequency', rebalancing.frequency)
         explain.addInput('Tax aware', rebalancing.taxAware)
         explain.addInput('Use contributions', rebalancing.useContributions)
@@ -86,11 +208,134 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         explain.addCheckpoint('Trades', 0)
         return []
       }
-      const availableCashRef = {
-        value: rebalancing.useContributions
-          ? state.cashAccounts.reduce((sum, account) => sum + account.balance, 0)
-          : 0,
+
+      const totalsByAsset = emptyTotals()
+      let totalBalance = 0
+      nonCashHoldings.forEach((holding) => {
+        const asset = getNonCashAsset(holding)
+        if (!asset) {
+          return
+        }
+        totalsByAsset[asset] += holding.balance
+        totalBalance += holding.balance
+      })
+
+      if (totalBalance <= 0) {
+        explain.addInput('Frequency', rebalancing.frequency)
+        explain.addInput('Tax aware', rebalancing.taxAware)
+        explain.addInput('Use contributions', rebalancing.useContributions)
+        explain.addInput('Drift threshold', rebalancing.driftThreshold)
+        explain.addInput('Min trade', rebalancing.minTradeAmount)
+        explain.addCheckpoint('Should rebalance', true)
+        explain.addCheckpoint('Target weights', targetLabel)
+        explain.addCheckpoint('Trades', 0)
+        return []
       }
+
+      const driftExceeded = nonCashAssets.some((asset) => {
+        const currentWeight = totalsByAsset[asset] / totalBalance
+        return Math.abs(currentWeight - targetWeights[asset]) > rebalancing.driftThreshold
+      })
+      if (rebalancing.frequency === 'threshold' && !driftExceeded) {
+        return []
+      }
+      if (!driftExceeded && rebalancing.driftThreshold > 0) {
+        return []
+      }
+
+      const buyRemaining: TargetWeights = emptyTotals()
+      const sellRemaining: TargetWeights = emptyTotals()
+      nonCashAssets.forEach((asset) => {
+        const targetAmount = targetWeights[asset] * totalBalance
+        const currentAmount = totalsByAsset[asset]
+        const delta = targetAmount - currentAmount
+        if (Math.abs(delta) < rebalancing.minTradeAmount) {
+          return
+        }
+        if (delta > 0) {
+          buyRemaining[asset] = delta
+        } else if (delta < 0) {
+          sellRemaining[asset] = -delta
+        }
+      })
+
+      const totalBuys = nonCashAssets.reduce((sum, asset) => sum + buyRemaining[asset], 0)
+      const totalSells = nonCashAssets.reduce((sum, asset) => sum + sellRemaining[asset], 0)
+      if (totalBuys <= 0 || totalSells <= 0) {
+        return []
+      }
+
+      const referenceByAsset = new Map<NonCashAsset, SimHolding>()
+      nonCashHoldings.forEach((holding) => {
+        const asset = getNonCashAsset(holding)
+        if (!asset || referenceByAsset.has(asset)) {
+          return
+        }
+        referenceByAsset.set(asset, holding)
+      })
+
+      const holdingsByAccount = new Map<string, SimHolding[]>()
+      nonCashHoldings.forEach((holding) => {
+        const list = holdingsByAccount.get(holding.investmentAccountId) ?? []
+        list.push(holding)
+        holdingsByAccount.set(holding.investmentAccountId, list)
+      })
+
+      const accountList = [...holdingsByAccount.entries()]
+        .map(([accountId, holdings]) => ({
+          accountId,
+          holdings,
+          rank: getAccountRank(holdings),
+          balance: holdings.reduce((sum, holding) => sum + holding.balance, 0),
+        }))
+        .sort((a, b) => a.rank - b.rank || b.balance - a.balance)
+
+      const ensureHoldingForAsset = (
+        accountId: string,
+        asset: NonCashAsset,
+        holdings: SimHolding[],
+        taxType: SimHolding['taxType'],
+      ) => {
+        const existing = holdings.find((holding) => getNonCashAsset(holding) === asset)
+        if (existing) {
+          return existing
+        }
+        const key = `${accountId}:${asset}`
+        const existingId = createdHoldingIds.get(key)
+        const reference = referenceByAsset.get(asset)
+        const holdingType = reference?.holdingType ?? assetHoldingType[asset]
+        const defaults = holdingTypeDefaultsByType.get(holdingType)
+        const returnRate = reference?.returnRate ?? defaults?.returnRate ?? 0
+        const returnStdDev = reference?.returnStdDev ?? defaults?.returnStdDev ?? 0
+        const holding = {
+          id: existingId ?? createUuid(),
+          investmentAccountId: accountId,
+          taxType,
+          holdingType,
+          balance: 0,
+          costBasisEntries: [],
+          returnRate,
+          returnStdDev,
+        }
+        createdHoldingIds.set(key, holding.id)
+        state.holdings.push(holding)
+        holdings.push(holding)
+        return holding
+      }
+
+      const pickNextBuyAsset = (): NonCashAsset | null => {
+        let candidate: NonCashAsset | null = null
+        let best = 0
+        nonCashAssets.forEach((asset) => {
+          const remaining = buyRemaining[asset]
+          if (remaining > best) {
+            best = remaining
+            candidate = asset
+          }
+        })
+        return candidate
+      }
+
       let priority = 20
       const nextPriority = () => {
         const current = priority
@@ -98,134 +343,72 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         return current
       }
 
-      const targetWeights = {
-        equity: target.equity,
-        bonds: target.bonds,
-        cash: target.cash,
-        realEstate: target.realEstate,
-        other: target.other,
-      }
-
-      const buildActionsForHoldings = (holdings: SimHolding[]): ActionIntent[] => {
-        const total = holdings.reduce((sum, holding) => sum + holding.balance, 0)
-        if (total <= 0) {
-          return []
+      const actions: ActionIntent[] = []
+      accountList.forEach(({ accountId, holdings }) => {
+        if (nonCashAssets.every((asset) => sellRemaining[asset] <= 0)) {
+          return
         }
-        const totalsByClass = {
-          equity: 0,
-          bonds: 0,
-          cash: 0,
-          realEstate: 0,
-          other: 0,
+        if (nonCashAssets.every((asset) => buyRemaining[asset] <= 0)) {
+          return
         }
+        const accountTaxType = getAccountTaxType(holdings)
+        const holdingsByAsset = new Map<NonCashAsset, SimHolding[]>()
+        nonCashAssets.forEach((asset) => holdingsByAsset.set(asset, []))
         holdings.forEach((holding) => {
-          totalsByClass[toAssetClass(holding)] += holding.balance
+          const asset = getNonCashAsset(holding)
+          if (!asset) {
+            return
+          }
+          holdingsByAsset.get(asset)?.push(holding)
         })
 
-        const driftExceeded = (Object.keys(targetWeights) as Array<keyof typeof targetWeights>).some(
-          (asset) => {
-            const currentWeight = total > 0 ? totalsByClass[asset] / total : 0
-            return Math.abs(currentWeight - targetWeights[asset]) > rebalancing.driftThreshold
-          },
-        )
-        if (rebalancing.frequency === 'threshold' && !driftExceeded) {
-          return []
-        }
-        if (!driftExceeded && rebalancing.driftThreshold > 0) {
-          return []
-        }
-
-        const actions: ActionIntent[] = []
-        ;(Object.keys(targetWeights) as Array<keyof typeof targetWeights>).forEach((asset) => {
-          const targetAmount = targetWeights[asset] * total
-          const currentAmount = totalsByClass[asset]
-          const delta = targetAmount - currentAmount
-          if (Math.abs(delta) < rebalancing.minTradeAmount) {
+        nonCashAssets.forEach((asset) => {
+          if (sellRemaining[asset] <= 0) {
             return
           }
-          const assetHoldings = holdings.filter((holding) => toAssetClass(holding) === asset)
-          if (assetHoldings.length === 0) {
-            return
-          }
-          if (delta < 0) {
-            let remaining = -delta
-            sortHoldingsForSale(assetHoldings).forEach((holding) => {
-              if (remaining <= 0) {
+          const saleHoldings = sortHoldingsForSale(holdingsByAsset.get(asset) ?? [])
+          saleHoldings.forEach((holding) => {
+            let remaining = Math.min(holding.balance, sellRemaining[asset])
+            while (remaining > 0) {
+              const buyAsset = pickNextBuyAsset()
+              if (buyAsset === null) {
                 return
               }
-              const amount = Math.min(remaining, holding.balance)
+              const buyHolding = ensureHoldingForAsset(
+                accountId,
+                buyAsset,
+                holdings,
+                accountTaxType,
+              )
+              const buyAmountRemaining = buyRemaining[buyAsset]
+              const amount = Math.min(remaining, buyAmountRemaining)
               if (amount <= 0) {
                 return
               }
               actions.push({
-                id: `rebalance-sell-${holding.id}-${context.monthIndex}`,
-                kind: 'withdraw',
+                id: `rebalance-${holding.id}-${buyHolding.id}-${context.monthIndex}`,
+                kind: 'rebalance',
                 amount,
                 sourceHoldingId: holding.id,
+                targetHoldingId: buyHolding.id,
                 priority: nextPriority(),
                 label: 'Rebalance',
               })
               remaining -= amount
-            })
-          } else if (delta > 0) {
-            const amount = rebalancing.useContributions
-              ? Math.min(delta, Math.max(0, availableCashRef.value))
-              : delta
-            if (amount <= 0) {
-              return
+              sellRemaining[asset] = Math.max(0, sellRemaining[asset] - amount)
+              buyRemaining[buyAsset] = Math.max(0, buyAmountRemaining - amount)
             }
-            const targetHolding = assetHoldings.sort((a, b) => b.balance - a.balance)[0]
-            if (!targetHolding) {
-              return
-            }
-            actions.push({
-              id: `rebalance-buy-${targetHolding.id}-${context.monthIndex}`,
-              kind: 'deposit',
-              amount,
-              targetHoldingId: targetHolding.id,
-              fromCash: true,
-              priority: nextPriority(),
-              label: 'Rebalance',
-            })
-            if (rebalancing.useContributions) {
-              availableCashRef.value = Math.max(0, availableCashRef.value - amount)
-            }
-          }
+          })
         })
-        return actions
-      }
+      })
 
-      let actions: ActionIntent[] = []
-      if (glidepath.scope === 'per_account') {
-        const perAccountActions: ActionIntent[] = []
-        const holdingsByAccount = new Map<string, SimHolding[]>()
-        state.holdings.forEach((holding) => {
-          const list = holdingsByAccount.get(holding.investmentAccountId) ?? []
-          list.push(holding)
-          holdingsByAccount.set(holding.investmentAccountId, list)
-        })
-        holdingsByAccount.forEach((holdings) => {
-          perAccountActions.push(...buildActionsForHoldings(holdings))
-        })
-        explain.addInput('Frequency', rebalancing.frequency)
-        explain.addInput('Tax aware', rebalancing.taxAware)
-        explain.addInput('Use contributions', rebalancing.useContributions)
-        explain.addInput('Drift threshold', rebalancing.driftThreshold)
-        explain.addInput('Min trade', rebalancing.minTradeAmount)
-        explain.addCheckpoint('Should rebalance', true)
-        explain.addCheckpoint('Target weights', formatTargetWeights(target))
-        explain.addCheckpoint('Trades', perAccountActions.length)
-        return perAccountActions
-      }
-
-      actions = buildActionsForHoldings(state.holdings)
       explain.addInput('Frequency', rebalancing.frequency)
       explain.addInput('Tax aware', rebalancing.taxAware)
       explain.addInput('Use contributions', rebalancing.useContributions)
       explain.addInput('Drift threshold', rebalancing.driftThreshold)
       explain.addInput('Min trade', rebalancing.minTradeAmount)
       explain.addCheckpoint('Should rebalance', true)
-      explain.addCheckpoint('Target weights', formatTargetWeights(target))
+      explain.addCheckpoint('Target weights', targetLabel)
       explain.addCheckpoint('Trades', actions.length)
       return actions
     },

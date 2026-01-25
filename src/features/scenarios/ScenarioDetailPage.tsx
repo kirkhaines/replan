@@ -1885,7 +1885,6 @@ const ScenarioDetailPage = () => {
                 <span>Glidepath scope</span>
                 <select {...register('scenario.strategies.glidepath.scope')}>
                   <option value="global">Global</option>
-                  <option value="per_account">Per account</option>
                 </select>
               </label>
             </div>
@@ -1901,8 +1900,7 @@ const ScenarioDetailPage = () => {
                   appendGlidepathTarget({
                     age: 65,
                     equity: 0.6,
-                    bonds: 0.3,
-                    cash: 0.05,
+                    bonds: 0.35,
                     realEstate: 0.05,
                     other: 0,
                   })
@@ -1962,15 +1960,7 @@ const ScenarioDetailPage = () => {
                         />
                       </td>
                       <td>
-                        <input
-                          type="number"
-                          step="0.01"
-                          defaultValue={field.cash}
-                          {...register(
-                            `scenario.strategies.glidepath.targets.${index}.cash`,
-                            { valueAsNumber: true },
-                          )}
-                        />
+                        <span className="muted">Using cash buffer</span>
                       </td>
                       <td>
                         <input

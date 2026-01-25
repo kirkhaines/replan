@@ -142,7 +142,6 @@ export const interpolateTargets = (
     age: key,
     equity: lower.equity + (upper.equity - lower.equity) * ratio,
     bonds: lower.bonds + (upper.bonds - lower.bonds) * ratio,
-    cash: lower.cash + (upper.cash - lower.cash) * ratio,
     realEstate: lower.realEstate + (upper.realEstate - lower.realEstate) * ratio,
     other: lower.other + (upper.other - lower.other) * ratio,
   }

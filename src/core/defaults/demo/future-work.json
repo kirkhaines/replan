@@ -38,7 +38,6 @@
             "age": 40,
             "equity": 0.8,
             "bonds": 0.15,
-            "cash": 0.03,
             "realEstate": 0.02,
             "other": 0
           },
@@ -46,7 +45,6 @@
             "age": 60,
             "equity": 0.6,
             "bonds": 0.3,
-            "cash": 0.05,
             "realEstate": 0.05,
             "other": 0
           }

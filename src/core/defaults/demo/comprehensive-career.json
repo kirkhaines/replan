@@ -39,7 +39,6 @@
             "age": 20,
             "equity": 0.9,
             "bonds": 0.1,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -47,7 +46,6 @@
             "age": 30,
             "equity": 0.8,
             "bonds": 0.2,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -55,7 +53,6 @@
             "age": 40,
             "equity": 0.7,
             "bonds": 0.3,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -63,7 +60,6 @@
             "age": 50,
             "equity": 0.6,
             "bonds": 0.4,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -71,7 +67,6 @@
             "age": 60,
             "equity": 0.5,
             "bonds": 0.5,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -79,7 +74,6 @@
             "age": 70,
             "equity": 0.4,
             "bonds": 0.6,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -87,7 +81,6 @@
             "age": 80,
             "equity": 0.3,
             "bonds": 0.7,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -95,7 +88,6 @@
             "age": 90,
             "equity": 0.2,
             "bonds": 0.8,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           },
@@ -103,7 +95,6 @@
             "age": 100,
             "equity": 0.1,
             "bonds": 0.9,
-            "cash": 0,
             "realEstate": 0,
             "other": 0
           }

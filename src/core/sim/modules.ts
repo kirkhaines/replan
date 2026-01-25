@@ -6,6 +6,7 @@ import { createConversionModule } from './modules/conversionModule'
 import { createEventModule } from './modules/eventModule'
 import { createHealthcareModule } from './modules/healthcareModule'
 import { createPensionModule } from './modules/pensionModule'
+import { createRebalancingModule } from './modules/rebalancingModule'
 import { createRmdModule } from './modules/rmdModule'
 import { createReturnModule } from './modules/returnModule'
 import { createSocialSecurityModule } from './modules/socialSecurityModule'
@@ -26,7 +27,7 @@ export const createSimulationModules = (
     createWorkModule(snapshot),
     createSocialSecurityModule(snapshot),
     createCashBufferModule(snapshot),
-    // createRebalancingModule(snapshot),
+    createRebalancingModule(snapshot),
     createConversionModule(snapshot),
     createRmdModule(snapshot),
     createTaxModule(snapshot),

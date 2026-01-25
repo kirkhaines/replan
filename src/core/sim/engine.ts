@@ -628,6 +628,59 @@ const applyHoldingWithdrawal = (
   return withdrawal
 }
 
+const applyHoldingRebalance = (
+  state: SimulationState,
+  sourceHoldingId: string,
+  targetHoldingId: string,
+  amount: number,
+  totals: MonthTotals,
+  context: SimulationContext,
+) => {
+  if (!sourceHoldingId || !targetHoldingId || amount <= 0) {
+    return 0
+  }
+  const source = state.holdings.find((entry) => entry.id === sourceHoldingId)
+  const target = state.holdings.find((entry) => entry.id === targetHoldingId)
+  if (!source || !target || source.id === target.id) {
+    return 0
+  }
+  const startingBalance = source.balance
+  const applied = Math.min(amount, source.balance)
+  if (applied <= 0) {
+    return 0
+  }
+  source.balance -= applied
+
+  if (source.taxType === 'taxable') {
+    const basisMethod = context.snapshot.scenario.strategies.taxableLot.costBasisMethod
+    const totalBasis = sumCostBasisEntries(source.costBasisEntries)
+    let basisUsed = 0
+    if (basisMethod === 'average') {
+      const basisRatio = startingBalance > 0 ? totalBasis / startingBalance : 0
+      basisUsed = applied * basisRatio
+      if (basisRatio > 0 && startingBalance > 0) {
+        const scale = Math.max(0, (startingBalance - applied) / startingBalance)
+        source.costBasisEntries = scaleCostBasisEntries(source.costBasisEntries, scale)
+      }
+    } else {
+      const { used, entries } = consumeCostBasisEntries(
+        source.costBasisEntries,
+        applied,
+        basisMethod === 'fifo' ? 'fifo' : 'lifo',
+      )
+      basisUsed = used
+      source.costBasisEntries = entries
+    }
+    const gain = Math.max(0, applied - basisUsed)
+    state.yearLedger.capitalGains += gain
+    totals.capitalGains += gain
+  }
+
+  target.balance += applied
+  addCostBasisEntry(target, applied, context.dateIso)
+  return applied
+}
+
 const withdrawProRata = (
   state: SimulationState,
   amount: number,
@@ -670,7 +723,7 @@ const resolveIntents = (
 ): ActionRecordWithModule[] => {
   const sorted = [...intents].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
   return sorted.map((intent) => {
-    if (intent.kind === 'withdraw') {
+    if (intent.kind === 'withdraw' || intent.kind === 'rebalance') {
       const available = intent.sourceHoldingId
         ? state.holdings.find((holding) => holding.id === intent.sourceHoldingId)?.balance ?? 0
         : sumHoldings(state)
@@ -690,6 +743,20 @@ const applyActions = (
     action.moduleId === 'work' || action.moduleId === 'cashBuffer'
 
   actions.forEach((action) => {
+    if (action.kind === 'rebalance') {
+      if (!action.sourceHoldingId || !action.targetHoldingId) {
+        return
+      }
+      applyHoldingRebalance(
+        state,
+        action.sourceHoldingId,
+        action.targetHoldingId,
+        action.resolvedAmount,
+        totals,
+        context,
+      )
+      return
+    }
     if (action.kind === 'withdraw') {
       const skipPenalty = action.skipPenalty || action.moduleId === 'rebalancing'
       const skipRothContributionConsumption = action.moduleId === 'rebalancing'

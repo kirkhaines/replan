@@ -32,6 +32,7 @@ describe('runSimulation', () => {
           spendingStrategyId: '00000000-0000-4000-8000-000000000004',
           strategies: {
             ...baseStrategies,
+            glidepath: { ...baseStrategies.glidepath, targets: [] },
             returnModel: {
               ...baseStrategies.returnModel,
               inflationAssumptions: {
