@@ -605,6 +605,20 @@ const ScenarioDetailPage = () => {
     () => new Map(futureWorkStrategies.map((strategy) => [strategy.id, strategy])),
     [futureWorkStrategies],
   )
+  const futureWorkEndByStrategyId = useMemo(() => {
+    const map = new Map<string, string>()
+    futureWorkPeriods.forEach((period) => {
+      const endDate = toIsoDateString(period.endDate)
+      if (!endDate) {
+        return
+      }
+      const current = map.get(period.futureWorkStrategyId)
+      if (!current || endDate > current) {
+        map.set(period.futureWorkStrategyId, endDate)
+      }
+    })
+    return map
+  }, [futureWorkPeriods])
 
   const scenarioPersonStrategies = useMemo(() => {
     const ids = new Set(scenario?.personStrategyIds ?? [])
@@ -1532,9 +1546,9 @@ const ScenarioDetailPage = () => {
                 <tr>
                   <th>Person</th>
                   <th>Date of birth</th>
-                  <th>Life expectancy</th>
-                  <th>Social Security start</th>
                   <th>Work strategy</th>
+                  <th>Social Security start</th>
+                  <th>Life expectancy</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -1543,6 +1557,7 @@ const ScenarioDetailPage = () => {
                   const person = peopleById.get(strategy.personId)
                   const socialSecurity = socialSecurityById.get(strategy.socialSecurityStrategyId)
                   const futureWork = futureWorkById.get(strategy.futureWorkStrategyId)
+                  const workEnd = futureWorkEndByStrategyId.get(strategy.futureWorkStrategyId)
                   return (
                     <tr key={strategy.id}>
                       <td>
@@ -1559,7 +1574,13 @@ const ScenarioDetailPage = () => {
                         )}
                       </td>
                       <td>{person?.dateOfBirth ?? '-'}</td>
-                      <td>{person?.lifeExpectancy ?? '-'}</td>
+                      <td>
+                        {futureWork
+                          ? `${futureWork.name} ${
+                              workEnd ? `(ends ${workEnd})` : '(does not end)'
+                            }`
+                          : '-'}
+                      </td>
                       <td>
                         {person && socialSecurity?.startDate
                           ? `${socialSecurity.startDate} (age ${getAgeInYearsAtDate(
@@ -1568,7 +1589,7 @@ const ScenarioDetailPage = () => {
                             )})`
                           : '-'}
                       </td>
-                      <td>{futureWork?.name ?? '-'}</td>
+                      <td>{person?.lifeExpectancy ?? '-'}</td>
                       <td>
                           <button
                             className="link-button"
@@ -1988,7 +2009,6 @@ const ScenarioDetailPage = () => {
                         <button
                           className="link-button"
                           type="button"
-                          disabled={glidepathTargetFields.length <= 1}
                           onClick={() => removeGlidepathTarget(index)}
                         >
                           Remove
