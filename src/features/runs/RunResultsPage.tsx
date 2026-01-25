@@ -124,6 +124,101 @@ const moduleLabels: Record<string, string> = {
   'returns-core': 'Market returns',
 }
 
+type BalanceDetail = 'none' | 'seasoning' | 'asset'
+
+const balanceDetailOptions = [
+  { value: 'none', label: 'No extra detail' },
+  { value: 'seasoning', label: 'Seasoning/gains' },
+  { value: 'asset', label: 'Asset type' },
+] as const
+
+const assetClasses = ['equity', 'bonds', 'realEstate', 'other'] as const
+const taxTypes = ['taxable', 'traditional', 'roth', 'hsa'] as const
+type AssetClass = (typeof assetClasses)[number]
+type TaxType = (typeof taxTypes)[number]
+
+const balanceSeriesColors: Record<string, string> = {
+  cash: '#22c55e',
+  taxable: '#2563eb',
+  traditional: '#f59e0b',
+  roth: '#7c3aed',
+  hsa: '#ec4899',
+  rothSeasoned: '#7c3aed',
+  rothUnseasoned: '#a855f7',
+  rothNonBasis: '#d8b4fe',
+  taxableContrib: '#2563eb',
+  taxableRealized: '#60a5fa',
+  taxableUnrealized: '#1d4ed8',
+  traditionalContrib: '#f59e0b',
+  traditionalRealized: '#fbbf24',
+  traditionalUnrealized: '#d97706',
+  hsaContrib: '#ec4899',
+  hsaRealized: '#f472b6',
+  hsaUnrealized: '#be185d',
+}
+
+const assetSeriesColors: Record<TaxType, Record<AssetClass, string>> = {
+  taxable: {
+    equity: '#2563eb',
+    bonds: '#1d4ed8',
+    realEstate: '#3b82f6',
+    other: '#60a5fa',
+  },
+  traditional: {
+    equity: '#f59e0b',
+    bonds: '#d97706',
+    realEstate: '#fbbf24',
+    other: '#fcd34d',
+  },
+  roth: {
+    equity: '#7c3aed',
+    bonds: '#6d28d9',
+    realEstate: '#a855f7',
+    other: '#c084fc',
+  },
+  hsa: {
+    equity: '#ec4899',
+    bonds: '#db2777',
+    realEstate: '#f472b6',
+    other: '#fb7185',
+  },
+}
+
+const colorForBalanceSeriesKey = (key: string) => {
+  const override = balanceSeriesColors[key]
+  if (override) {
+    return override
+  }
+  const match = key.match(/^(taxable|traditional|roth|hsa)-(equity|bonds|realEstate|other)$/)
+  if (match) {
+    const [, taxType, assetClass] = match as [string, TaxType, AssetClass]
+    return assetSeriesColors[taxType][assetClass]
+  }
+  return colorForChartKey(key)
+}
+
+const assetClassLabel: Record<(typeof assetClasses)[number], string> = {
+  equity: 'Equity',
+  bonds: 'Bonds',
+  realEstate: 'Real estate',
+  other: 'Other',
+}
+
+const toAssetClass = (holdingType?: string | null) => {
+  switch (holdingType) {
+    case 'bonds':
+      return 'bonds'
+    case 'real_estate':
+      return 'realEstate'
+    case 'other':
+      return 'other'
+    case 'cash':
+      return 'cash'
+    default:
+      return 'equity'
+  }
+}
+
 const RunResultsPage = () => {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
@@ -141,6 +236,7 @@ const RunResultsPage = () => {
   const [showOrdinaryChart, setShowOrdinaryChart] = useState(true)
   const [showCashflowChart, setShowCashflowChart] = useState(true)
   const [rangeKey, setRangeKey] = useState('all')
+  const [balanceDetail, setBalanceDetail] = useState<BalanceDetail>('none')
 
   const monthlyTimeline = useMemo(() => run?.result.monthlyTimeline ?? [], [run])
   const explanations = useMemo(() => run?.result.explanations ?? [], [run])
@@ -331,6 +427,35 @@ const RunResultsPage = () => {
     }
     return { cashById, investmentById, holdingById }
   }, [run])
+  const holdingNamesFromRun = useMemo(() => {
+    const map = new Map<string, { name: string; investmentAccountId?: string }>()
+    if (!run?.result.explanations) {
+      return map
+    }
+    run.result.explanations.forEach((month) => {
+      month.accounts.forEach((account) => {
+        if (account.kind !== 'holding' || !account.name) {
+          return
+        }
+        if (!map.has(account.id)) {
+          map.set(account.id, {
+            name: account.name,
+            investmentAccountId: account.investmentAccountId,
+          })
+        }
+      })
+    })
+    return map
+  }, [run])
+  const holdingMetaById = useMemo(() => {
+    const map = new Map<string, { taxType: string; holdingType: string }>()
+    if (run?.snapshot) {
+      run.snapshot.investmentAccountHoldings.forEach((holding) => {
+        map.set(holding.id, { taxType: holding.taxType, holdingType: holding.holdingType })
+      })
+    }
+    return map
+  }, [run])
   const initialBalances = useMemo(() => {
     const balances = new Map<string, number>()
     if (!run?.snapshot) {
@@ -369,44 +494,90 @@ const RunResultsPage = () => {
 
   const balanceOverTime = useMemo(() => {
     if (!run?.snapshot) {
-      return { data: [], seriesKeys: [] }
+      return { data: [], series: [] }
     }
-    const holdingTaxType = new Map(
-      run.snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
-    )
-    const seriesKeys = [
-      'cash',
-      'taxable',
-      'traditional',
-      'rothSeasoned',
-      'rothUnseasoned',
-      'rothNonBasis',
-      'hsa',
-    ] as const
+    const series: Array<{ key: string; label: string; color: string }> = []
+    const registerSeries = (key: string, label: string) => {
+      series.push({ key, label, color: colorForBalanceSeriesKey(key) })
+    }
+    if (balanceDetail === 'none') {
+      registerSeries('cash', 'Cash')
+      registerSeries('taxable', 'Taxable holdings')
+      registerSeries('traditional', 'Traditional holdings')
+      registerSeries('roth', 'Roth holdings')
+      registerSeries('hsa', 'HSA holdings')
+    } else if (balanceDetail === 'seasoning') {
+      registerSeries('cash', 'Cash')
+      registerSeries('taxableContrib', 'Taxable contributions')
+      registerSeries('taxableRealized', 'Taxable realized gains')
+      registerSeries('taxableUnrealized', 'Taxable unrealized gains')
+      registerSeries('traditionalContrib', 'Traditional contributions')
+      registerSeries('traditionalRealized', 'Traditional realized gains')
+      registerSeries('traditionalUnrealized', 'Traditional unrealized gains')
+      registerSeries('rothSeasoned', 'Roth seasoned basis')
+      registerSeries('rothUnseasoned', 'Roth unseasoned basis')
+      registerSeries('rothNonBasis', 'Roth gains')
+      registerSeries('hsaContrib', 'HSA contributions')
+      registerSeries('hsaRealized', 'HSA realized gains')
+      registerSeries('hsaUnrealized', 'HSA unrealized gains')
+    } else {
+      registerSeries('cash', 'Cash')
+      taxTypes.forEach((taxType) => {
+        assetClasses.forEach((assetClass) => {
+          const key = `${taxType}-${assetClass}`
+          registerSeries(key, `${taxType} - ${assetClassLabel[assetClass]}`)
+        })
+      })
+    }
     const data = filteredTimeline.map((point) => {
       const year = point.date ? new Date(point.date).getFullYear() : undefined
       const monthly = monthlyByYear.get(point.yearIndex)
       const lastMonth = monthly && monthly.length > 0 ? monthly[monthly.length - 1] : null
-      const accounts = lastMonth
-        ? explanationsByMonth.get(lastMonth.monthIndex)?.accounts
+      const explanation = lastMonth
+        ? explanationsByMonth.get(lastMonth.monthIndex)
         : undefined
-      const totals: Record<(typeof seriesKeys)[number], number> = {
-        cash: 0,
-        taxable: 0,
-        traditional: 0,
-        rothSeasoned: 0,
-        rothUnseasoned: 0,
-        rothNonBasis: 0,
-        hsa: 0,
-      }
+      const accounts = explanation?.accounts
+      const contributionTotals = explanation?.contributionTotals
+      const totals = series.reduce<Record<string, number>>((acc, entry) => {
+        acc[entry.key] = 0
+        return acc
+      }, {})
       if (accounts) {
+        const displayDate = lastMonth?.date ?? point.date
+        const balanceByTaxType: Record<string, number> = {
+          taxable: 0,
+          traditional: 0,
+          hsa: 0,
+        }
+        const basisByTaxType: Record<string, number> = {
+          taxable: 0,
+          traditional: 0,
+          hsa: 0,
+        }
         accounts.forEach((account) => {
           if (account.kind === 'cash') {
-            totals.cash += adjustForInflation(account.balance, lastMonth?.date ?? point.date)
+            totals.cash += adjustForInflation(account.balance, displayDate)
             return
           }
-          const taxType = holdingTaxType.get(account.id)
+          const meta = holdingMetaById.get(account.id)
+          const taxType = account.taxType ?? meta?.taxType
+          const holdingType = account.holdingType ?? meta?.holdingType
           if (!taxType) {
+            return
+          }
+          const adjustedBalance = adjustForInflation(account.balance, displayDate)
+          if (balanceDetail === 'none') {
+            totals[taxType] = (totals[taxType] ?? 0) + adjustedBalance
+            return
+          }
+          if (balanceDetail === 'asset') {
+            const assetClass = toAssetClass(holdingType)
+            if (assetClass === 'cash') {
+              totals.cash += adjustedBalance
+              return
+            }
+            const key = `${taxType}-${assetClass}`
+            totals[key] = (totals[key] ?? 0) + adjustedBalance
             return
           }
           if (taxType === 'roth') {
@@ -414,18 +585,67 @@ const RunResultsPage = () => {
             const unseasoned = account.basisUnseasoned ?? 0
             const basisTotal = Math.min(account.balance, Math.max(0, seasoned + unseasoned))
             const nonBasis = Math.max(0, account.balance - basisTotal)
-            totals.rothSeasoned += adjustForInflation(seasoned, lastMonth?.date ?? point.date)
-            totals.rothUnseasoned += adjustForInflation(unseasoned, lastMonth?.date ?? point.date)
-            totals.rothNonBasis += adjustForInflation(nonBasis, lastMonth?.date ?? point.date)
+            totals.rothSeasoned += adjustForInflation(seasoned, displayDate)
+            totals.rothUnseasoned += adjustForInflation(unseasoned, displayDate)
+            totals.rothNonBasis += adjustForInflation(nonBasis, displayDate)
             return
           }
-          totals[taxType] += adjustForInflation(account.balance, lastMonth?.date ?? point.date)
+          if (taxType in balanceByTaxType) {
+            balanceByTaxType[taxType] += adjustedBalance
+            const costBasis =
+              account.costBasis !== undefined ? account.costBasis : account.balance
+            basisByTaxType[taxType] += adjustForInflation(costBasis, displayDate)
+          }
         })
+        if (balanceDetail === 'seasoning') {
+          const totalsSource = contributionTotals ?? {
+            taxable: 0,
+            traditional: 0,
+            roth: 0,
+            hsa: 0,
+          }
+          const splitTotals = (taxType: 'taxable' | 'traditional' | 'hsa') => {
+            const balance = balanceByTaxType[taxType]
+            if (balance <= 0) {
+              return { contributions: 0, realized: 0, unrealized: 0 }
+            }
+            const basis = Math.min(balance, Math.max(0, basisByTaxType[taxType]))
+            const contributionsRaw = contributionTotals
+              ? adjustForInflation(totalsSource[taxType], displayDate)
+              : basis
+            const contributions = Math.min(basis, Math.max(0, contributionsRaw))
+            const realized = Math.max(0, basis - contributions)
+            const unrealized = Math.max(0, balance - basis)
+            return { contributions, realized, unrealized }
+          }
+          const taxableSplit = splitTotals('taxable')
+          totals.taxableContrib += taxableSplit.contributions
+          totals.taxableRealized += taxableSplit.realized
+          totals.taxableUnrealized += taxableSplit.unrealized
+
+          const traditionalSplit = splitTotals('traditional')
+          totals.traditionalContrib += traditionalSplit.contributions
+          totals.traditionalRealized += traditionalSplit.realized
+          totals.traditionalUnrealized += traditionalSplit.unrealized
+
+          const hsaSplit = splitTotals('hsa')
+          totals.hsaContrib += hsaSplit.contributions
+          totals.hsaRealized += hsaSplit.realized
+          totals.hsaUnrealized += hsaSplit.unrealized
+        }
       }
       return { ...point, year, ...totals }
     })
-    return { data, seriesKeys }
-  }, [adjustForInflation, explanationsByMonth, filteredTimeline, monthlyByYear, run])
+    return { data, series }
+  }, [
+    adjustForInflation,
+    balanceDetail,
+    explanationsByMonth,
+    filteredTimeline,
+    holdingMetaById,
+    monthlyByYear,
+    run,
+  ])
 
   const ordinaryIncomeChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -777,7 +997,8 @@ const RunResultsPage = () => {
   }
 
   const getHoldingLabel = (holdingId: string) => {
-    const holding = accountLookup.holdingById.get(holdingId)
+    const holding =
+      accountLookup.holdingById.get(holdingId) ?? holdingNamesFromRun.get(holdingId)
     if (!holding) {
       return holdingId
     }
@@ -861,13 +1082,27 @@ const RunResultsPage = () => {
       <div className="card">
         <div className="row">
           <h2>Balance over time</h2>
-          <button
-            className="link-button"
-            type="button"
-            onClick={() => setShowBalanceChart((current) => !current)}
-          >
-            {showBalanceChart ? '▾' : '▸'} {showBalanceChart ? 'Hide' : 'Show'}
-          </button>
+          <div className="row" style={{ gap: '0.75rem' }}>
+            <label className="field">
+              <select
+                value={balanceDetail}
+                onChange={(event) => setBalanceDetail(event.target.value as BalanceDetail)}
+              >
+                {balanceDetailOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="link-button"
+              type="button"
+              onClick={() => setShowBalanceChart((current) => !current)}
+            >
+              {showBalanceChart ? '▾' : '▸'} {showBalanceChart ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
         {showBalanceChart ? (
           <>
@@ -915,62 +1150,17 @@ const RunResultsPage = () => {
                     }}
                     wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                   />
-                  <Area
-                    type="monotone"
-                    dataKey="cash"
-                    stackId="balance"
-                    name="Cash"
-                    stroke="#22c55e"
-                    fill="color-mix(in srgb, #22c55e 35%, transparent)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="taxable"
-                    stackId="balance"
-                    name="Taxable holdings"
-                    stroke="#2563eb"
-                    fill="color-mix(in srgb, #2563eb 35%, transparent)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="traditional"
-                    stackId="balance"
-                    name="Traditional holdings"
-                    stroke="#f59e0b"
-                    fill="color-mix(in srgb, #f59e0b 35%, transparent)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="rothSeasoned"
-                    stackId="balance"
-                    name="Roth seasoned basis"
-                    stroke="#7c3aed"
-                    fill="color-mix(in srgb, #7c3aed 35%, transparent)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="rothUnseasoned"
-                    stackId="balance"
-                    name="Roth unseasoned basis"
-                    stroke="#a855f7"
-                    fill="color-mix(in srgb, #a855f7 35%, transparent)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="rothNonBasis"
-                    stackId="balance"
-                    name="Roth non-basis"
-                    stroke="#d8b4fe"
-                    fill="color-mix(in srgb, #d8b4fe 35%, transparent)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="hsa"
-                    stackId="balance"
-                    name="HSA holdings"
-                    stroke="#ec4899"
-                    fill="color-mix(in srgb, #ec4899 35%, transparent)"
-                  />
+                  {balanceOverTime.series.map((series) => (
+                    <Area
+                      key={series.key}
+                      type="monotone"
+                      dataKey={series.key}
+                      stackId="balance"
+                      name={series.label}
+                      stroke={series.color}
+                      fill={`color-mix(in srgb, ${series.color} 35%, transparent)`}
+                    />
+                  ))}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -985,16 +1175,11 @@ const RunResultsPage = () => {
                 marginTop: '0.35rem',
               }}
             >
-              {[
-                { key: 'cash', label: 'Cash', color: '#22c55e' },
-                { key: 'taxable', label: 'Taxable holdings', color: '#2563eb' },
-                { key: 'traditional', label: 'Traditional holdings', color: '#f59e0b' },
-                { key: 'rothSeasoned', label: 'Roth seasoned basis', color: '#7c3aed' },
-                { key: 'rothUnseasoned', label: 'Roth unseasoned basis', color: '#a855f7' },
-                { key: 'rothNonBasis', label: 'Roth non-basis', color: '#d8b4fe' },
-                { key: 'hsa', label: 'HSA holdings', color: '#ec4899' },
-              ].map((item) => (
-                <span key={item.key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              {balanceOverTime.series.map((item) => (
+                <span
+                  key={item.key}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                >
                   <span
                     style={{
                       width: '10px',
@@ -1475,7 +1660,12 @@ const RunResultsPage = () => {
                                                     const cashflows = totals.cashflows
                                                     const actions = totals.actions
                                                     const marketTotal = totals.market?.total ?? 0
+                                                    const hasActivity =
+                                                      module.cashflows.length > 0 ||
+                                                      module.actions.length > 0 ||
+                                                      (module.marketReturns?.length ?? 0) > 0
                                                     return (
+                                                      hasActivity ||
                                                       cashflows.cash !== 0 ||
                                                       cashflows.ordinaryIncome !== 0 ||
                                                       cashflows.capitalGains !== 0 ||

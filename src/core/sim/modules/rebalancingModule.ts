@@ -21,6 +21,18 @@ const assetHoldingType: Record<NonCashAsset, SimHolding['holdingType']> = {
   other: 'other',
 }
 
+const holdingTypeLabels: Record<SimHolding['holdingType'], string> = {
+  bonds: 'Bonds',
+  sp500: 'S&P 500',
+  nasdaq: 'Nasdaq',
+  dow: 'Dow',
+  non_us_developed: 'Non-US developed',
+  emerging_markets: 'Emerging markets',
+  real_estate: 'Real estate',
+  cash: 'Cash',
+  other: 'Other',
+}
+
 const taxTypeRank: Record<SimHolding['taxType'], number> = {
   traditional: 0,
   roth: 1,
@@ -304,11 +316,13 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         const existingId = createdHoldingIds.get(key)
         const reference = referenceByAsset.get(asset)
         const holdingType = reference?.holdingType ?? assetHoldingType[asset]
+        const name = reference?.name ?? holdingTypeLabels[holdingType]
         const defaults = holdingTypeDefaultsByType.get(holdingType)
         const returnRate = reference?.returnRate ?? defaults?.returnRate ?? 0
         const returnStdDev = reference?.returnStdDev ?? defaults?.returnStdDev ?? 0
         const holding = {
           id: existingId ?? createUuid(),
+          name,
           investmentAccountId: accountId,
           taxType,
           holdingType,

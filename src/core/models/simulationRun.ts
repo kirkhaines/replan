@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isoDateStringSchema } from './common'
+import { holdingTypeSchema, taxTypeSchema } from './enums'
 import { simulationSnapshotSchema } from './simulationSnapshot'
 
 const cashflowCategorySchema = z.enum([
@@ -84,10 +85,21 @@ const marketReturnSchema = z.object({
 const accountBalanceSchema = z.object({
   id: z.string(),
   kind: z.enum(['cash', 'holding']),
+  name: z.string().optional(),
   balance: z.number(),
   investmentAccountId: z.string().optional(),
+  taxType: taxTypeSchema.optional(),
+  holdingType: holdingTypeSchema.optional(),
+  costBasis: z.number().optional(),
   basisSeasoned: z.number().optional(),
   basisUnseasoned: z.number().optional(),
+})
+
+const contributionTotalsSchema = z.object({
+  taxable: z.number(),
+  traditional: z.number(),
+  roth: z.number(),
+  hsa: z.number(),
 })
 
 const moduleRunSchema = z.object({
@@ -119,6 +131,7 @@ const monthExplanationSchema = z.object({
   date: isoDateStringSchema,
   modules: z.array(moduleRunSchema),
   accounts: z.array(accountBalanceSchema),
+  contributionTotals: contributionTotalsSchema.optional(),
 })
 
 export const timelinePointSchema = z.object({

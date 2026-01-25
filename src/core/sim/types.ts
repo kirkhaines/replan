@@ -14,6 +14,7 @@ export type SimCashAccount = {
 
 export type SimHolding = {
   id: string
+  name: string
   investmentAccountId: string
   taxType: InvestmentAccountHolding['taxType']
   holdingType: InvestmentAccountHolding['holdingType']

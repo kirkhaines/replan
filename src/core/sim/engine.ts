@@ -310,12 +310,17 @@ const buildAccountBalances = (
       balance: account.balance,
     })),
     ...state.holdings.map((holding) => {
+      const costBasis = sumCostBasisEntries(holding.costBasisEntries)
       if (holding.taxType !== 'roth') {
         return {
           id: holding.id,
           kind: 'holding' as const,
+          name: holding.name,
           balance: holding.balance,
           investmentAccountId: holding.investmentAccountId,
+          taxType: holding.taxType,
+          holdingType: holding.holdingType,
+          costBasis,
         }
       }
       const basis = rothBasisByAccount.get(holding.investmentAccountId)
@@ -327,13 +332,34 @@ const buildAccountBalances = (
       return {
         id: holding.id,
         kind: 'holding' as const,
+        name: holding.name,
         balance: holding.balance,
         investmentAccountId: holding.investmentAccountId,
+        taxType: holding.taxType,
+        holdingType: holding.holdingType,
+        costBasis,
         basisSeasoned: holdingSeasoned,
         basisUnseasoned: unseasoned,
       }
     }),
   ]
+}
+
+const buildContributionTotals = (state: SimulationState, dateIso: string) => {
+  const totals = {
+    taxable: 0,
+    traditional: 0,
+    roth: 0,
+    hsa: 0,
+  }
+  state.investmentAccounts.forEach((account) => {
+    account.contributionEntries.forEach((entry) => {
+      if (entry.date && entry.date <= dateIso) {
+        totals[entry.taxType] += entry.amount
+      }
+    })
+  })
+  return totals
 }
 
 const buildMarketReturns = (
@@ -404,6 +430,7 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
   })
   const holdings = snapshot.investmentAccountHoldings.map((holding) => ({
     id: holding.id,
+    name: holding.name,
     investmentAccountId: holding.investmentAccountId,
     taxType: holding.taxType,
     holdingType: holding.holdingType,
@@ -448,6 +475,7 @@ const cloneState = (state: SimulationState): SimulationState => ({
   })),
   holdings: state.holdings.map((holding) => ({
     ...holding,
+    name: holding.name,
     costBasisEntries: holding.costBasisEntries.map((entry) => ({ ...entry })),
   })),
   yearLedger: { ...state.yearLedger },
@@ -1124,6 +1152,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
           date: dateIso,
           modules: moduleRuns,
           accounts: buildAccountBalances(state, dateIso),
+          contributionTotals: buildContributionTotals(state, dateIso),
         })
 
         const monthRecord = buildMonthlyRecord(monthIndex, dateIso, age, monthTotals, state)
