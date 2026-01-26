@@ -7,7 +7,27 @@ import type { CashflowSeriesEntry, SimulationModule } from '../types'
 
 export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const taxStrategy = snapshot.scenario.strategies.tax
+  const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const explain = createExplainTracker()
+
+  const inflateTaxPolicy = (policy: TaxPolicy, year: number) => {
+    if (year <= policy.year || cpiRate <= 0) {
+      return policy
+    }
+    const factor = Math.pow(1 + cpiRate, year - policy.year)
+    return {
+      ...policy,
+      standardDeduction: policy.standardDeduction * factor,
+      ordinaryBrackets: policy.ordinaryBrackets.map((bracket) => ({
+        ...bracket,
+        upTo: bracket.upTo === null ? null : bracket.upTo * factor,
+      })),
+      capitalGainsBrackets: policy.capitalGainsBrackets.map((bracket) => ({
+        ...bracket,
+        upTo: bracket.upTo === null ? null : bracket.upTo * factor,
+      })),
+    }
+  }
 
   return {
     id: 'taxes',
@@ -82,13 +102,14 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
         explain.addCheckpoint('Taxes applied', false)
         return []
       }
+      const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
       const taxResult = computeTax({
         ordinaryIncome: state.yearLedger.ordinaryIncome,
         capitalGains: state.yearLedger.capitalGains,
         deductions: state.yearLedger.deductions,
         taxExemptIncome: state.yearLedger.taxExemptIncome,
         stateTaxRate: taxStrategy.stateCode === 'none' ? taxStrategy.stateTaxRate : 0,
-        policy,
+        policy: inflatedPolicy,
         useStandardDeduction: taxStrategy.useStandardDeduction,
         applyCapitalGainsRates: taxStrategy.applyCapitalGainsRates,
       })
@@ -162,6 +183,7 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
         explain.addCheckpoint('Withholding due', 0)
         return []
       }
+      const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
       const monthOfYear = context.date.getMonth() + 1
       const scaleFactor = monthOfYear > 0 ? 12 / monthOfYear : 1
       const annualized = {
@@ -176,7 +198,7 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
         deductions: annualized.deductions,
         taxExemptIncome: annualized.taxExemptIncome,
         stateTaxRate: taxStrategy.stateCode === 'none' ? taxStrategy.stateTaxRate : 0,
-        policy,
+        policy: inflatedPolicy,
         useStandardDeduction: taxStrategy.useStandardDeduction,
         applyCapitalGainsRates: taxStrategy.applyCapitalGainsRates,
       })

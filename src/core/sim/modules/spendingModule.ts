@@ -51,7 +51,7 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
         const wantAmount =
           inflateAmount(item.wantAmount, startIso, context.dateIso, inflationRate) *
           guardrailFactor
-        const deductionAmount = item.isPreTax || item.isCharitable ? 1 : 0
+        const deductionAmount = item.isPreTax ? 1 : 0
 
         if (needAmount > 0) {
           cashflows.push({

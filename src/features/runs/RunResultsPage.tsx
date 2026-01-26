@@ -776,6 +776,8 @@ const RunResultsPage = () => {
       socialSecurityIncome: number
       pensionIncome: number
       taxDeferredIncome: number
+      standardDeduction: number
+      ledgerDeductions: number
     } & Record<string, number>
 
     const data = timeline.map((point) => {
@@ -795,10 +797,14 @@ const RunResultsPage = () => {
         snapshot.scenario.strategies.tax.filingStatus,
       )
       const bracketValues: Record<string, number> = {}
+      let standardDeduction = 0
       if (policy) {
         const yearDelta = pointYear - policy.year
         const inflationMultiplier =
           inflationRate !== 0 ? Math.pow(1 + inflationRate, yearDelta) : 1
+        if (snapshot.scenario.strategies.tax.useStandardDeduction) {
+          standardDeduction = policy.standardDeduction * inflationMultiplier
+        }
         policy.ordinaryBrackets.forEach((bracket, index) => {
           if (bracket.upTo === null) {
             return
@@ -807,6 +813,7 @@ const RunResultsPage = () => {
           bracketValues[`bracket_${index}`] = adjustForInflation(absoluteValue, point.date)
         })
       }
+      const ledgerDeductions = point.ledger?.deductions ?? 0
       return {
         age: point.age,
         year: Number.isNaN(pointYear) ? undefined : pointYear,
@@ -816,6 +823,8 @@ const RunResultsPage = () => {
         socialSecurityIncome: adjustForInflation(totals.socialSecurity, point.date),
         pensionIncome: adjustForInflation(totals.pension, point.date),
         taxDeferredIncome: adjustForInflation(totals.taxDeferred, point.date),
+        standardDeduction: -adjustForInflation(standardDeduction, point.date),
+        ledgerDeductions: -adjustForInflation(ledgerDeductions, point.date),
         ...bracketValues,
       } as OrdinaryIncomeChartEntry
     })
@@ -826,6 +835,7 @@ const RunResultsPage = () => {
         entry.socialSecurityIncome +
         entry.pensionIncome +
         entry.taxDeferredIncome
+      // do not include tax bracket lines when determining domain
       return Math.max(max, totals)
     }, 0)
 
@@ -1241,7 +1251,7 @@ const RunResultsPage = () => {
       {ordinaryIncomeChart.data.length > 0 ? (
         <div className="card">
           <div className="row">
-            <h2>Ordinary income tax bracket</h2>
+            <h2>Taxable ordinary income and bracket thresholds</h2>
           <button
             className="link-button"
             type="button"
@@ -1256,11 +1266,12 @@ const RunResultsPage = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={ordinaryIncomeChart.data}>
                   <CartesianGrid strokeDasharray="3 3" />
+                  <ReferenceLine y={0} stroke="var(--text-muted)" strokeWidth={1} />
                   <XAxis dataKey="year" />
                   <YAxis
                     tickFormatter={(value) => formatAxisValue(Number(value))}
                     width={70}
-                    domain={[0, ordinaryIncomeChart.maxValue]}
+                    domain={['dataMin', ordinaryIncomeChart.maxValue]}
                     allowDataOverflow={true}
                   />
                   <Tooltip
@@ -1291,6 +1302,22 @@ const RunResultsPage = () => {
                   }}
                   wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                 />
+                  <Area
+                    type="monotone"
+                    dataKey="standardDeduction"
+                    stackId="ordinary"
+                    name="Standard deduction"
+                    stroke="#64748b"
+                    fill="color-mix(in srgb, #64748b 30%, transparent)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="ledgerDeductions"
+                    stackId="ordinary"
+                    name="Other deductions"
+                    stroke="#94a3b8"
+                    fill="color-mix(in srgb, #94a3b8 30%, transparent)"
+                  />
                   <Area
                     type="monotone"
                     dataKey="salaryIncome"
@@ -1363,6 +1390,8 @@ const RunResultsPage = () => {
                 }}
               >
                 {[
+                  { key: 'standardDeduction', label: 'Standard deduction', color: '#64748b' },
+                  { key: 'ledgerDeductions', label: 'Other deductions', color: '#94a3b8' },
                   { key: 'salaryIncome', label: 'Salary and other income', color: '#4f63ff' },
                   { key: 'investmentIncome', label: 'Investment income', color: '#3da5ff' },
                   { key: 'socialSecurityIncome', label: 'Taxable social security', color: '#7ecf7a' },
