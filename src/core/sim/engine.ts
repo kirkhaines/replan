@@ -929,6 +929,7 @@ const buildYearRecord = (
     contributions: totals.contributions,
     withdrawals: totals.withdrawals,
     taxes: totals.taxes,
+    ledger: { ...state.yearLedger },
   }
 }
 
@@ -1244,6 +1245,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       cashBalance: point.cashBalance,
       investmentBalance: point.investmentBalance,
       date: point.date,
+      ledger: point.ledger,
     })),
     monthlyTimeline,
     explanations,

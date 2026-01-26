@@ -102,6 +102,16 @@ const contributionTotalsSchema = z.object({
   hsa: z.number(),
 })
 
+const taxLedgerSchema = z.object({
+  ordinaryIncome: z.number(),
+  capitalGains: z.number(),
+  deductions: z.number(),
+  taxExemptIncome: z.number(),
+  penalties: z.number(),
+  taxPaid: z.number(),
+  earnedIncome: z.number(),
+})
+
 const moduleRunSchema = z.object({
   moduleId: z.string(),
   cashflows: z.array(cashflowItemSchema),
@@ -146,6 +156,7 @@ export const timelinePointSchema = z.object({
   cashBalance: z.number().optional(),
   investmentBalance: z.number().optional(),
   date: isoDateStringSchema.optional(),
+  ledger: taxLedgerSchema.optional(),
 })
 
 export const monthlyTimelinePointSchema = z.object({

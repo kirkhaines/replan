@@ -137,6 +137,8 @@ const taxTypes = ['taxable', 'traditional', 'roth', 'hsa'] as const
 type AssetClass = (typeof assetClasses)[number]
 type TaxType = (typeof taxTypes)[number]
 
+type YearDetailMode = 'none' | 'month' | 'module'
+
 const balanceSeriesColors: Record<string, string> = {
   cash: '#22c55e',
   taxable: '#2563eb',
@@ -219,6 +221,42 @@ const toAssetClass = (holdingType?: string | null) => {
   }
 }
 
+const detailButtonStyle = (isActive: boolean) => ({
+  width: '22px',
+  height: '22px',
+  borderRadius: '999px',
+  border: '1px solid var(--border)',
+  background: isActive ? 'var(--surface-muted)' : 'var(--surface)',
+  color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  cursor: 'pointer',
+})
+
+const CancelIcon = () => (
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+    <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M5 5l6 6M11 5l-6 6" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const CalendarIcon = () => (
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+    <rect x="2" y="3.5" width="12" height="10.5" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M2 6.5h12" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M5 2v3M11 2v3" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const PieIcon = () => (
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+    <path d="M8 2a6 6 0 1 0 6 6H8z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M8 2v6h6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
 const RunResultsPage = () => {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
@@ -226,7 +264,7 @@ const RunResultsPage = () => {
   const [run, setRun] = useState<SimulationRun | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const titleInputRef = useRef<HTMLInputElement | null>(null)
-  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
+  const [yearDetailModes, setYearDetailModes] = useState<Record<number, YearDetailMode>>({})
   const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set())
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
   const [showPresentDay, setShowPresentDay] = useState(true)
@@ -1015,6 +1053,9 @@ const RunResultsPage = () => {
     return getHoldingLabel(entry.id)
   }
 
+  const getYearDetailMode = (yearIndex: number): YearDetailMode =>
+    yearDetailModes[yearIndex] ?? 'none'
+
   return (
     <section className="stack">
       <PageHeader
@@ -1561,35 +1602,716 @@ const RunResultsPage = () => {
           </thead>
           <tbody>
             {filteredTimeline.map((point) => {
-              const isExpanded = expandedYears.has(point.yearIndex)
               const monthRows = monthlyByYear.get(point.yearIndex) ?? []
+              const yearMode = getYearDetailMode(point.yearIndex)
+              const yearMonthEntries = monthRows.flatMap((month) => {
+                const explanation = explanationsByMonth.get(month.monthIndex)
+                return explanation ? [{ month, explanation }] : []
+              })
+              const yearStartMonth = monthRows.length > 0 ? monthRows[0] : null
+              const yearEndMonth = monthRows.length > 0 ? monthRows[monthRows.length - 1] : null
+              const yearEndExplanation = yearEndMonth
+                ? explanationsByMonth.get(yearEndMonth.monthIndex)
+                : undefined
+              const priorYearMonths =
+                point.yearIndex > 0 ? monthlyByYear.get(point.yearIndex - 1) ?? [] : []
+              const priorYearEndMonth =
+                priorYearMonths.length > 0 ? priorYearMonths[priorYearMonths.length - 1] : null
+              const priorYearEndExplanation = priorYearEndMonth
+                ? explanationsByMonth.get(priorYearEndMonth.monthIndex)
+                : undefined
+              const yearModules = new Map<
+                string,
+                {
+                  moduleId: string
+                  hasActivity: boolean
+                  months: Array<{
+                    month: (typeof monthRows)[number]
+                    module: (typeof yearMonthEntries)[number]['explanation']['modules'][number]
+                  }>
+                  totals: {
+                    cash: number
+                    ordinaryIncome: number
+                    capitalGains: number
+                    deductions: number
+                    taxExemptIncome: number
+                    deposit: number
+                    withdraw: number
+                    convert: number
+                    market: number
+                    hasMarket: boolean
+                  }
+                }
+              >()
+              yearMonthEntries.forEach(({ month, explanation }) => {
+                explanation.modules.forEach((module) => {
+                  const hasActivity =
+                    module.cashflows.length > 0 ||
+                    module.actions.length > 0 ||
+                    (module.marketReturns?.length ?? 0) > 0
+                  const entry = yearModules.get(module.moduleId) ?? {
+                    moduleId: module.moduleId,
+                    hasActivity: false,
+                    months: [],
+                    totals: {
+                      cash: 0,
+                      ordinaryIncome: 0,
+                      capitalGains: 0,
+                      deductions: 0,
+                      taxExemptIncome: 0,
+                      deposit: 0,
+                      withdraw: 0,
+                      convert: 0,
+                      market: 0,
+                      hasMarket: false,
+                    },
+                  }
+                  entry.totals.cash += module.totals.cashflows.cash
+                  entry.totals.ordinaryIncome += module.totals.cashflows.ordinaryIncome
+                  entry.totals.capitalGains += module.totals.cashflows.capitalGains
+                  entry.totals.deductions += module.totals.cashflows.deductions
+                  entry.totals.taxExemptIncome += module.totals.cashflows.taxExemptIncome
+                  entry.totals.deposit += module.totals.actions.deposit
+                  entry.totals.withdraw += module.totals.actions.withdraw
+                  entry.totals.convert += module.totals.actions.convert
+                  if (module.totals.market) {
+                    entry.totals.market += module.totals.market.total
+                    entry.totals.hasMarket = true
+                  }
+                  if (hasActivity) {
+                    entry.hasActivity = true
+                    entry.months.push({ month, module })
+                  }
+                  yearModules.set(module.moduleId, entry)
+                })
+              })
+              const yearModuleRows = [...yearModules.values()]
+                .filter((entry) => {
+                  if (entry.hasActivity) {
+                    return true
+                  }
+                  const totals = entry.totals
+                  return (
+                    totals.cash !== 0 ||
+                    totals.ordinaryIncome !== 0 ||
+                    totals.capitalGains !== 0 ||
+                    totals.deductions !== 0 ||
+                    totals.taxExemptIncome !== 0 ||
+                    totals.deposit !== 0 ||
+                    totals.withdraw !== 0 ||
+                    totals.convert !== 0 ||
+                    totals.market !== 0
+                  )
+                })
+                .sort((a, b) =>
+                  (moduleLabels[a.moduleId] ?? a.moduleId).localeCompare(
+                    moduleLabels[b.moduleId] ?? b.moduleId,
+                  ),
+                )
               return (
                 <Fragment key={point.yearIndex}>
-                  <tr
-                    onClick={() =>
-                      setExpandedYears((current) => {
-                        const next = new Set(current)
-                        if (next.has(point.yearIndex)) {
-                          next.delete(point.yearIndex)
-                        } else {
-                          next.add(point.yearIndex)
-                        }
-                        return next
-                      })
-                    }
-                  >
+                  <tr>
                     <td>
-                      <span className="muted" aria-hidden="true">
-                        {isExpanded ? '▾' : '▸'}
-                      </span>{' '}
-                      {point.date ? addMonths(point.date, -11) ?? '-' : '-'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ display: 'inline-flex', gap: '0.25rem' }}>
+                          <button
+                            type="button"
+                            title="No detail"
+                            aria-label="No detail"
+                            onClick={() =>
+                              setYearDetailModes((current) => ({
+                                ...current,
+                                [point.yearIndex]:
+                                  current[point.yearIndex] === 'none' ? 'none' : 'none',
+                              }))
+                            }
+                            style={detailButtonStyle(yearMode === 'none')}
+                          >
+                            <CancelIcon />
+                          </button>
+                          <button
+                            type="button"
+                            title="Month detail"
+                            aria-label="Month detail"
+                            onClick={() =>
+                              setYearDetailModes((current) => ({
+                                ...current,
+                                [point.yearIndex]:
+                                  current[point.yearIndex] === 'month' ? 'none' : 'month',
+                              }))
+                            }
+                            style={detailButtonStyle(yearMode === 'month')}
+                          >
+                            <CalendarIcon />
+                          </button>
+                          <button
+                            type="button"
+                            title="Module detail"
+                            aria-label="Module detail"
+                            onClick={() =>
+                              setYearDetailModes((current) => ({
+                                ...current,
+                                [point.yearIndex]:
+                                  current[point.yearIndex] === 'module' ? 'none' : 'module',
+                              }))
+                            }
+                            style={detailButtonStyle(yearMode === 'module')}
+                          >
+                            <PieIcon />
+                          </button>
+                        </div>
+                        <span>{point.date ? addMonths(point.date, -11) ?? '-' : '-'}</span>
+                      </div>
                     </td>
                     <td>{point.age}</td>
                     <td>{formatCurrencyForDate(point.balance, point.date)}</td>
                     <td>{formatCurrencyForDate(point.contribution, point.date)}</td>
                     <td>{formatCurrencyForDate(point.spending, point.date)}</td>
                   </tr>
-                  {isExpanded
+                  {yearMode === 'module' ? (
+                    <tr className="table-row-highlight">
+                      <td colSpan={5} className="expansion">
+                        <div className="stack">
+                          <div className="stack">
+                            <strong>Module activity</strong>
+                            <div className="table-wrap">
+                              <table className="table compact selectable">
+                                <thead>
+                                  <tr>
+                                    <th>Module</th>
+                                    <th>Cash</th>
+                                    <th>Ord inc</th>
+                                    <th>Cap gains</th>
+                                    <th>Deductions</th>
+                                    <th>Tax exempt</th>
+                                    <th>Deposit</th>
+                                    <th>Withdraw</th>
+                                    <th>Convert</th>
+                                    <th>Market</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {yearModuleRows.map((module) => {
+                                    const moduleKey = `year:${point.yearIndex}:${module.moduleId}`
+                                    const moduleExpanded = expandedModules.has(moduleKey)
+                                    const totals = module.totals
+                                    return (
+                                      <Fragment key={moduleKey}>
+                                        <tr
+                                          onClick={() =>
+                                            setExpandedModules((current) => {
+                                              const next = new Set(current)
+                                              if (next.has(moduleKey)) {
+                                                next.delete(moduleKey)
+                                              } else {
+                                                next.add(moduleKey)
+                                              }
+                                              return next
+                                            })
+                                          }
+                                        >
+                                          <td>
+                                            <span className="muted" aria-hidden="true">
+                                              {moduleExpanded ? '▾' : '▸'}
+                                            </span>{' '}
+                                            {moduleLabels[module.moduleId] ?? module.moduleId}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(totals.cash, point.date)}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(
+                                              totals.ordinaryIncome,
+                                              point.date,
+                                            )}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(
+                                              totals.capitalGains,
+                                              point.date,
+                                            )}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(
+                                              totals.deductions,
+                                              point.date,
+                                            )}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(
+                                              totals.taxExemptIncome,
+                                              point.date,
+                                            )}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(
+                                              totals.deposit,
+                                              point.date,
+                                            )}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(
+                                              totals.withdraw,
+                                              point.date,
+                                            )}
+                                          </td>
+                                          <td>
+                                            {formatSignedCurrencyForDate(
+                                              totals.convert,
+                                              point.date,
+                                            )}
+                                          </td>
+                                          <td>
+                                            {totals.hasMarket
+                                              ? formatSignedCurrencyForDate(
+                                                  totals.market,
+                                                  point.date,
+                                                )
+                                              : '-'}
+                                          </td>
+                                        </tr>
+                                        {moduleExpanded ? (
+                                          <tr>
+                                            <td colSpan={10} className="expansion">
+                                              <div className="stack">
+                                                {(() => {
+                                                  const months = [...module.months].sort(
+                                                    (a, b) =>
+                                                      a.month.monthIndex - b.month.monthIndex,
+                                                  )
+                                                  const inputLabels = new Set<string>()
+                                                  const checkpointLabels = new Set<string>()
+                                                  months.forEach((entry) => {
+                                                    entry.module.inputs?.forEach((input) => {
+                                                      inputLabels.add(input.label)
+                                                    })
+                                                    entry.module.checkpoints?.forEach((checkpoint) => {
+                                                      checkpointLabels.add(checkpoint.label)
+                                                    })
+                                                  })
+                                                  const inputRows = Array.from(inputLabels)
+                                                  const checkpointRows = Array.from(checkpointLabels)
+                                                  const cashflowRows = months.flatMap((entry) =>
+                                                    entry.module.cashflows.map((flow) => ({
+                                                      month: entry.month,
+                                                      flow,
+                                                    })),
+                                                  )
+                                                  const actionRows = months.flatMap((entry) =>
+                                                    entry.module.actions.map((action) => ({
+                                                      month: entry.month,
+                                                      action,
+                                                    })),
+                                                  )
+                                                  const marketRows = months.flatMap((entry) =>
+                                                    (entry.module.marketReturns ?? []).map((item) => ({
+                                                      month: entry.month,
+                                                      item,
+                                                    })),
+                                                  )
+                                                  return (
+                                                    <>
+                                                      {inputRows.length > 0 ? (
+                                                        <div className="stack">
+                                                          <strong className="muted">Inputs</strong>
+                                                          <div className="table-wrap">
+                                                            <table className="table compact">
+                                                              <thead>
+                                                                <tr>
+                                                                  <th>Metric</th>
+                                                                  {months.map((entry) => (
+                                                                    <th key={entry.month.monthIndex}>
+                                                                      {entry.month.date}
+                                                                    </th>
+                                                                  ))}
+                                                                </tr>
+                                                              </thead>
+                                                              <tbody>
+                                                                {inputRows.map((label) => (
+                                                                  <tr key={label}>
+                                                                    <td className="muted">{label}</td>
+                                                                    {months.map((entry) => {
+                                                                      const value =
+                                                                        entry.module.inputs?.find(
+                                                                          (input) =>
+                                                                            input.label === label,
+                                                                        )?.value
+                                                                      return (
+                                                                        <td key={entry.month.monthIndex}>
+                                                                          {formatMetricValue(value)}
+                                                                        </td>
+                                                                      )
+                                                                    })}
+                                                                  </tr>
+                                                                ))}
+                                                              </tbody>
+                                                            </table>
+                                                          </div>
+                                                        </div>
+                                                      ) : null}
+                                                      {checkpointRows.length > 0 ? (
+                                                        <div className="stack">
+                                                          <strong className="muted">Checkpoints</strong>
+                                                          <div className="table-wrap">
+                                                            <table className="table compact">
+                                                              <thead>
+                                                                <tr>
+                                                                  <th>Metric</th>
+                                                                  {months.map((entry) => (
+                                                                    <th key={entry.month.monthIndex}>
+                                                                      {entry.month.date}
+                                                                    </th>
+                                                                  ))}
+                                                                </tr>
+                                                              </thead>
+                                                              <tbody>
+                                                                {checkpointRows.map((label) => (
+                                                                  <tr key={label}>
+                                                                    <td className="muted">{label}</td>
+                                                                    {months.map((entry) => {
+                                                                      const value =
+                                                                        entry.module.checkpoints?.find(
+                                                                          (checkpoint) =>
+                                                                            checkpoint.label === label,
+                                                                        )?.value
+                                                                      return (
+                                                                        <td key={entry.month.monthIndex}>
+                                                                          {formatMetricValue(value)}
+                                                                        </td>
+                                                                      )
+                                                                    })}
+                                                                  </tr>
+                                                                ))}
+                                                              </tbody>
+                                                            </table>
+                                                          </div>
+                                                        </div>
+                                                      ) : null}
+                                                      {cashflowRows.length > 0 ? (
+                                                        <div className="stack">
+                                                          <strong className="muted">Cashflows</strong>
+                                                          <div className="table-wrap">
+                                                            <table className="table compact">
+                                                              <thead>
+                                                                <tr>
+                                                                  <th>Month</th>
+                                                                  <th>Label</th>
+                                                                  <th>Category</th>
+                                                                  <th>Cash</th>
+                                                                  <th>Ord inc</th>
+                                                                  <th>Cap gains</th>
+                                                                  <th>Deductions</th>
+                                                                  <th>Tax exempt</th>
+                                                                </tr>
+                                                              </thead>
+                                                              <tbody>
+                                                                {cashflowRows.map(({ month, flow }) => (
+                                                                  <tr key={`${month.monthIndex}-${flow.id}`}>
+                                                                    <td>{month.date}</td>
+                                                                    <td>{flow.label}</td>
+                                                                    <td className="muted">{flow.category}</td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        flow.cash,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        flow.ordinaryIncome ?? 0,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        flow.capitalGains ?? 0,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        flow.deductions ?? 0,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        flow.taxExemptIncome ?? 0,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                  </tr>
+                                                                ))}
+                                                              </tbody>
+                                                            </table>
+                                                          </div>
+                                                        </div>
+                                                      ) : null}
+                                                      {actionRows.length > 0 ? (
+                                                        <div className="stack">
+                                                          <strong className="muted">Actions</strong>
+                                                          <div className="table-wrap">
+                                                            <table className="table compact">
+                                                              <thead>
+                                                                <tr>
+                                                                  <th>Month</th>
+                                                                  <th>Label</th>
+                                                                  <th>Kind</th>
+                                                                  <th>Amount</th>
+                                                                  <th>Resolved</th>
+                                                                  <th>Source</th>
+                                                                  <th>Target</th>
+                                                                </tr>
+                                                              </thead>
+                                                              <tbody>
+                                                                {actionRows.map(({ month, action }) => (
+                                                                  <tr key={`${month.monthIndex}-${action.id}`}>
+                                                                    <td>{month.date}</td>
+                                                                    <td>{action.label ?? action.id}</td>
+                                                                    <td className="muted">{action.kind}</td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        action.amount,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        action.resolvedAmount,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td className="muted">
+                                                                      {action.sourceHoldingId
+                                                                        ? getHoldingLabel(
+                                                                            action.sourceHoldingId,
+                                                                          )
+                                                                        : '-'}
+                                                                    </td>
+                                                                    <td className="muted">
+                                                                      {action.targetHoldingId
+                                                                        ? getHoldingLabel(
+                                                                            action.targetHoldingId,
+                                                                          )
+                                                                        : '-'}
+                                                                    </td>
+                                                                  </tr>
+                                                                ))}
+                                                              </tbody>
+                                                            </table>
+                                                          </div>
+                                                        </div>
+                                                      ) : null}
+                                                      {marketRows.length > 0 ? (
+                                                        <div className="stack">
+                                                          <strong className="muted">Market returns</strong>
+                                                          <div className="table-wrap">
+                                                            <table className="table compact">
+                                                              <thead>
+                                                                <tr>
+                                                                  <th>Month</th>
+                                                                  <th>Account</th>
+                                                                  <th>Start</th>
+                                                                  <th>End</th>
+                                                                  <th>Change</th>
+                                                                  <th>Rate</th>
+                                                                </tr>
+                                                              </thead>
+                                                              <tbody>
+                                                                {marketRows.map(({ month, item }) => (
+                                                                  <tr key={`${month.monthIndex}-${item.id}`}>
+                                                                    <td>{month.date}</td>
+                                                                    <td>
+                                                                      {item.kind === 'cash'
+                                                                        ? accountLookup.cashById.get(item.id) ??
+                                                                          item.id
+                                                                        : getHoldingLabel(item.id)}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        item.balanceStart,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        item.balanceEnd,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>
+                                                                      {formatSignedCurrencyForDate(
+                                                                        item.amount,
+                                                                        month.date,
+                                                                      )}
+                                                                    </td>
+                                                                    <td>{formatRate(item.rate)}</td>
+                                                                  </tr>
+                                                                ))}
+                                                              </tbody>
+                                                            </table>
+                                                          </div>
+                                                        </div>
+                                                      ) : null}
+                                                    </>
+                                                  )
+                                                })()}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        ) : null}
+                                      </Fragment>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                          <div className="stack">
+                            <strong>Year ledger</strong>
+                            <div className="table-wrap">
+                              {point.ledger ? (
+                                <table className="table compact">
+                                  <tbody>
+                                    <tr>
+                                      <td className="muted">Ordinary income</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.ordinaryIncome,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="muted">Capital gains</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.capitalGains,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="muted">Deductions</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.deductions,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="muted">Tax exempt income</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.taxExemptIncome,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="muted">Penalties</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.penalties,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="muted">Tax paid</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.taxPaid,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="muted">Earned income</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.earnedIncome,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              ) : (
+                                <p className="muted">No year ledger data available.</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="stack">
+                            <strong>Account balances</strong>
+                            <div className="table-wrap">
+                              {yearEndExplanation ? (
+                                <table className="table compact">
+                                  <thead>
+                                    <tr>
+                                      <th>Account</th>
+                                      <th>Prior</th>
+                                      <th>Current</th>
+                                      <th>Change</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {yearEndExplanation.accounts.map((account) => {
+                                      const priorBalance = priorYearEndExplanation
+                                        ? priorYearEndExplanation.accounts.find(
+                                            (entry) =>
+                                              entry.id === account.id &&
+                                              entry.kind === account.kind,
+                                          )?.balance
+                                        : point.yearIndex === 0
+                                          ? initialBalances.get(
+                                              `${account.kind}:${account.id}`,
+                                            )
+                                          : undefined
+                                      const priorDate =
+                                        priorYearEndExplanation?.date ?? yearStartMonth?.date
+                                      const adjustedPrior =
+                                        priorBalance !== undefined
+                                          ? adjustForInflation(priorBalance, priorDate)
+                                          : undefined
+                                      const adjustedCurrent = adjustForInflation(
+                                        account.balance,
+                                        yearEndMonth?.date,
+                                      )
+                                      const delta =
+                                        adjustedPrior !== undefined
+                                          ? adjustedCurrent - adjustedPrior
+                                          : null
+                                      return (
+                                        <tr key={`${account.kind}-${account.id}`}>
+                                          <td>{getAccountLabel(account)}</td>
+                                          <td>
+                                            {adjustedPrior !== undefined
+                                              ? formatSignedCurrency(adjustedPrior)
+                                              : '-'}
+                                          </td>
+                                          <td>{formatSignedCurrency(adjustedCurrent)}</td>
+                                          <td>
+                                            {delta === null
+                                              ? '-'
+                                              : formatSignedCurrency(delta)}
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              ) : (
+                                <p className="muted">No account balance data available.</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  {yearMode === 'month'
                     ? monthRows.map((month) => {
                         const monthExpanded = expandedMonths.has(month.monthIndex)
                         const explanation = explanationsByMonth.get(month.monthIndex)

@@ -134,6 +134,7 @@ export type YearRecord = {
   contributions: number
   withdrawals: number
   taxes: number
+  ledger: TaxLedger
 }
 
 export type SimulationState = {
