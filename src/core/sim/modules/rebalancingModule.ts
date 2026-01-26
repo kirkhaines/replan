@@ -171,16 +171,6 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
     )
   }
 
-  const getAccountTaxType = (holdings: SimHolding[]) => {
-    if (holdings.length === 0) {
-      return 'taxable' as const
-    }
-    const best = holdings.reduce((current, holding) =>
-      holding.balance > current.balance ? holding : current,
-    )
-    return best.taxType
-  }
-
   return {
     id: 'rebalancing',
     explain,
@@ -308,11 +298,13 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         holdings: SimHolding[],
         taxType: SimHolding['taxType'],
       ) => {
-        const existing = holdings.find((holding) => getNonCashAsset(holding) === asset)
+        const existing = holdings.find(
+          (holding) => getNonCashAsset(holding) === asset && holding.taxType === taxType,
+        )
         if (existing) {
           return existing
         }
-        const key = `${accountId}:${asset}`
+        const key = `${accountId}:${asset}:${taxType}`
         const existingId = createdHoldingIds.get(key)
         const reference = referenceByAsset.get(asset)
         const holdingType = reference?.holdingType ?? assetHoldingType[asset]
@@ -365,7 +357,6 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
         if (nonCashAssets.every((asset) => buyRemaining[asset] <= 0)) {
           return
         }
-        const accountTaxType = getAccountTaxType(holdings)
         const holdingsByAsset = new Map<NonCashAsset, SimHolding[]>()
         nonCashAssets.forEach((asset) => holdingsByAsset.set(asset, []))
         holdings.forEach((holding) => {
@@ -392,7 +383,7 @@ export const createRebalancingModule = (snapshot: SimulationSnapshot): Simulatio
                 accountId,
                 buyAsset,
                 holdings,
-                accountTaxType,
+                holding.taxType,
               )
               const buyAmountRemaining = buyRemaining[buyAsset]
               const amount = Math.min(remaining, buyAmountRemaining)

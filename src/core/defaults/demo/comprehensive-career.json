@@ -13,6 +13,7 @@
     ],
     "investmentAccountIds": [
       "5e339278-350d-4c34-a57a-6cb257eccbf1",
+      "7f0c8361-5a3f-4b5d-9a4f-7c0d5a2663a1",
       "663dd7bb-81ac-4c1a-a804-1a352095eea5"
     ],
     "spendingStrategyId": "d323f7d4-313e-406d-b720-b4749e82db07",
@@ -500,7 +501,7 @@
   "investmentAccounts": [
     {
       "id": "5e339278-350d-4c34-a57a-6cb257eccbf1",
-      "name": "Demo Retirement Accounts",
+      "name": "Demo 401k",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000,
       "contributionEntries": [
@@ -543,7 +544,15 @@
           "date": "2021-01-01",
           "amount": 15000,
           "taxType": "traditional"
-        },
+        }
+      ]
+    },
+    {
+      "id": "7f0c8361-5a3f-4b5d-9a4f-7c0d5a2663a1",
+      "name": "Demo Roth IRA",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000,
+      "contributionEntries": [
         {
           "date": "2012-01-01",
           "amount": 40000,
@@ -677,7 +686,7 @@
       "holdingType": "sp500",
       "returnRate": 0.08,
       "returnStdDev": 0.16,
-      "investmentAccountId": "5e339278-350d-4c34-a57a-6cb257eccbf1",
+      "investmentAccountId": "7f0c8361-5a3f-4b5d-9a4f-7c0d5a2663a1",
       "createdAt": 1700000000000,
       "updatedAt": 1700000000000
     },
