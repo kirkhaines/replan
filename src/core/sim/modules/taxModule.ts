@@ -1,9 +1,14 @@
-import type { SimulationSnapshot } from '../../models'
+import type { SimulationSnapshot, TaxPolicy } from '../../models'
 import { createExplainTracker } from '../explain'
 import { computeTax, selectTaxPolicy } from '../tax'
 import { computePayrollTaxes, selectPayrollTaxPolicy } from '../payrollTaxes'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
-import type { CashflowSeriesEntry, SimulationModule } from '../types'
+import type {
+  CashflowSeriesEntry,
+  SimulationContext,
+  SimulationModule,
+  SimulationState,
+} from '../types'
 
 export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const taxStrategy = snapshot.scenario.strategies.tax
@@ -28,6 +33,85 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
       })),
     }
   }
+
+  const scheduleTaxPayment = (
+    state: SimulationState,
+    entry: {
+      taxYear: number
+      amount: number
+      penalties: number
+      taxableOrdinary: number
+      taxableCapGains: number
+    },
+  ) => {
+    const existingIndex = state.pendingTaxDue.findIndex(
+      (pending) => pending.taxYear === entry.taxYear,
+    )
+    if (existingIndex >= 0) {
+      state.pendingTaxDue[existingIndex] = entry
+    } else {
+      state.pendingTaxDue.push(entry)
+    }
+  }
+
+  const buildTaxDue = (state: SimulationState, context: SimulationContext) => {
+    const policyYear = taxStrategy.policyYear || context.date.getFullYear()
+    const taxYear = context.date.getFullYear()
+    const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, taxStrategy.filingStatus)
+    if (!policy) {
+      return null
+    }
+    const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
+    const taxResult = computeTax({
+      ordinaryIncome: state.yearLedger.ordinaryIncome,
+      capitalGains: state.yearLedger.capitalGains,
+      deductions: state.yearLedger.deductions,
+      taxExemptIncome: state.yearLedger.taxExemptIncome,
+      stateTaxRate: taxStrategy.stateCode === 'none' ? taxStrategy.stateTaxRate : 0,
+      policy: inflatedPolicy,
+      useStandardDeduction: taxStrategy.useStandardDeduction,
+      applyCapitalGainsRates: taxStrategy.applyCapitalGainsRates,
+    })
+    const stateTaxPolicy =
+      taxStrategy.stateCode !== 'none'
+        ? selectStateTaxPolicy(taxStrategy.stateCode, policyYear, taxStrategy.filingStatus)
+        : null
+    const taxableIncome = taxResult.taxableOrdinaryIncome + taxResult.taxableCapitalGains
+    const stateTax = stateTaxPolicy
+      ? computeStateTax({
+          taxableIncome,
+          policy: stateTaxPolicy,
+          useStandardDeduction: taxStrategy.useStandardDeduction,
+        })
+      : 0
+    const payrollPolicy = selectPayrollTaxPolicy(policyYear)
+    const payrollTaxes = payrollPolicy
+      ? computePayrollTaxes({
+          earnedIncome: state.yearLedger.earnedIncome,
+          filingStatus: taxStrategy.filingStatus,
+          policy: payrollPolicy,
+        })
+      : { socialSecurityTax: 0, medicareTax: 0, totalPayrollTax: 0 }
+    state.magiHistory[context.yearIndex] = taxResult.magi
+    const federalTaxOwed = taxResult.taxOwed
+    const totalTax =
+      federalTaxOwed + stateTax + payrollTaxes.totalPayrollTax + state.yearLedger.penalties
+    const taxDue = totalTax - state.yearLedger.taxPaid
+    return {
+      taxYear,
+      taxDue,
+      penalties: state.yearLedger.penalties,
+      taxableOrdinary: taxResult.taxableOrdinaryIncome,
+      taxableCapGains: taxResult.taxableCapitalGains,
+      totalTax,
+      taxPaid: state.yearLedger.taxPaid,
+      federalTaxOwed,
+      stateTax,
+      payrollTaxes,
+    }
+  }
+
+  const monthShouldPayTaxes = (context: SimulationContext) => context.date.getMonth() === 2
 
   return {
     id: 'taxes',
@@ -93,76 +177,39 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
       explain.addInput('State code', taxStrategy.stateCode)
       explain.addInput('Use standard deduction', taxStrategy.useStandardDeduction)
       explain.addInput('Apply cap gains rates', taxStrategy.applyCapitalGainsRates)
-      if (!context.isEndOfYear) {
+      if (!monthShouldPayTaxes(context)) {
         explain.addCheckpoint('Taxes applied', false)
         return []
       }
-      const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, taxStrategy.filingStatus)
-      if (!policy) {
+      const paymentYear = context.date.getFullYear() - 1
+      const dueEntries = state.pendingTaxDue.filter(
+        (entry) => entry.taxYear <= paymentYear,
+      )
+      if (dueEntries.length === 0) {
         explain.addCheckpoint('Taxes applied', false)
         return []
       }
-      const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
-      const taxResult = computeTax({
-        ordinaryIncome: state.yearLedger.ordinaryIncome,
-        capitalGains: state.yearLedger.capitalGains,
-        deductions: state.yearLedger.deductions,
-        taxExemptIncome: state.yearLedger.taxExemptIncome,
-        stateTaxRate: taxStrategy.stateCode === 'none' ? taxStrategy.stateTaxRate : 0,
-        policy: inflatedPolicy,
-        useStandardDeduction: taxStrategy.useStandardDeduction,
-        applyCapitalGainsRates: taxStrategy.applyCapitalGainsRates,
-      })
-      const stateTaxPolicy =
-        taxStrategy.stateCode !== 'none'
-          ? selectStateTaxPolicy(taxStrategy.stateCode, policyYear, taxStrategy.filingStatus)
-          : null
-      const taxableIncome = taxResult.taxableOrdinaryIncome + taxResult.taxableCapitalGains
-      const stateTax = stateTaxPolicy
-        ? computeStateTax({
-            taxableIncome,
-            policy: stateTaxPolicy,
-            useStandardDeduction: taxStrategy.useStandardDeduction,
-          })
-        : 0
-      const payrollPolicy = selectPayrollTaxPolicy(policyYear)
-      const payrollTaxes = payrollPolicy
-        ? computePayrollTaxes({
-            earnedIncome: state.yearLedger.earnedIncome,
-            filingStatus: taxStrategy.filingStatus,
-            policy: payrollPolicy,
-          })
-        : { socialSecurityTax: 0, medicareTax: 0, totalPayrollTax: 0 }
-      state.magiHistory[context.yearIndex] = taxResult.magi
-      const federalTaxOwed = taxResult.taxOwed
-      const totalTax =
-        federalTaxOwed + stateTax + payrollTaxes.totalPayrollTax + state.yearLedger.penalties
-      const taxDue = totalTax - state.yearLedger.taxPaid
-      explain.addCheckpoint('Ordinary income', state.yearLedger.ordinaryIncome)
-      explain.addCheckpoint('Capital gains', state.yearLedger.capitalGains)
-      explain.addCheckpoint('Deductions', state.yearLedger.deductions)
-      explain.addCheckpoint('Tax exempt', state.yearLedger.taxExemptIncome)
-      explain.addCheckpoint('Federal tax', federalTaxOwed)
-      explain.addCheckpoint('State tax', stateTax)
-      explain.addCheckpoint('Social Security tax', payrollTaxes.socialSecurityTax)
-      explain.addCheckpoint('Medicare tax', payrollTaxes.medicareTax)
-      explain.addCheckpoint('Penalties', state.yearLedger.penalties)
-      explain.addCheckpoint('Total tax', totalTax)
-      explain.addCheckpoint('Tax paid', state.yearLedger.taxPaid)
-      explain.addCheckpoint('Tax due', taxDue)
-      explain.addCheckpoint('MAGI', taxResult.magi)
-      explain.addCheckpoint('Taxable ordinary', taxResult.taxableOrdinaryIncome)
-      explain.addCheckpoint('Taxable cap gains', taxResult.taxableCapitalGains)
-      explain.addCheckpoint('Std deduction', taxResult.standardDeductionApplied)
-      if (taxDue === 0) {
+      const totalDue = dueEntries.reduce((sum, entry) => sum + entry.amount, 0)
+      const totalPenalties = dueEntries.reduce((sum, entry) => sum + entry.penalties, 0)
+      const totalOrdinary = dueEntries.reduce((sum, entry) => sum + entry.taxableOrdinary, 0)
+      const totalCapGains = dueEntries.reduce((sum, entry) => sum + entry.taxableCapGains, 0)
+      explain.addCheckpoint('Taxes applied', true)
+      explain.addCheckpoint('Penalties', totalPenalties)
+      explain.addCheckpoint('Taxable ordinary', totalOrdinary)
+      explain.addCheckpoint('Taxable cap gains', totalCapGains)
+      state.pendingTaxDue = state.pendingTaxDue.filter(
+        (entry) => entry.taxYear > paymentYear,
+      )
+      if (totalDue === 0) {
         return []
       }
+      const label = totalDue > 0 ? 'Taxes due (prior year)' : 'Tax refund (prior year)'
       return [
         {
-          id: `tax-${context.yearIndex}`,
-          label: taxDue > 0 ? 'Taxes due' : 'Tax refund',
+          id: `tax-${paymentYear}`,
+          label,
           category: 'tax',
-          cash: -taxDue,
+          cash: -totalDue,
         },
       ]
     },
@@ -252,6 +299,49 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
           cash: -withholdingDue,
         },
       ]
+    },
+    onEndOfYear: (state, context) => {
+      const taxSummary = buildTaxDue(state, context)
+      if (!taxSummary) {
+        return
+      }
+      const {
+        taxYear,
+        taxDue,
+        penalties,
+        taxableOrdinary,
+        taxableCapGains,
+        totalTax,
+        taxPaid,
+        federalTaxOwed,
+        stateTax,
+        payrollTaxes,
+      } = taxSummary
+      explain.addCheckpoint('Ordinary income', state.yearLedger.ordinaryIncome)
+      explain.addCheckpoint('Capital gains', state.yearLedger.capitalGains)
+      explain.addCheckpoint('Deductions', state.yearLedger.deductions)
+      explain.addCheckpoint('Tax exempt', state.yearLedger.taxExemptIncome)
+      explain.addCheckpoint('Federal tax', federalTaxOwed)
+      explain.addCheckpoint('State tax', stateTax)
+      explain.addCheckpoint('Social Security tax', payrollTaxes.socialSecurityTax)
+      explain.addCheckpoint('Medicare tax', payrollTaxes.medicareTax)
+      explain.addCheckpoint('Penalties', penalties)
+      explain.addCheckpoint('Total tax', totalTax)
+      explain.addCheckpoint('Tax paid', taxPaid)
+      explain.addCheckpoint('Tax due', taxDue)
+      explain.addCheckpoint('MAGI', state.magiHistory[context.yearIndex] ?? 0)
+      explain.addCheckpoint('Taxable ordinary', taxableOrdinary)
+      explain.addCheckpoint('Taxable cap gains', taxableCapGains)
+      if (taxDue === 0) {
+        return
+      }
+      scheduleTaxPayment(state, {
+        taxYear,
+        amount: taxDue,
+        penalties,
+        taxableOrdinary,
+        taxableCapGains,
+      })
     },
   }
 }

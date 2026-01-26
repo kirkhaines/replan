@@ -455,6 +455,7 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
       taxPaid: 0,
       earnedIncome: 0,
     },
+    pendingTaxDue: [],
     yearContributionsByTaxType: {
       cash: 0,
       taxable: 0,
@@ -479,6 +480,7 @@ const cloneState = (state: SimulationState): SimulationState => ({
     costBasisEntries: holding.costBasisEntries.map((entry) => ({ ...entry })),
   })),
   yearLedger: { ...state.yearLedger },
+  pendingTaxDue: state.pendingTaxDue.map((entry) => ({ ...entry })),
   yearContributionsByTaxType: { ...state.yearContributionsByTaxType },
   magiHistory: { ...state.magiHistory },
   initialBalance: state.initialBalance,

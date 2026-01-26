@@ -142,6 +142,13 @@ export type SimulationState = {
   investmentAccounts: SimInvestmentAccount[]
   holdings: SimHolding[]
   yearLedger: TaxLedger
+  pendingTaxDue: Array<{
+    taxYear: number
+    amount: number
+    penalties: number
+    taxableOrdinary: number
+    taxableCapGains: number
+  }>
   yearContributionsByTaxType: Record<CashflowSeriesBucket, number>
   magiHistory: Record<number, number>
   initialBalance: number
