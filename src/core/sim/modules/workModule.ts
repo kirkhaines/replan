@@ -22,6 +22,9 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
     futureWorkStrategyIds.has(period.futureWorkStrategyId),
   )
   const holdingIds = new Set(snapshot.investmentAccountHoldings.map((holding) => holding.id))
+  const holdingTaxTypeById = new Map(
+    snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
+  )
   const contributionLimits = snapshot.contributionLimits ?? []
   const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const explain = createExplainTracker()
@@ -172,12 +175,14 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
         const employeeMonthly401k = employeeAnnual401k / 12
         const employeeHoldingValid = holdingIds.has(period['401kInvestmentAccountHoldingId'])
         if (employeeMonthly401k > 0 && employeeHoldingValid) {
+          const employeeTaxType = holdingTaxTypeById.get(period['401kInvestmentAccountHoldingId'])
+          const deductions = employeeTaxType === 'traditional' ? employeeMonthly401k : 0
           cashflows.push({
             id: `${period.id}-${context.monthIndex}-deferral`,
             label: `${period.name} 401k deferral`,
             category: 'work',
             cash: -employeeMonthly401k,
-            deductions: employeeMonthly401k,
+            deductions,
           })
         }
 
