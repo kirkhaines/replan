@@ -23,3 +23,13 @@
   Repro: N/A
   Notes: Find duplicated basis-handling code in taxable source handling and refactor to a common util.
   Status: open
+- Title: CPI inflation computed without standard helper
+  Impact: low
+  Repro: N/A
+  Notes: Find places computing CPI inflation that should use a shared standard function.
+  Status: open
+- Title: Non-SSA utility functions living in ssa.ts
+  Impact: low
+  Repro: N/A
+  Notes: Identify utility functions in `ssa.ts` that are not SSA-specific and relocate/refactor.
+  Status: open

@@ -306,3 +306,137 @@ const buildRmdTableSeed = () => {
 }
 
 export const rmdTableSeed: RmdTableEntry[] = buildRmdTableSeed()
+
+// 2026 tax year update
+// --- add to taxPolicySeed ---
+taxPolicySeed.push(
+  {
+    year: 2026,
+    filingStatus: 'single',
+    standardDeduction: 16100,
+    ordinaryBrackets: [
+      { upTo: 12400, rate: 0.1 },
+      { upTo: 50400, rate: 0.12 },
+      { upTo: 105700, rate: 0.22 },
+      { upTo: 201775, rate: 0.24 },
+      { upTo: 256225, rate: 0.32 },
+      { upTo: 640600, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 49450, rate: 0 },
+      { upTo: 545500, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  },
+  {
+    year: 2026,
+    filingStatus: 'married_joint',
+    standardDeduction: 32200,
+    ordinaryBrackets: [
+      { upTo: 24800, rate: 0.1 },
+      { upTo: 100800, rate: 0.12 },
+      { upTo: 211400, rate: 0.22 },
+      { upTo: 403550, rate: 0.24 },
+      { upTo: 512450, rate: 0.32 },
+      { upTo: 768700, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 98900, rate: 0 },
+      { upTo: 613700, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  },
+  {
+    year: 2026,
+    filingStatus: 'married_separate',
+    standardDeduction: 16100,
+    ordinaryBrackets: [
+      { upTo: 12400, rate: 0.1 },
+      { upTo: 50400, rate: 0.12 },
+      { upTo: 105700, rate: 0.22 },
+      { upTo: 201775, rate: 0.24 },
+      { upTo: 256225, rate: 0.32 },
+      { upTo: 384350, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 49450, rate: 0 },
+      { upTo: 306850, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  },
+  {
+    year: 2026,
+    filingStatus: 'head_of_household',
+    standardDeduction: 24150,
+    ordinaryBrackets: [
+      { upTo: 17700, rate: 0.1 },
+      { upTo: 67450, rate: 0.12 },
+      { upTo: 105700, rate: 0.22 },
+      { upTo: 201750, rate: 0.24 },
+      { upTo: 256200, rate: 0.32 },
+      { upTo: 640600, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+    capitalGainsBrackets: [
+      { upTo: 66200, rate: 0 },
+      { upTo: 579600, rate: 0.15 },
+      { upTo: null, rate: 0.2 },
+    ],
+  }
+)
+
+// --- add to irmaaTableSeed ---
+irmaaTableSeed.push(
+  {
+    year: 2026,
+    filingStatus: 'single',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 109000, partBMonthly: 202.9, partDMonthly: 0 },
+      { maxMagi: 137000, partBMonthly: 284.1, partDMonthly: 14.5 },
+      { maxMagi: 171000, partBMonthly: 405.8, partDMonthly: 37.5 },
+      { maxMagi: 205000, partBMonthly: 527.5, partDMonthly: 60.4 },
+      { maxMagi: 500000, partBMonthly: 649.2, partDMonthly: 83.3 }, // "less than $500,000"
+      { maxMagi: null, partBMonthly: 689.9, partDMonthly: 91.0 },   // "$500,000 or more"
+    ],
+  },
+  {
+    year: 2026,
+    filingStatus: 'married_joint',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 218000, partBMonthly: 202.9, partDMonthly: 0 },
+      { maxMagi: 274000, partBMonthly: 284.1, partDMonthly: 14.5 },
+      { maxMagi: 342000, partBMonthly: 405.8, partDMonthly: 37.5 },
+      { maxMagi: 410000, partBMonthly: 527.5, partDMonthly: 60.4 },
+      { maxMagi: 750000, partBMonthly: 649.2, partDMonthly: 83.3 }, // "less than $750,000"
+      { maxMagi: null, partBMonthly: 689.9, partDMonthly: 91.0 },   // "$750,000 or more"
+    ],
+  },
+  {
+    year: 2026,
+    filingStatus: 'married_separate',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 109000, partBMonthly: 202.9, partDMonthly: 0 },
+      { maxMagi: 391000, partBMonthly: 649.2, partDMonthly: 83.3 }, // "less than $391,000"
+      { maxMagi: null, partBMonthly: 689.9, partDMonthly: 91.0 },   // "$391,000 or more"
+    ],
+  },
+  {
+    year: 2026,
+    filingStatus: 'head_of_household',
+    lookbackYears: 2,
+    tiers: [
+      { maxMagi: 109000, partBMonthly: 202.9, partDMonthly: 0 },
+      { maxMagi: 137000, partBMonthly: 284.1, partDMonthly: 14.5 },
+      { maxMagi: 171000, partBMonthly: 405.8, partDMonthly: 37.5 },
+      { maxMagi: 205000, partBMonthly: 527.5, partDMonthly: 60.4 },
+      { maxMagi: 500000, partBMonthly: 649.2, partDMonthly: 83.3 },
+      { maxMagi: null, partBMonthly: 689.9, partDMonthly: 91.0 },
+    ],
+  }
+)
