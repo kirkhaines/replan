@@ -67,6 +67,8 @@ export const beneficiaryRelationshipSchema = z.enum([
   'government_entity',
 ])
 
+export type BeneficiaryRelationship = z.infer<typeof beneficiaryRelationshipSchema>
+
 export const taxTreatmentSchema = z.enum([
   'ordinary',
   'capital_gains',

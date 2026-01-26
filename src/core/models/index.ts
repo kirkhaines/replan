@@ -19,6 +19,7 @@ export {
   withdrawalOrderTypeSchema,
   funeralDispositionSchema,
 } from './enums'
+export type { BeneficiaryRelationship } from './enums'
 export type { Person } from './person'
 export { personSchema } from './person'
 export type {

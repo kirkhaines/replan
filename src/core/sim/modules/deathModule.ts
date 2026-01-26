@@ -144,7 +144,6 @@ export const createDeathModule = (snapshot: SimulationSnapshot): SimulationModul
         { policy: ReturnType<typeof selectInheritanceTaxPolicy>; taxableEstate: number }
       >()
       const estateCosts = funeralCost + estateTax
-      const estateAvailable = Math.max(0, grossEstate - funeralCost - estateTax)
       const inheritanceTax = beneficiaries.reduce((sum, entry) => {
         if (entry.stateOfResidence === 'none') {
           return sum
