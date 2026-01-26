@@ -107,6 +107,7 @@ const taxLedgerSchema = z.object({
   capitalGains: z.number(),
   deductions: z.number(),
   taxExemptIncome: z.number(),
+  socialSecurityBenefits: z.number(),
   penalties: z.number(),
   taxPaid: z.number(),
   earnedIncome: z.number(),

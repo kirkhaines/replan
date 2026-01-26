@@ -76,6 +76,7 @@ export type { SimulationSnapshot } from './simulationSnapshot'
 export {
   taxBracketSchema,
   taxPolicySchema,
+  socialSecurityProvisionalIncomeBracketSchema,
   irmaaTierSchema,
   irmaaTableSchema,
   rmdTableSchema,
@@ -83,6 +84,7 @@ export {
 export type {
   TaxBracket,
   TaxPolicy,
+  SocialSecurityProvisionalIncomeBracket,
   IrmaaTier,
   IrmaaTable,
   RmdTableEntry,

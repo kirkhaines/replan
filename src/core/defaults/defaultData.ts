@@ -6,6 +6,7 @@ import type {
   SsaRetirementAdjustment,
   SsaWageIndex,
   TaxPolicy,
+  SocialSecurityProvisionalIncomeBracket,
   IrmaaTable,
   RmdTableEntry,
 } from '../models'
@@ -239,6 +240,35 @@ export const taxPolicySeed: TaxPolicy[] = [
     ],
   },
 ]
+
+export const socialSecurityProvisionalIncomeBracketsSeed: SocialSecurityProvisionalIncomeBracket[] =
+  [
+    // Provisional income brackets are not indexed to inflation.
+    {
+      year: 2024,
+      filingStatus: 'single',
+      baseAmount: 25000,
+      adjustedBaseAmount: 34000,
+    },
+    {
+      year: 2024,
+      filingStatus: 'married_joint',
+      baseAmount: 32000,
+      adjustedBaseAmount: 44000,
+    },
+    {
+      year: 2024,
+      filingStatus: 'married_separate',
+      baseAmount: 0,
+      adjustedBaseAmount: 0,
+    },
+    {
+      year: 2024,
+      filingStatus: 'head_of_household',
+      baseAmount: 25000,
+      adjustedBaseAmount: 34000,
+    },
+  ]
 
 export const irmaaTableSeed: IrmaaTable[] = [
   {

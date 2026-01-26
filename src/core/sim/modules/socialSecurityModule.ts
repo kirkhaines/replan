@@ -98,7 +98,6 @@ export const createSocialSecurityModule = (snapshot: SimulationSnapshot): Simula
           label: `${benefit.person.name} Social Security`,
           category: 'social_security',
           cash: monthlyBenefit,
-          ordinaryIncome: monthlyBenefit,
         })
       })
       const totalBenefits = cashflows.reduce((sum, flow) => sum + flow.cash, 0)

@@ -39,6 +39,7 @@ const summarizeSnapshot = (snapshot?: { [key: string]: unknown }) => {
     investmentAccountHoldings?: unknown[]
     contributionLimits?: unknown[]
     taxPolicies?: unknown[]
+    socialSecurityProvisionalIncomeBrackets?: unknown[]
     irmaaTables?: unknown[]
     rmdTable?: unknown[]
   }
@@ -57,6 +58,7 @@ const summarizeSnapshot = (snapshot?: { [key: string]: unknown }) => {
     `holdings=${getCount(data.investmentAccountHoldings)}`,
     `contributionLimits=${getCount(data.contributionLimits)}`,
     `taxPolicies=${getCount(data.taxPolicies)}`,
+    `ssProvisionalBrackets=${getCount(data.socialSecurityProvisionalIncomeBrackets)}`,
     `irmaaTables=${getCount(data.irmaaTables)}`,
     `rmdTable=${getCount(data.rmdTable)}`,
   ].join(', ')

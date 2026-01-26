@@ -1,10 +1,12 @@
 # Enhancements
 
 ## Scenario Edit
-- N/A
+- Add sticky right-side "Jump to" mini-toc (floating section nav) for quick section access.
+- Reorganize scenario edit top/secondary sections, splitting up "Simulation Strategies."
 
 ## Run Results
-- N/A
+- Add total of stacked areas to tooltip for Taxable ordinary income graph on sim run page.
+- Use pie chart icon for expanding monthly summary rows and calendar icon for expanding yearly module rows on Taxable ordinary income graph.
 
 ## Simulation Engine
 - N/A

@@ -1,6 +1,6 @@
 import type { SimulationSnapshot, TaxPolicy } from '../../models'
 import { createExplainTracker } from '../explain'
-import { computeTax, selectTaxPolicy } from '../tax'
+import { computeTax, selectSocialSecurityProvisionalIncomeBracket, selectTaxPolicy } from '../tax'
 import { computePayrollTaxes, selectPayrollTaxPolicy } from '../payrollTaxes'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
 import type {
@@ -62,6 +62,11 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
       return null
     }
     const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
+    const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
+      snapshot.socialSecurityProvisionalIncomeBrackets,
+      policyYear,
+      taxStrategy.filingStatus,
+    )
     const taxResult = computeTax({
       ordinaryIncome: state.yearLedger.ordinaryIncome,
       capitalGains: state.yearLedger.capitalGains,
@@ -71,6 +76,8 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
       policy: inflatedPolicy,
       useStandardDeduction: taxStrategy.useStandardDeduction,
       applyCapitalGainsRates: taxStrategy.applyCapitalGainsRates,
+      socialSecurityBenefits: state.yearLedger.socialSecurityBenefits,
+      socialSecurityProvisionalBracket: socialSecurityBracket,
     })
     const stateTaxPolicy =
       taxStrategy.stateCode !== 'none'
@@ -102,6 +109,7 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
       taxDue,
       penalties: state.yearLedger.penalties,
       taxableOrdinary: taxResult.taxableOrdinaryIncome,
+      taxableSocialSecurity: taxResult.taxableSocialSecurity,
       taxableCapGains: taxResult.taxableCapitalGains,
       totalTax,
       taxPaid: state.yearLedger.taxPaid,
@@ -231,6 +239,11 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
         return []
       }
       const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
+      const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
+        snapshot.socialSecurityProvisionalIncomeBrackets,
+        policyYear,
+        taxStrategy.filingStatus,
+      )
       const monthOfYear = context.date.getMonth() + 1
       const scaleFactor = monthOfYear > 0 ? 12 / monthOfYear : 1
       const annualized = {
@@ -238,6 +251,7 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
         capitalGains: state.yearLedger.capitalGains * scaleFactor,
         deductions: state.yearLedger.deductions * scaleFactor,
         taxExemptIncome: state.yearLedger.taxExemptIncome * scaleFactor,
+        socialSecurityBenefits: state.yearLedger.socialSecurityBenefits * scaleFactor,
       }
       const estimate = computeTax({
         ordinaryIncome: annualized.ordinaryIncome,
@@ -248,6 +262,8 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
         policy: inflatedPolicy,
         useStandardDeduction: taxStrategy.useStandardDeduction,
         applyCapitalGainsRates: taxStrategy.applyCapitalGainsRates,
+        socialSecurityBenefits: annualized.socialSecurityBenefits,
+        socialSecurityProvisionalBracket: socialSecurityBracket,
       })
       const stateTaxEstimate =
         taxStrategy.stateCode !== 'none'
@@ -309,18 +325,20 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
         taxYear,
         taxDue,
         penalties,
-        taxableOrdinary,
-        taxableCapGains,
-        totalTax,
-        taxPaid,
-        federalTaxOwed,
-        stateTax,
-        payrollTaxes,
-      } = taxSummary
+      taxableOrdinary,
+      taxableSocialSecurity,
+      taxableCapGains,
+      totalTax,
+      taxPaid,
+      federalTaxOwed,
+      stateTax,
+      payrollTaxes,
+    } = taxSummary
       explain.addCheckpoint('Ordinary income', state.yearLedger.ordinaryIncome)
       explain.addCheckpoint('Capital gains', state.yearLedger.capitalGains)
       explain.addCheckpoint('Deductions', state.yearLedger.deductions)
       explain.addCheckpoint('Tax exempt', state.yearLedger.taxExemptIncome)
+      explain.addCheckpoint('Social Security benefits', state.yearLedger.socialSecurityBenefits)
       explain.addCheckpoint('Federal tax', federalTaxOwed)
       explain.addCheckpoint('State tax', stateTax)
       explain.addCheckpoint('Social Security tax', payrollTaxes.socialSecurityTax)
@@ -331,6 +349,7 @@ export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule 
       explain.addCheckpoint('Tax due', taxDue)
       explain.addCheckpoint('MAGI', state.magiHistory[context.yearIndex] ?? 0)
       explain.addCheckpoint('Taxable ordinary', taxableOrdinary)
+      explain.addCheckpoint('Taxable Social Security', taxableSocialSecurity)
       explain.addCheckpoint('Taxable cap gains', taxableCapGains)
       if (taxDue === 0) {
         return

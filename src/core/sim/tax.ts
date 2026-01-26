@@ -1,10 +1,15 @@
-import type { IrmaaTable, TaxPolicy } from '../models'
+import type {
+  IrmaaTable,
+  SocialSecurityProvisionalIncomeBracket,
+  TaxPolicy,
+} from '../models'
 
 export type TaxComputation = {
   taxOwed: number
   magi: number
   taxableOrdinaryIncome: number
   taxableCapitalGains: number
+  taxableSocialSecurity: number
   standardDeductionApplied: number
 }
 
@@ -28,6 +33,58 @@ export const selectTaxPolicy = (
 ) => {
   const matching = policies.filter((policy) => policy.filingStatus === filingStatus)
   return selectByYear(matching, year)
+}
+
+export const selectSocialSecurityProvisionalIncomeBracket = (
+  brackets: SocialSecurityProvisionalIncomeBracket[],
+  year: number,
+  filingStatus: SocialSecurityProvisionalIncomeBracket['filingStatus'],
+) => {
+  const matching = brackets.filter((bracket) => bracket.filingStatus === filingStatus)
+  return selectByYear(matching, year)
+}
+
+export const computeTaxableSocialSecurity = ({
+  benefits,
+  ordinaryIncome,
+  capitalGains,
+  taxExemptIncome,
+  bracket,
+}: {
+  benefits: number
+  ordinaryIncome: number
+  capitalGains: number
+  taxExemptIncome: number
+  bracket: SocialSecurityProvisionalIncomeBracket | null
+}) => {
+  if (benefits <= 0) {
+    return { taxableBenefits: 0, provisionalIncome: 0 }
+  }
+  if (!bracket) {
+    return { taxableBenefits: benefits, provisionalIncome: 0 }
+  }
+  const provisionalIncome =
+    Math.max(0, ordinaryIncome) +
+    Math.max(0, capitalGains) +
+    Math.max(0, taxExemptIncome) +
+    Math.max(0, benefits) * 0.5
+
+  if (bracket.baseAmount === 0 && bracket.adjustedBaseAmount === 0) {
+    // Approximate the MFS-with-spouse rule where 85% of benefits are taxable.
+    return { taxableBenefits: benefits * 0.85, provisionalIncome }
+  }
+
+  if (provisionalIncome <= bracket.baseAmount) {
+    return { taxableBenefits: 0, provisionalIncome }
+  }
+  if (provisionalIncome <= bracket.adjustedBaseAmount) {
+    const taxable = 0.5 * (provisionalIncome - bracket.baseAmount)
+    return { taxableBenefits: Math.min(benefits * 0.5, taxable), provisionalIncome }
+  }
+  const baseTaxable = 0.5 * Math.min(benefits, bracket.adjustedBaseAmount - bracket.baseAmount)
+  const additionalTaxable = 0.85 * (provisionalIncome - bracket.adjustedBaseAmount)
+  const taxableBenefits = Math.min(benefits * 0.85, baseTaxable + additionalTaxable)
+  return { taxableBenefits, provisionalIncome }
 }
 
 const computeBracketTax = (income: number, brackets: TaxPolicy['ordinaryBrackets']) => {
@@ -80,6 +137,8 @@ export const computeTax = ({
   policy,
   useStandardDeduction,
   applyCapitalGainsRates,
+  socialSecurityBenefits = 0,
+  socialSecurityProvisionalBracket = null,
 }: {
   ordinaryIncome: number
   capitalGains: number
@@ -89,9 +148,21 @@ export const computeTax = ({
   policy: TaxPolicy
   useStandardDeduction: boolean
   applyCapitalGainsRates: boolean
+  socialSecurityBenefits?: number
+  socialSecurityProvisionalBracket?: SocialSecurityProvisionalIncomeBracket | null
 }): TaxComputation => {
   const standardDeductionApplied = useStandardDeduction ? policy.standardDeduction : 0
-  const taxableOrdinaryIncome = Math.max(0, ordinaryIncome - deductions - standardDeductionApplied)
+  const { taxableBenefits } = computeTaxableSocialSecurity({
+    benefits: socialSecurityBenefits,
+    ordinaryIncome,
+    capitalGains,
+    taxExemptIncome,
+    bracket: socialSecurityProvisionalBracket,
+  })
+  const taxableOrdinaryIncome = Math.max(
+    0,
+    ordinaryIncome + taxableBenefits - deductions - standardDeductionApplied,
+  )
   const taxableCapitalGains = Math.max(0, capitalGains)
   const ordinaryTax = computeBracketTax(taxableOrdinaryIncome, policy.ordinaryBrackets)
   const capitalGainsTax = applyCapitalGainsRates
@@ -99,13 +170,14 @@ export const computeTax = ({
     : computeBracketTax(taxableCapitalGains, policy.ordinaryBrackets)
   const stateTax = stateTaxRate * (taxableOrdinaryIncome + taxableCapitalGains)
   const taxOwed = ordinaryTax + capitalGainsTax + stateTax
-  const magi = ordinaryIncome + capitalGains + taxExemptIncome
+  const magi = ordinaryIncome + taxableBenefits + capitalGains + taxExemptIncome
 
   return {
     taxOwed,
     magi,
     taxableOrdinaryIncome,
     taxableCapitalGains,
+    taxableSocialSecurity: taxableBenefits,
     standardDeductionApplied,
   }
 }

@@ -451,6 +451,7 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
       capitalGains: 0,
       deductions: 0,
       taxExemptIncome: 0,
+      socialSecurityBenefits: 0,
       penalties: 0,
       taxPaid: 0,
       earnedIncome: 0,
@@ -548,6 +549,9 @@ const applyCashflows = (
     state.yearLedger.capitalGains += flow.capitalGains ?? 0
     state.yearLedger.deductions += flow.deductions ?? 0
     state.yearLedger.taxExemptIncome += flow.taxExemptIncome ?? 0
+    if (flow.category === 'social_security') {
+      state.yearLedger.socialSecurityBenefits += flow.cash
+    }
     if (flow.category === 'work' && flow.cash > 0) {
       state.yearLedger.earnedIncome += flow.cash
     }
@@ -990,6 +994,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
           capitalGains: 0,
           deductions: 0,
           taxExemptIncome: 0,
+          socialSecurityBenefits: 0,
           penalties: 0,
           taxPaid: 0,
           earnedIncome: 0,

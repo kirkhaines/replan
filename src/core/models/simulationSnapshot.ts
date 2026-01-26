@@ -19,7 +19,12 @@ import {
   ssaWageIndexSchema,
   contributionLimitDefaultSchema,
 } from './defaults'
-import { irmaaTableSchema, rmdTableSchema, taxPolicySchema } from './policies'
+import {
+  irmaaTableSchema,
+  rmdTableSchema,
+  socialSecurityProvisionalIncomeBracketSchema,
+  taxPolicySchema,
+} from './policies'
 
 export const simulationSnapshotSchema = z.object({
   scenario: scenarioSchema,
@@ -39,6 +44,9 @@ export const simulationSnapshotSchema = z.object({
   ssaRetirementAdjustments: z.array(ssaRetirementAdjustmentSchema),
   contributionLimits: z.array(contributionLimitDefaultSchema),
   taxPolicies: z.array(taxPolicySchema),
+  socialSecurityProvisionalIncomeBrackets: z.array(
+    socialSecurityProvisionalIncomeBracketSchema,
+  ),
   irmaaTables: z.array(irmaaTableSchema),
   rmdTable: z.array(rmdTableSchema),
 })

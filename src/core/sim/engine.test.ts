@@ -11,6 +11,7 @@ import {
   ssaBendPointSeed,
   ssaRetirementAdjustmentSeed,
   ssaWageIndexSeed,
+  socialSecurityProvisionalIncomeBracketsSeed,
   taxPolicySeed,
 } from '../defaults/defaultData'
 import { createUuid } from '../utils/uuid'
@@ -134,6 +135,7 @@ describe('runSimulation', () => {
         ssaRetirementAdjustments: [],
         contributionLimits: [],
         taxPolicies: [],
+        socialSecurityProvisionalIncomeBrackets: [],
         irmaaTables: [],
         rmdTable: [],
       },
@@ -206,6 +208,7 @@ describe('runSimulation', () => {
           updatedAt: timestamp,
         })),
         taxPolicies: taxPolicySeed,
+        socialSecurityProvisionalIncomeBrackets: socialSecurityProvisionalIncomeBracketsSeed,
         irmaaTables: irmaaTableSeed,
         rmdTable: rmdTableSeed,
       }

@@ -1,6 +1,12 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import { computeTax, selectIrmaaTable, selectTaxPolicy } from '../tax'
+import {
+  computeTax,
+  computeTaxableSocialSecurity,
+  selectIrmaaTable,
+  selectSocialSecurityProvisionalIncomeBracket,
+  selectTaxPolicy,
+} from '../tax'
 import { estimateCashBufferWithdrawals } from './cashBufferModule'
 import type {
   ActionIntent,
@@ -49,6 +55,19 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
         return { conversionAmount: 0 }
       }
       const policyBaseYear = policy.year ?? policyYear
+      const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
+        snapshot.socialSecurityProvisionalIncomeBrackets,
+        policyYear,
+        tax.filingStatus,
+      )
+      const { taxableBenefits: taxableSocialSecurity } = computeTaxableSocialSecurity({
+        benefits: state.yearLedger.socialSecurityBenefits,
+        ordinaryIncome: state.yearLedger.ordinaryIncome,
+        capitalGains: state.yearLedger.capitalGains,
+        taxExemptIncome: state.yearLedger.taxExemptIncome,
+        bracket: socialSecurityBracket,
+      })
+      const currentTaxableOrdinary = state.yearLedger.ordinaryIncome + taxableSocialSecurity
 
       let conversionCandidate = 0
       let irmaaHeadroom = Number.POSITIVE_INFINITY
@@ -58,7 +77,7 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
         )
         if (bracket?.upTo !== null && bracket?.upTo !== undefined) {
           const bracketCeiling = inflateFromPolicyYear(bracket.upTo, policyBaseYear)
-          conversionCandidate = Math.max(0, bracketCeiling - state.yearLedger.ordinaryIncome)
+          conversionCandidate = Math.max(0, bracketCeiling - currentTaxableOrdinary)
         }
       }
 
@@ -69,7 +88,7 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
           const tableBaseYear = table?.year ?? policyBaseYear
           const inflatedTier = inflateFromPolicyYear(baseTier, tableBaseYear)
           const currentMagi =
-            state.yearLedger.ordinaryIncome +
+            currentTaxableOrdinary +
             state.yearLedger.capitalGains +
             state.yearLedger.taxExemptIncome
           irmaaHeadroom = Math.max(0, inflatedTier - currentMagi)
@@ -104,6 +123,8 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
           policy,
           useStandardDeduction: tax.useStandardDeduction,
           applyCapitalGainsRates: tax.applyCapitalGainsRates,
+          socialSecurityBenefits: state.yearLedger.socialSecurityBenefits,
+          socialSecurityProvisionalBracket: socialSecurityBracket,
         })
         const statePolicy =
           tax.stateCode !== 'none'
@@ -148,6 +169,8 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
           policy,
           useStandardDeduction: tax.useStandardDeduction,
           applyCapitalGainsRates: tax.applyCapitalGainsRates,
+          socialSecurityBenefits: state.yearLedger.socialSecurityBenefits,
+          socialSecurityProvisionalBracket: socialSecurityBracket,
         })
         const statePolicy =
           tax.stateCode !== 'none'
@@ -255,8 +278,25 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
           conversionCandidate = context.yearPlan.conversionAmount
           explain.addCheckpoint('Planned conversion', conversionCandidate)
         } else {
+          const policyYear = context.date.getFullYear()
+          const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
+            snapshot.socialSecurityProvisionalIncomeBrackets,
+            policyYear,
+            tax.filingStatus,
+          )
+          const { taxableBenefits: taxableSocialSecurity } = computeTaxableSocialSecurity({
+            benefits: state.yearLedger.socialSecurityBenefits,
+            ordinaryIncome: state.yearLedger.ordinaryIncome,
+            capitalGains: state.yearLedger.capitalGains,
+            taxExemptIncome: state.yearLedger.taxExemptIncome,
+            bracket: socialSecurityBracket,
+          })
+          const currentTaxableOrdinary = state.yearLedger.ordinaryIncome + taxableSocialSecurity
+          const currentMagi =
+            currentTaxableOrdinary +
+            state.yearLedger.capitalGains +
+            state.yearLedger.taxExemptIncome
           if (rothConversion.targetOrdinaryBracketRate > 0) {
-            const policyYear = context.date.getFullYear()
             const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, tax.filingStatus)
             const bracket = policy?.ordinaryBrackets.find(
               (entry) => entry.rate === rothConversion.targetOrdinaryBracketRate,
@@ -266,19 +306,14 @@ export const createConversionModule = (snapshot: SimulationSnapshot): Simulation
               const bracketCeiling = inflateFromPolicyYear(bracket.upTo, policyBaseYear)
               conversionCandidate = Math.max(
                 0,
-                bracketCeiling - state.yearLedger.ordinaryIncome,
+                bracketCeiling - currentTaxableOrdinary,
               )
             }
           }
           if (rothConversion.respectIrmaa) {
-            const policyYear = context.date.getFullYear()
             const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, tax.filingStatus)
             const table = selectIrmaaTable(snapshot.irmaaTables, policyYear, tax.filingStatus)
             const baseTier = table?.tiers[0]?.maxMagi ?? 0
-            const currentMagi =
-              state.yearLedger.ordinaryIncome +
-              state.yearLedger.capitalGains +
-              state.yearLedger.taxExemptIncome
             if (baseTier > 0) {
               const policyBaseYear = policy?.year ?? policyYear
               const tableBaseYear = table?.year ?? policyBaseYear

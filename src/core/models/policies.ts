@@ -14,6 +14,13 @@ export const taxPolicySchema = z.object({
   capitalGainsBrackets: z.array(taxBracketSchema),
 })
 
+export const socialSecurityProvisionalIncomeBracketSchema = z.object({
+  year: z.number().int(),
+  filingStatus: filingStatusSchema,
+  baseAmount: z.number().min(0),
+  adjustedBaseAmount: z.number().min(0),
+})
+
 export const irmaaTierSchema = z.object({
   maxMagi: z.number().nullable(),
   partBMonthly: z.number().min(0),
@@ -34,6 +41,9 @@ export const rmdTableSchema = z.object({
 
 export type TaxBracket = z.infer<typeof taxBracketSchema>
 export type TaxPolicy = z.infer<typeof taxPolicySchema>
+export type SocialSecurityProvisionalIncomeBracket = z.infer<
+  typeof socialSecurityProvisionalIncomeBracketSchema
+>
 export type IrmaaTier = z.infer<typeof irmaaTierSchema>
 export type IrmaaTable = z.infer<typeof irmaaTableSchema>
 export type RmdTableEntry = z.infer<typeof rmdTableSchema>

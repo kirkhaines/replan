@@ -44,6 +44,7 @@ export type TaxLedger = {
   capitalGains: number
   deductions: number
   taxExemptIncome: number
+  socialSecurityBenefits: number
   penalties: number
   taxPaid: number
   earnedIncome: number

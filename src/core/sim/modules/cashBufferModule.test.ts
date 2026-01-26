@@ -9,6 +9,7 @@ import {
   ssaBendPointSeed,
   ssaRetirementAdjustmentSeed,
   ssaWageIndexSeed,
+  socialSecurityProvisionalIncomeBracketsSeed,
   taxPolicySeed,
 } from '../../defaults/defaultData'
 import { buildScenario } from '../../../test/scenarioFactory'
@@ -146,6 +147,7 @@ const makeSnapshot = ({
     ssaRetirementAdjustments: ssaRetirementAdjustmentSeed,
     contributionLimits: contributionLimitDefaultsSeed,
     taxPolicies: taxPolicySeed,
+    socialSecurityProvisionalIncomeBrackets: socialSecurityProvisionalIncomeBracketsSeed,
     irmaaTables: irmaaTableSeed,
     rmdTable: rmdTableSeed,
   }
@@ -190,6 +192,7 @@ const makeState = (
     capitalGains: 0,
     deductions: 0,
     taxExemptIncome: 0,
+    socialSecurityBenefits: 0,
     penalties: 0,
     taxPaid: 0,
     earnedIncome: 0,

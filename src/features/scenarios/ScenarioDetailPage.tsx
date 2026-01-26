@@ -36,6 +36,7 @@ import useUnsavedChangesWarning from '../../hooks/useUnsavedChangesWarning'
 import {
   inflationDefaultsSeed,
   taxPolicySeed,
+  socialSecurityProvisionalIncomeBracketsSeed,
   irmaaTableSeed,
   rmdTableSeed,
   longTermCareAnnualCostsByLevel,
@@ -338,6 +339,7 @@ const buildSimulationSnapshot = async (
     ssaRetirementAdjustments,
     contributionLimits,
     taxPolicies: taxPolicySeed,
+    socialSecurityProvisionalIncomeBrackets: socialSecurityProvisionalIncomeBracketsSeed,
     irmaaTables: irmaaTableSeed,
     rmdTable: rmdTableSeed,
   }

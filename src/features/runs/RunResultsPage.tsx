@@ -14,7 +14,11 @@ import {
 import type { SimulationRun } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
-import { selectTaxPolicy } from '../../core/sim/tax'
+import {
+  computeTaxableSocialSecurity,
+  selectSocialSecurityProvisionalIncomeBracket,
+  selectTaxPolicy,
+} from '../../core/sim/tax'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 0 })
@@ -693,6 +697,7 @@ const RunResultsPage = () => {
     const finishedAt = run.finishedAt
     const timeline = filteredTimeline
     const inflationRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+    const socialSecurityBrackets = snapshot.socialSecurityProvisionalIncomeBrackets ?? []
     const holdingTaxType = new Map(
       snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
     )
@@ -719,14 +724,16 @@ const RunResultsPage = () => {
       }
       month.modules.forEach((module) => {
         module.cashflows.forEach((flow) => {
+          if (flow.category === 'social_security') {
+            totals.socialSecurity += flow.cash
+            return
+          }
           const amount = flow.ordinaryIncome ?? 0
           if (!amount) {
             return
           }
           if (flow.category === 'work') {
             totals.salary += amount
-          } else if (flow.category === 'social_security') {
-            totals.socialSecurity += amount
           } else if (flow.category === 'pension') {
             totals.pension += amount
           } else if (flow.category === 'event' || flow.category === 'other') {
@@ -814,13 +821,29 @@ const RunResultsPage = () => {
         })
       }
       const ledgerDeductions = point.ledger?.deductions ?? 0
+      const ledgerCapitalGains = point.ledger?.capitalGains ?? 0
+      const ledgerTaxExempt = point.ledger?.taxExemptIncome ?? 0
+      const nonSocialSecurityOrdinary =
+        totals.salary + totals.investment + totals.pension + totals.taxDeferred
+      const ssBracket = selectSocialSecurityProvisionalIncomeBracket(
+        socialSecurityBrackets,
+        pointYear,
+        snapshot.scenario.strategies.tax.filingStatus,
+      )
+      const { taxableBenefits: taxableSocialSecurity } = computeTaxableSocialSecurity({
+        benefits: totals.socialSecurity,
+        ordinaryIncome: nonSocialSecurityOrdinary,
+        capitalGains: ledgerCapitalGains,
+        taxExemptIncome: ledgerTaxExempt,
+        bracket: ssBracket,
+      })
       return {
         age: point.age,
         year: Number.isNaN(pointYear) ? undefined : pointYear,
         yearIndex: point.yearIndex,
         salaryIncome: adjustForInflation(totals.salary, point.date),
         investmentIncome: adjustForInflation(totals.investment, point.date),
-        socialSecurityIncome: adjustForInflation(totals.socialSecurity, point.date),
+        socialSecurityIncome: adjustForInflation(taxableSocialSecurity, point.date),
         pensionIncome: adjustForInflation(totals.pension, point.date),
         taxDeferredIncome: adjustForInflation(totals.taxDeferred, point.date),
         standardDeduction: -adjustForInflation(standardDeduction, point.date),
@@ -2234,6 +2257,15 @@ const RunResultsPage = () => {
                                       <td>
                                         {formatSignedCurrencyForDate(
                                           point.ledger.taxExemptIncome,
+                                          point.date,
+                                        )}
+                                      </td>
+                                    </tr>
+                                    <tr>
+                                      <td className="muted">Social Security benefits</td>
+                                      <td>
+                                        {formatSignedCurrencyForDate(
+                                          point.ledger.socialSecurityBenefits ?? 0,
                                           point.date,
                                         )}
                                       </td>
