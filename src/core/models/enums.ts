@@ -44,9 +44,34 @@ export const filingStatusSchema = z.enum([
   'head_of_household',
 ])
 
+export const stateTaxCodeSchema = z.enum(['none', 'ok', 'tx', 'nj'])
+
+export const beneficiaryRelationshipSchema = z.enum([
+  'spouse',
+  'civil_union_partner',
+  'domestic_partner',
+  'child',
+  'stepchild',
+  'grandchild',
+  'parent',
+  'grandparent',
+  'sibling',
+  'in_law',
+  'niece_nephew',
+  'cousin',
+  'friend',
+  'unrelated',
+  'charity',
+  'religious_institution',
+  'educational_institution',
+  'government_entity',
+])
+
 export const taxTreatmentSchema = z.enum([
   'ordinary',
   'capital_gains',
   'tax_exempt',
   'none',
 ])
+
+export const funeralDispositionSchema = z.enum(['funeral', 'burial', 'cremation'])

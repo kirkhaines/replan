@@ -124,6 +124,7 @@ const moduleLabels: Record<string, string> = {
   conversions: 'Conversions',
   rmd: 'RMD',
   taxes: 'Taxes',
+  'death-legacy': 'Death & legacy',
   'funding-core': 'Funding',
   'returns-core': 'Market returns',
 }

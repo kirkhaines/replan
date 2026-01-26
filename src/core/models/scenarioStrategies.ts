@@ -1,13 +1,17 @@
 import { z } from 'zod'
 import {
   filingStatusSchema,
+  funeralDispositionSchema,
   inflationTypeSchema,
   longTermCareLevelSchema,
+  beneficiaryRelationshipSchema,
+  stateTaxCodeSchema,
   taxTreatmentSchema,
   taxTypeSchema,
   withdrawalOrderTypeSchema,
 } from './enums'
 import { isoDateStringSchema } from './common'
+import { createUuid } from '../utils/uuid'
 
 const inflationAssumptionsSchema = z.object(
   Object.fromEntries(
@@ -127,7 +131,7 @@ export const healthcareStrategySchema = z.object({
 
 export const taxStrategySchema = z.object({
   filingStatus: filingStatusSchema,
-  stateCode: z.enum(['none', 'ok', 'tx']).default('none'),
+  stateCode: stateTaxCodeSchema.default('none'),
   stateTaxRate: z.number().min(0).max(1),
   useStandardDeduction: z.boolean(),
   applyCapitalGainsRates: z.boolean(),
@@ -152,6 +156,26 @@ export const pensionIncomeSchema = z.object({
   taxTreatment: taxTreatmentSchema,
 })
 
+export const beneficiarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  sharePct: z.number().min(0).max(1),
+  stateOfResidence: stateTaxCodeSchema,
+  relationship: beneficiaryRelationshipSchema,
+  assumedOrdinaryRate: z.number().min(0).max(1),
+  assumedCapitalGainsRate: z.number().min(0).max(1),
+})
+
+export const deathStrategySchema = z.object({
+  enabled: z.boolean(),
+  funeralDisposition: funeralDispositionSchema,
+  funeralCostOverride: z.number().min(0),
+  estateTaxExemption: z.number().min(0),
+  estateTaxRate: z.number().min(0).max(1),
+  taxableStepUp: z.boolean(),
+  beneficiaries: z.array(beneficiarySchema).min(1),
+})
+
 export const scenarioStrategiesSchema = z.object({
   returnModel: returnModelStrategySchema,
   glidepath: glidepathStrategySchema,
@@ -166,6 +190,7 @@ export const scenarioStrategiesSchema = z.object({
   charitable: charitableStrategySchema,
   healthcare: healthcareStrategySchema,
   tax: taxStrategySchema,
+  death: deathStrategySchema,
   events: z.array(cashflowEventSchema),
   pensions: z.array(pensionIncomeSchema),
 })
@@ -276,6 +301,25 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     applyCapitalGainsRates: true,
     policyYear: 2024,
   },
+  death: {
+    enabled: false,
+    funeralDisposition: 'funeral',
+    funeralCostOverride: 0,
+    estateTaxExemption: 12920000,
+    estateTaxRate: 0.4,
+    taxableStepUp: true,
+    beneficiaries: [
+      {
+        id: createUuid(),
+        name: 'Heir',
+        sharePct: 1,
+        stateOfResidence: 'none',
+        relationship: 'child',
+        assumedOrdinaryRate: 0.22,
+        assumedCapitalGainsRate: 0.15,
+      },
+    ],
+  },
   events: [],
   pensions: [],
 })
@@ -291,6 +335,15 @@ export const normalizeScenarioStrategies = (
       ? [...provided, ...remaining]
       : provided
   })()
+  const beneficiaries =
+    strategies?.death?.beneficiaries && strategies.death.beneficiaries.length > 0
+      ? strategies.death.beneficiaries.map((entry) => ({
+          ...entry,
+          stateOfResidence:
+            entry.stateOfResidence ?? defaults.death.beneficiaries[0].stateOfResidence,
+          relationship: entry.relationship ?? defaults.death.beneficiaries[0].relationship,
+        }))
+      : defaults.death.beneficiaries
   return {
     ...defaults,
     ...strategies,
@@ -307,6 +360,7 @@ export const normalizeScenarioStrategies = (
     charitable: { ...defaults.charitable, ...strategies?.charitable },
     healthcare: { ...defaults.healthcare, ...strategies?.healthcare },
     tax: { ...defaults.tax, ...strategies?.tax },
+    death: { ...defaults.death, ...strategies?.death, beneficiaries },
     events: strategies?.events ?? defaults.events,
     pensions: strategies?.pensions ?? defaults.pensions,
   }

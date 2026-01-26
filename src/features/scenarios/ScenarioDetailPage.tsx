@@ -10,6 +10,9 @@ import {
   taxTreatmentSchema,
   withdrawalOrderTypeSchema,
   longTermCareLevelSchema,
+  funeralDispositionSchema,
+  stateTaxCodeSchema,
+  beneficiaryRelationshipSchema,
   normalizeScenarioStrategies,
   type InflationDefault,
   type Scenario,
@@ -59,6 +62,47 @@ const withdrawalOrderLabels: Record<string, string> = {
 const withdrawalOrderOptions = withdrawalOrderTypeSchema.options.map((option) => ({
   value: option,
   label: withdrawalOrderLabels[option] ?? option.replace('_', ' '),
+}))
+
+const stateTaxCodeLabels: Record<(typeof stateTaxCodeSchema.options)[number], string> = {
+  none: 'None/Custom',
+  ok: 'Oklahoma',
+  tx: 'Texas',
+  nj: 'New Jersey',
+}
+
+const stateTaxCodeOptions = stateTaxCodeSchema.options.map((option) => ({
+  value: option,
+  label: stateTaxCodeLabels[option] ?? option.toUpperCase(),
+}))
+
+const beneficiaryRelationshipLabels: Record<
+  (typeof beneficiaryRelationshipSchema.options)[number],
+  string
+> = {
+  spouse: 'Spouse',
+  civil_union_partner: 'Civil union partner',
+  domestic_partner: 'Domestic partner',
+  child: 'Child',
+  stepchild: 'Stepchild',
+  grandchild: 'Grandchild',
+  parent: 'Parent',
+  grandparent: 'Grandparent',
+  sibling: 'Sibling',
+  in_law: 'In-law',
+  niece_nephew: 'Niece/Nephew',
+  cousin: 'Cousin',
+  friend: 'Friend',
+  unrelated: 'Unrelated',
+  charity: 'Charity',
+  religious_institution: 'Religious institution',
+  educational_institution: 'Educational institution',
+  government_entity: 'Government entity',
+}
+
+const beneficiaryRelationshipOptions = beneficiaryRelationshipSchema.options.map((option) => ({
+  value: option,
+  label: beneficiaryRelationshipLabels[option] ?? option,
 }))
 
 const addYearsToIsoDate = (isoDate: string, years: number) => {
@@ -543,6 +587,7 @@ const ScenarioDetailPage = () => {
   const investmentAccountIds = watch('scenario.investmentAccountIds')
   const taxPolicyYear = watch('scenario.strategies.tax.policyYear')
   const taxFilingStatus = watch('scenario.strategies.tax.filingStatus')
+  const deathEnabled = watch('scenario.strategies.death.enabled')
   const rothConversionStartAge = watch('scenario.strategies.rothConversion.startAge')
   const rothConversionEndAge = watch('scenario.strategies.rothConversion.endAge')
   const ladderLeadTimeYears = watch('scenario.strategies.rothLadder.leadTimeYears')
@@ -588,6 +633,15 @@ const ScenarioDetailPage = () => {
   } = useFieldArray({
     control,
     name: 'scenario.strategies.pensions',
+  })
+  const {
+    fields: beneficiaryRows,
+    append: appendBeneficiary,
+    remove: removeBeneficiary,
+    replace: replaceBeneficiaries,
+  } = useFieldArray({
+    control,
+    name: 'scenario.strategies.death.beneficiaries',
   })
 
   const spendingSummaryRows = useMemo(
@@ -964,11 +1018,20 @@ const ScenarioDetailPage = () => {
     replaceGlidepathTargets(normalizedScenario.strategies.glidepath.targets)
     replaceEvents(normalizedScenario.strategies.events)
     replacePensions(normalizedScenario.strategies.pensions)
+    replaceBeneficiaries(normalizedScenario.strategies.death.beneficiaries)
     setFutureWorkPeriods(futureWorkPeriods.map(normalizeFutureWorkPeriod))
     setSpendingLineItems(spendingLineItems.map(normalizeSpendingLineItem))
     setSelectionError(null)
     setIsLoading(false)
-  }, [id, replaceEvents, replaceGlidepathTargets, replacePensions, reset, storage])
+  }, [
+    id,
+    replaceBeneficiaries,
+    replaceEvents,
+    replaceGlidepathTargets,
+    replacePensions,
+    reset,
+    storage,
+  ])
 
   const loadRuns = useCallback(
     async (scenarioId: string) => {
@@ -2530,9 +2593,11 @@ const ScenarioDetailPage = () => {
               <label className="field">
                 <span>State</span>
                 <select {...register('scenario.strategies.tax.stateCode')}>
-                  <option value="none">None/Custom</option>
-                  <option value="ok">Oklahoma</option>
-                  <option value="tx">Texas</option>
+                  {stateTaxCodeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label className="field checkbox">
@@ -2546,6 +2611,204 @@ const ScenarioDetailPage = () => {
                 />
                 <span>Apply capital gains rates</span>
               </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Death & legacy</h3>
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.death.enabled')} />
+                <span>Enable death/legacy modeling</span>
+              </label>
+              <label className="field">
+                <span>Funeral option</span>
+                <select
+                  {...register('scenario.strategies.death.funeralDisposition')}
+                  disabled={!deathEnabled}
+                >
+                  {funeralDispositionSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Funeral cost override</span>
+                <input
+                  type="number"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.funeralCostOverride', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Estate tax exemption</span>
+                <input
+                  type="number"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.estateTaxExemption', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Estate tax rate</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.estateTaxRate', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.taxableStepUp')}
+                />
+                <span>Step-up basis for taxable holdings</span>
+              </label>
+            </div>
+
+            <div className="stack">
+              <div className="row">
+                <h4>Beneficiaries</h4>
+                <button
+                  className="button secondary"
+                  type="button"
+                  disabled={!deathEnabled}
+                  onClick={() =>
+                    appendBeneficiary({
+                      id: createUuid(),
+                      name: 'Beneficiary',
+                      sharePct: 1,
+                      stateOfResidence: 'none',
+                      relationship: 'child',
+                      assumedOrdinaryRate: 0.22,
+                      assumedCapitalGainsRate: 0.15,
+                    })
+                  }
+                >
+                  Add beneficiary
+                </button>
+              </div>
+              {beneficiaryRows.length === 0 ? (
+                <p className="muted">No beneficiaries yet.</p>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Relationship</th>
+                      <th>Share</th>
+                      <th>State of residence</th>
+                      <th>Assumed ordinary rate</th>
+                      <th>Assumed cap gains rate</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {beneficiaryRows.map((field, index) => (
+                      <tr key={field.id}>
+                        <td>
+                          <input
+                            type="hidden"
+                            {...register(`scenario.strategies.death.beneficiaries.${index}.id`)}
+                          />
+                          <input
+                            defaultValue={field.name}
+                            disabled={!deathEnabled}
+                            {...register(
+                              `scenario.strategies.death.beneficiaries.${index}.name`,
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            defaultValue={field.relationship ?? 'child'}
+                            disabled={!deathEnabled}
+                            {...register(
+                              `scenario.strategies.death.beneficiaries.${index}.relationship`,
+                            )}
+                          >
+                            {beneficiaryRelationshipOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            defaultValue={field.sharePct}
+                            disabled={!deathEnabled}
+                            {...register(
+                              `scenario.strategies.death.beneficiaries.${index}.sharePct`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            defaultValue={field.stateOfResidence ?? 'none'}
+                            disabled={!deathEnabled}
+                            {...register(
+                              `scenario.strategies.death.beneficiaries.${index}.stateOfResidence`,
+                            )}
+                          >
+                            {stateTaxCodeOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            defaultValue={field.assumedOrdinaryRate}
+                            disabled={!deathEnabled}
+                            {...register(
+                              `scenario.strategies.death.beneficiaries.${index}.assumedOrdinaryRate`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
+                            defaultValue={field.assumedCapitalGainsRate}
+                            disabled={!deathEnabled}
+                            {...register(
+                              `scenario.strategies.death.beneficiaries.${index}.assumedCapitalGainsRate`,
+                              { valueAsNumber: true },
+                            )}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            className="link-button"
+                            type="button"
+                            disabled={!deathEnabled}
+                            onClick={() => removeBeneficiary(index)}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 

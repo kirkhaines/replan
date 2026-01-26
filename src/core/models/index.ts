@@ -12,9 +12,12 @@ export {
   holdingTypeSchema,
   inflationTypeSchema,
   filingStatusSchema,
+  stateTaxCodeSchema,
+  beneficiaryRelationshipSchema,
   taxTreatmentSchema,
   longTermCareLevelSchema,
   withdrawalOrderTypeSchema,
+  funeralDispositionSchema,
 } from './enums'
 export type { Person } from './person'
 export { personSchema } from './person'
