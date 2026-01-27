@@ -248,6 +248,16 @@ const RunResultsGraphs = ({
                         const label = row?.year
                           ? `${row.year} (age ${row.age ?? '-'})`
                           : `${row?.age ?? ''}`
+                        const bracketKeys = new Set(
+                          ordinaryIncomeChart.bracketLines.map((line) => line.key),
+                        )
+                        const total = payload.reduce((sum, entry) => {
+                          const key = String(entry.dataKey ?? '')
+                          if (bracketKeys.has(key)) {
+                            return sum
+                          }
+                          return sum + Number(entry.value ?? 0)
+                        }, 0)
                         return (
                           <div
                             style={{
@@ -259,11 +269,32 @@ const RunResultsGraphs = ({
                             }}
                           >
                             <div className="tooltip-label">{label}</div>
-                            {payload.map((entry) => (
-                              <div key={String(entry.dataKey)} style={{ color: entry.color }}>
-                                {entry.name}: {formatCurrency(Number(entry.value))}
-                              </div>
-                            ))}
+                            {(() => {
+                              const stackedEntries = payload.filter((entry) =>
+                                entry.dataKey && !bracketKeys.has(String(entry.dataKey)),
+                              )
+                              const bracketEntries = payload.filter(
+                                (entry) =>
+                                  entry.dataKey && bracketKeys.has(String(entry.dataKey)),
+                              )
+                              return (
+                                <>
+                                  {stackedEntries.map((entry) => (
+                                    <div key={String(entry.dataKey)} style={{ color: entry.color }}>
+                                      {entry.name}: {formatCurrency(Number(entry.value))}
+                                    </div>
+                                  ))}
+                                  <div className="tooltip-total">
+                                    Total: {formatCurrency(total)}
+                                  </div>
+                                  {bracketEntries.map((entry) => (
+                                    <div key={String(entry.dataKey)} style={{ color: entry.color }}>
+                                      {entry.name}: {formatCurrency(Number(entry.value))}
+                                    </div>
+                                  ))}
+                                </>
+                              )
+                            })()}
                           </div>
                         )
                       }}
