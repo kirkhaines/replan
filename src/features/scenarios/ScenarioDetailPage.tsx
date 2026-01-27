@@ -1550,7 +1550,7 @@ const ScenarioDetailPage = () => {
         </div>
       ) : null}
 
-      <form className="card stack" onSubmit={handleSubmit(onSubmit, onInvalid)}>
+      <form className="stack" onSubmit={handleSubmit(onSubmit, onInvalid)}>
         <input type="hidden" {...register('scenario.id')} />
         <input type="hidden" {...register('scenario.createdAt', { valueAsNumber: true })} />
         <input type="hidden" {...register('scenario.updatedAt', { valueAsNumber: true })} />
@@ -1582,306 +1582,23 @@ const ScenarioDetailPage = () => {
           />
         ))}
 
-        <div className="form-grid">
-          <label className="field">
-            <span>Scenario name</span>
-            <input {...register('scenario.name')} />
-            {errors.scenario?.name ? (
-              <span className="error">{errors.scenario.name.message}</span>
-            ) : null}
-          </label>
-        </div>
-        <label className="field">
-          <span>Description</span>
-          <textarea rows={3} {...register('scenario.description')} />
-        </label>
-
-        <div className="stack">
+        <div className="card stack">
           <div className="row">
-            <h2>People</h2>
-            <button className="button secondary" type="button" onClick={handleAddPersonStrategy}>
-              Add person
-            </button>
+            <h2>Basic config</h2>
           </div>
-          {scenarioPersonStrategies.length === 0 ? (
-            <p className="muted">No person strategies yet. Create one from People.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Person</th>
-                  <th>Date of birth</th>
-                  <th>Work strategy</th>
-                  <th>Social Security start</th>
-                  <th>Life expectancy</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scenarioPersonStrategies.map((strategy) => {
-                  const person = peopleById.get(strategy.personId)
-                  const socialSecurity = socialSecurityById.get(strategy.socialSecurityStrategyId)
-                  const futureWork = futureWorkById.get(strategy.futureWorkStrategyId)
-                  const workEnd = futureWorkEndByStrategyId.get(strategy.futureWorkStrategyId)
-                  return (
-                    <tr key={strategy.id}>
-                      <td>
-                        {person ? (
-                          <Link
-                            className="link"
-                            to={`/person-strategies/${strategy.id}`}
-                            state={{ from: location.pathname, scenarioId: scenario?.id }}
-                          >
-                            {person.name}
-                          </Link>
-                        ) : (
-                          'Unknown'
-                        )}
-                      </td>
-                      <td>{person?.dateOfBirth ?? '-'}</td>
-                      <td>
-                        {futureWork
-                          ? `${futureWork.name} ${
-                              workEnd ? `(ends ${workEnd})` : '(does not end)'
-                            }`
-                          : '-'}
-                      </td>
-                      <td>
-                        {person && socialSecurity?.startDate
-                          ? `${socialSecurity.startDate} (age ${getAgeInYearsAtDate(
-                              person.dateOfBirth,
-                              socialSecurity.startDate,
-                            )})`
-                          : '-'}
-                      </td>
-                      <td>{person?.lifeExpectancy ?? '-'}</td>
-                      <td>
-                          <button
-                            className="link-button"
-                            type="button"
-                            onClick={() => void handleRemovePersonStrategy(strategy.id)}
-                          >
-                            Remove
-                          </button>
-                        </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="stack">
-          <div className="row">
-            <h2>Cash accounts</h2>
-            <div className="button-row">
-              <select
-                aria-label="Add cash account"
-                value={selectedCashAccountId}
-                onChange={(event) => setSelectedCashAccountId(event.target.value)}
-                disabled={availableCashAccounts.length === 0}
-              >
-                {availableCashAccounts.length === 0 ? (
-                  <option value="">No cash accounts available</option>
-                ) : null}
-                {availableCashAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="button secondary"
-                type="button"
-                onClick={handleAddCashAccount}
-                disabled={!selectedCashAccountId}
-              >
-                Add cash account
-              </button>
-            </div>
-          </div>
-          {scenarioCashAccounts.length === 0 ? (
-            <p className="muted">No cash accounts available.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Balance</th>
-                  <th>Interest rate</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scenarioCashAccounts.map((account) => (
-                  <tr key={account.id}>
-                    <td>
-                      <Link
-                        className="link"
-                        to={`/accounts/cash/${account.id}`}
-                        state={{ from: location.pathname }}
-                      >
-                        {account.name}
-                      </Link>
-                    </td>
-                    <td>{formatCurrency(account.balance)}</td>
-                    <td>{account.interestRate}</td>
-                    <td>
-                      <button
-                        className="link-button"
-                        type="button"
-                        onClick={() => void handleRemoveCashAccount(account.id)}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="stack">
-          <div className="row">
-            <h2>Investment accounts</h2>
-            <div className="button-row">
-              <select
-                aria-label="Add investment account"
-                value={selectedInvestmentAccountId}
-                onChange={(event) => setSelectedInvestmentAccountId(event.target.value)}
-                disabled={availableInvestmentAccounts.length === 0}
-              >
-                {availableInvestmentAccounts.length === 0 ? (
-                  <option value="">No investment accounts available</option>
-                ) : null}
-                {availableInvestmentAccounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="button secondary"
-                type="button"
-                onClick={handleAddInvestmentAccount}
-                disabled={!selectedInvestmentAccountId}
-              >
-                Add investment account
-              </button>
-            </div>
-          </div>
-          {scenarioInvestmentAccounts.length === 0 ? (
-            <p className="muted">No investment accounts available.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Balance</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scenarioInvestmentAccounts.map((account) => (
-                  <tr key={account.id}>
-                    <td>
-                      <Link
-                        className="link"
-                        to={`/accounts/investment/${account.id}`}
-                        state={{ from: location.pathname }}
-                      >
-                        {account.name}
-                      </Link>
-                    </td>
-                    <td>{formatCurrency(investmentBalances[account.id] ?? 0)}</td>
-                    <td>
-                      <button
-                        className="link-button"
-                        type="button"
-                        onClick={() => void handleRemoveInvestmentAccount(account.id)}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="stack">
-          <div className="row">
-            <h2>Spending strategy</h2>
-          </div>
-          <div className="row">
+          <div className="form-grid">
             <label className="field">
-              <span>Strategy</span>
-              <select
-                value={selectedSpendingStrategyId ?? ''}
-                onChange={(event) => void handleSpendingStrategySelect(event.target.value)}
-              >
-                {spendingStrategies.length === 0 ? (
-                  <option value="">No spending strategies available</option>
-                ) : null}
-                {spendingStrategies.map((strategy) => (
-                  <option key={strategy.id} value={strategy.id}>
-                    {strategy.name}
-                  </option>
-                ))}
-              </select>
+              <span>Scenario name</span>
+              <input {...register('scenario.name')} />
+              {errors.scenario?.name ? (
+                <span className="error">{errors.scenario.name.message}</span>
+              ) : null}
             </label>
-            <button
-              className="button secondary"
-              type="button"
-              disabled={!selectedSpendingStrategyId}
-              onClick={() =>
-                selectedSpendingStrategyId
-                  ? navigate(`/spending-strategies/${selectedSpendingStrategyId}`, {
-                      state: { from: location.pathname },
-                    })
-                  : null
-              }
-            >
-              Edit spending strategy
-            </button>
-            <button className="button secondary" type="button" onClick={handleAddSpendingStrategy}>
-              Add spending strategy
-            </button>
           </div>
-
-          {spendingSummaryRows.length === 0 ? (
-            <p className="muted">No spending line items for this strategy.</p>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Start</th>
-                  <th>End</th>
-                  <th>Need total (monthly)</th>
-                  <th>Want total (monthly)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {spendingSummaryRows.map((row) => (
-                  <tr key={`${row.startLabel}-${row.endLabel}`}>
-                    <td>{row.startLabel}</td>
-                    <td>{row.endLabel}</td>
-                    <td>{formatCurrency(row.needTotal)}</td>
-                    <td>{formatCurrency(row.wantTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="stack">
-          <div className="row">
-            <h2>Simulation strategies</h2>
-          </div>
+          <label className="field">
+            <span>Description</span>
+            <textarea rows={3} {...register('scenario.description')} />
+          </label>
 
           <div className="stack">
             <h3>Market</h3>
@@ -1956,125 +1673,148 @@ const ScenarioDetailPage = () => {
               })}
             </div>
           </div>
+        </div>
 
-          <div className="stack">
-            <h3>Allocation</h3>
-            <div className="form-grid">
-              <label className="field">
-                <span>Glidepath mode</span>
-                <select {...register('scenario.strategies.glidepath.mode')}>
-                  <option value="age">Age</option>
-                  <option value="year">Year</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Glidepath scope</span>
-                <select {...register('scenario.strategies.glidepath.scope')}>
-                  <option value="global">Global</option>
-                </select>
-              </label>
-            </div>
+        <div className="card stack">
+          <div className="row">
+            <h2>People and assets</h2>
           </div>
-
           <div className="stack">
             <div className="row">
-              <h3>Glidepath targets</h3>
-              <button
-                className="button secondary"
-                type="button"
-                onClick={() =>
-                  appendGlidepathTarget({
-                    age: 65,
-                    equity: 0.6,
-                    bonds: 0.35,
-                    realEstate: 0.05,
-                    other: 0,
-                  })
-                }
-              >
-                Add target
+              <h3>People</h3>
+              <button className="button secondary" type="button" onClick={handleAddPersonStrategy}>
+                Add person
               </button>
             </div>
-            {glidepathTargetFields.length === 0 ? (
-              <p className="muted">No glidepath targets yet.</p>
+            {scenarioPersonStrategies.length === 0 ? (
+              <p className="muted">No person strategies yet. Create one from People.</p>
             ) : (
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Age</th>
-                    <th>Equity</th>
-                    <th>Bonds</th>
-                    <th>Cash</th>
-                    <th>Real estate</th>
-                    <th>Other</th>
+                    <th>Person</th>
+                    <th>Date of birth</th>
+                    <th>Work strategy</th>
+                    <th>Social Security start</th>
+                    <th>Life expectancy</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {glidepathTargetFields.map((field, index) => (
-                    <tr key={field.id}>
-                      <td>
-                        <input
-                          type="number"
-                          defaultValue={field.age}
-                          {...register(
-                            `scenario.strategies.glidepath.targets.${index}.age`,
-                            { valueAsNumber: true },
+                  {scenarioPersonStrategies.map((strategy) => {
+                    const person = peopleById.get(strategy.personId)
+                    const socialSecurity = socialSecurityById.get(strategy.socialSecurityStrategyId)
+                    const futureWork = futureWorkById.get(strategy.futureWorkStrategyId)
+                    const workEnd = futureWorkEndByStrategyId.get(strategy.futureWorkStrategyId)
+                    return (
+                      <tr key={strategy.id}>
+                        <td>
+                          {person ? (
+                            <Link
+                              className="link"
+                              to={`/person-strategies/${strategy.id}`}
+                              state={{ from: location.pathname, scenarioId: scenario?.id }}
+                            >
+                              {person.name}
+                            </Link>
+                          ) : (
+                            'Unknown'
                           )}
-                        />
-                      </td>
+                        </td>
+                        <td>{person?.dateOfBirth ?? '-'}</td>
+                        <td>
+                          {futureWork
+                            ? `${futureWork.name} ${
+                                workEnd ? `(ends ${workEnd})` : '(does not end)'
+                              }`
+                            : '-'}
+                        </td>
+                        <td>
+                          {person && socialSecurity?.startDate
+                            ? `${socialSecurity.startDate} (age ${getAgeInYearsAtDate(
+                                person.dateOfBirth,
+                                socialSecurity.startDate,
+                              )})`
+                            : '-'}
+                        </td>
+                        <td>{person?.lifeExpectancy ?? '-'}</td>
+                        <td>
+                          <button
+                            className="link-button"
+                            type="button"
+                            onClick={() => void handleRemovePersonStrategy(strategy.id)}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="stack">
+            <div className="row">
+              <h3>Cash accounts</h3>
+              <div className="button-row">
+                <select
+                  aria-label="Add cash account"
+                  value={selectedCashAccountId}
+                  onChange={(event) => setSelectedCashAccountId(event.target.value)}
+                  disabled={availableCashAccounts.length === 0}
+                >
+                  {availableCashAccounts.length === 0 ? (
+                    <option value="">No cash accounts available</option>
+                  ) : null}
+                  {availableCashAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={handleAddCashAccount}
+                  disabled={!selectedCashAccountId}
+                >
+                  Add cash account
+                </button>
+              </div>
+            </div>
+            {scenarioCashAccounts.length === 0 ? (
+              <p className="muted">No cash accounts available.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Balance</th>
+                    <th>Interest rate</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scenarioCashAccounts.map((account) => (
+                    <tr key={account.id}>
                       <td>
-                        <input
-                          type="number"
-                          step="0.01"
-                          defaultValue={field.equity}
-                          {...register(
-                            `scenario.strategies.glidepath.targets.${index}.equity`,
-                            { valueAsNumber: true },
-                          )}
-                        />
+                        <Link
+                          className="link"
+                          to={`/accounts/cash/${account.id}`}
+                          state={{ from: location.pathname }}
+                        >
+                          {account.name}
+                        </Link>
                       </td>
-                      <td>
-                        <input
-                          type="number"
-                          step="0.01"
-                          defaultValue={field.bonds}
-                          {...register(
-                            `scenario.strategies.glidepath.targets.${index}.bonds`,
-                            { valueAsNumber: true },
-                          )}
-                        />
-                      </td>
-                      <td>
-                        <span className="muted">Using cash buffer</span>
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          step="0.01"
-                          defaultValue={field.realEstate}
-                          {...register(
-                            `scenario.strategies.glidepath.targets.${index}.realEstate`,
-                            { valueAsNumber: true },
-                          )}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          step="0.01"
-                          defaultValue={field.other}
-                          {...register(
-                            `scenario.strategies.glidepath.targets.${index}.other`,
-                            { valueAsNumber: true },
-                          )}
-                        />
-                      </td>
+                      <td>{formatCurrency(account.balance)}</td>
+                      <td>{account.interestRate}</td>
                       <td>
                         <button
                           className="link-button"
                           type="button"
-                          onClick={() => removeGlidepathTarget(index)}
+                          onClick={() => void handleRemoveCashAccount(account.id)}
                         >
                           Remove
                         </button>
@@ -2087,480 +1827,185 @@ const ScenarioDetailPage = () => {
           </div>
 
           <div className="stack">
-            <div className="form-grid">
-              <label className="field">
-                <span>Rebalance frequency</span>
-                <select {...register('scenario.strategies.rebalancing.frequency')}>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="annual">Annual</option>
-                  <option value="threshold">Threshold</option>
+            <div className="row">
+              <h3>Investment accounts</h3>
+              <div className="button-row">
+                <select
+                  aria-label="Add investment account"
+                  value={selectedInvestmentAccountId}
+                  onChange={(event) => setSelectedInvestmentAccountId(event.target.value)}
+                  disabled={availableInvestmentAccounts.length === 0}
+                >
+                  {availableInvestmentAccounts.length === 0 ? (
+                    <option value="">No investment accounts available</option>
+                  ) : null}
+                  {availableInvestmentAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
                 </select>
-              </label>
-              <label className="field">
-                <span>Drift threshold</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register('scenario.strategies.rebalancing.driftThreshold', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Min trade amount</span>
-                <input
-                  type="number"
-                  {...register('scenario.strategies.rebalancing.minTradeAmount', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.rebalancing.useContributions')} />
-                <span>Use contributions first</span>
-              </label>
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.rebalancing.taxAware')} />
-                <span>Tax aware</span>
-              </label>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={handleAddInvestmentAccount}
+                  disabled={!selectedInvestmentAccountId}
+                >
+                  Add investment account
+                </button>
+              </div>
             </div>
-
+            {scenarioInvestmentAccounts.length === 0 ? (
+              <p className="muted">No investment accounts available.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Balance</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scenarioInvestmentAccounts.map((account) => (
+                    <tr key={account.id}>
+                      <td>
+                        <Link
+                          className="link"
+                          to={`/accounts/investment/${account.id}`}
+                          state={{ from: location.pathname }}
+                        >
+                          {account.name}
+                        </Link>
+                      </td>
+                      <td>{formatCurrency(investmentBalances[account.id] ?? 0)}</td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => void handleRemoveInvestmentAccount(account.id)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <div className="stack">
-            <h3>Withdrawals</h3>
-            <div className="stack">
-              <h4>Cash buffer</h4>
-              <div className="form-grid">
-                <label className="field">
-                  <span>Cash buffer target (months)</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.cashBuffer.targetMonths', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.withdrawal.useCashFirst')}
-                  />
-                  <span>Use cash first</span>
-                </label>
-                <label className="field">
-                  <span>Cash buffer min (months)</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.cashBuffer.minMonths', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Cash buffer max (months)</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.cashBuffer.maxMonths', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-              </div>
+            <div className="row">
+              <h3>Pensions</h3>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() => {
+                  const today = new Date().toISOString().slice(0, 10)
+                  appendPension({
+                    id: createUuid(),
+                    name: 'Pension',
+                    startDate: today,
+                    endDate: '',
+                    monthlyAmount: 0,
+                    inflationType: 'cpi',
+                    taxTreatment: 'ordinary',
+                  })
+                }}
+              >
+                Add pension
+              </button>
             </div>
-
-            <div className="stack">
-              <h4>Withdrawal order</h4>
-              <div className="form-grid">
-                <label className="field">
-                  <span>Withdrawal order 1</span>
-                  <select {...register('scenario.strategies.withdrawal.order.0')}>
-                    {withdrawalOrderOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Withdrawal order 2</span>
-                  <select {...register('scenario.strategies.withdrawal.order.1')}>
-                    {withdrawalOrderOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Withdrawal order 3</span>
-                  <select {...register('scenario.strategies.withdrawal.order.2')}>
-                    {withdrawalOrderOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Withdrawal order 4</span>
-                  <select {...register('scenario.strategies.withdrawal.order.3')}>
-                    {withdrawalOrderOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Withdrawal order 5</span>
-                  <select {...register('scenario.strategies.withdrawal.order.4')}>
-                    {withdrawalOrderOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </div>
-
-            <div className="stack">
-              <h4>Withdrawal guardrails</h4>
-              <div className="form-grid">
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.withdrawal.avoidEarlyPenalty')}
-                  />
-                  <span>Avoid early penalties</span>
-                </label>
-                <label className="field">
-                  <span>Guardrail percent</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register('scenario.strategies.withdrawal.guardrailPct', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Taxable gain harvest target</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.withdrawal.taxableGainHarvestTarget', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="stack">
-              <h4>Taxable lots</h4>
-              <div className="form-grid">
-                <label className="field">
-                  <span>Cost basis method</span>
-                  <select {...register('scenario.strategies.taxableLot.costBasisMethod')}>
-                    <option value="average">Average</option>
-                    <option value="fifo">FIFO</option>
-                    <option value="lifo">LIFO</option>
-                  </select>
-                </label>
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.taxableLot.harvestLosses')}
-                  />
-                  <span>Harvest losses</span>
-                </label>
-                <label className="field">
-                  <span>Gain realization target</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.taxableLot.gainRealizationTarget', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="stack">
-              <h4>Early retirement</h4>
-              <div className="form-grid">
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.earlyRetirement.allowPenalty')}
-                  />
-                  <span>Allow early penalties</span>
-                </label>
-                <label className="field">
-                  <span>Penalty rate</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register('scenario.strategies.earlyRetirement.penaltyRate', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.earlyRetirement.use72t')}
-                  />
-                  <span>Use 72(t)</span>
-                </label>
-                <label className="field">
-                  <span>Bridge cash years</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.earlyRetirement.bridgeCashYears', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="stack">
-            <h3>Conversions</h3>
-
-            <div className="stack">
-              <h4>Roth conversions</h4>
-              <div className="form-grid">
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.rothConversion.enabled')}
-                  />
-                  <span>Enable Roth conversions</span>
-                </label>
-                <label className="field">
-                  <span>Target tax bracket</span>
-                  <select
-                    {...register('scenario.strategies.rothConversion.targetOrdinaryBracketRate', {
-                      setValueAs: (value) => (value === '' ? 0 : Number(value)),
-                    })}
-                  >
-                    <option value={0}>None</option>
-                    {rothConversionBrackets.map((bracket) => (
-                      <option key={`${bracket.rate}-${bracket.upTo ?? 'top'}`} value={bracket.rate}>
-                        {`${Math.round(bracket.rate * 100)}% bracket${
-                          bracket.upTo ? ` (up to ${formatCurrency(bracket.upTo)})` : ''
-                        }`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Conversion start age</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothConversion.startAge', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Conversion end age</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothConversion.endAge', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Min conversion</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothConversion.minConversion', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Max conversion</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothConversion.maxConversion', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Conversion start date</span>
-                  <input readOnly value={rothConversionStartDate} />
-                </label>
-                <label className="field">
-                  <span>Conversion end date</span>
-                  <input readOnly value={rothConversionEndDate} />
-                </label>
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.rothConversion.respectIrmaa')}
-                  />
-                  <span>Respect IRMAA</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="stack">
-              <h4>Roth ladder</h4>
-              <div className="form-grid">
-                <label className="field checkbox">
-                  <input
-                    type="checkbox"
-                    {...register('scenario.strategies.rothLadder.enabled')}
-                  />
-                  <span>Enable Roth ladder</span>
-                </label>
-                <label className="field">
-                  <span>Ladder lead time (years)</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothLadder.leadTimeYears', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Availability start age (after lead time)</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothLadder.startAge', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Availability end age (after lead time)</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothLadder.endAge', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <div className="muted">
-                  Availability window:<br/>
-                  {ladderStartDate}–{ladderEndDate}
-                </div>
-                <div className="muted">
-                  Conversion window:<br/>
-                  {ladderConversionStart.toFixed(1)}–{ladderConversionEnd.toFixed(1)}<br/>
-                  {ladderConversionStartDate}–{ladderConversionEndDate}
-                </div>
-                <div className="stack" style={{ gridColumn: '1 / -1' }}>
-                  <span className="muted">
-                    Spending totals (availability window)
-                  </span>
-                  {ladderSpendingRows.length === 0 ? (
-                    <p className="muted">No spending intervals in this availability range.</p>
-                  ) : (
-                    <table className="table compact">
-                      <thead>
-                        <tr>
-                          <th>Start age</th>
-                          <th>End age</th>
-                          <th>Need total (annual)</th>
-                          <th>Want total (annual)</th>
-                          <th>Healthcare total (annual)</th>
-                          <th>Total (annual)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ladderSpendingRows.map((row) => (
-                          <tr key={`${row.startAgeLabel}-${row.endAgeLabel}`}>
-                            <td>{row.startAgeLabel}</td>
-                            <td>{row.endAgeLabel}</td>
-                            <td>{formatCurrency(row.annualNeed)}</td>
-                            <td>{formatCurrency(row.annualWant)}</td>
-                            <td>{formatCurrency(row.annualHealthcare)}</td>
-                            <td>{formatCurrency(row.annualTotal)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-                <label className="field">
-                  <span>Target after-tax spending (annual)</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothLadder.targetAfterTaxSpending', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Annual conversion</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rothLadder.annualConversion', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="stack">
-              <h4>Required minimum distributions</h4>
-              <div className="form-grid">
-                <label className="field checkbox">
-                  <input type="checkbox" {...register('scenario.strategies.rmd.enabled')} />
-                  <span>Apply RMDs</span>
-                </label>
-                <label className="field">
-                  <span>RMD start age</span>
-                  <input
-                    type="number"
-                    {...register('scenario.strategies.rmd.startAge', { valueAsNumber: true })}
-                  />
-                </label>
-                <label className="field">
-                  <span>Excess handling</span>
-                  <select {...register('scenario.strategies.rmd.excessHandling')}>
-                    <option value="spend">Spend</option>
-                    <option value="taxable">Taxable</option>
-                    <option value="roth">Roth</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Withholding rate</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    {...register('scenario.strategies.rmd.withholdingRate', {
-                      valueAsNumber: true,
-                    })}
-                  />
-                </label>
-                <div className="field">
-                  <span>RMD account types</span>
-                  <div className="line-item-flags">
-                    {taxTypeSchema.options.map((taxType) => (
-                      <label className="field checkbox" key={taxType}>
+            {pensionRows.length === 0 ? (
+              <p className="muted">No pensions yet.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Monthly</th>
+                    <th>Inflation</th>
+                    <th>Tax</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pensionRows.map((field, index) => (
+                    <tr key={field.id}>
+                      <td>
                         <input
-                          type="checkbox"
-                          value={taxType}
-                          {...register('scenario.strategies.rmd.accountTypes')}
+                          type="hidden"
+                          {...register(`scenario.strategies.pensions.${index}.id`)}
                         />
-                        <span>{taxType}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+                        <input
+                          defaultValue={field.name}
+                          {...register(`scenario.strategies.pensions.${index}.name`)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          defaultValue={field.startDate}
+                          {...register(`scenario.strategies.pensions.${index}.startDate`)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="date"
+                          defaultValue={field.endDate ?? ''}
+                          {...register(`scenario.strategies.pensions.${index}.endDate`)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          defaultValue={field.monthlyAmount}
+                          {...register(`scenario.strategies.pensions.${index}.monthlyAmount`, {
+                            valueAsNumber: true,
+                          })}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          defaultValue={field.inflationType}
+                          {...register(`scenario.strategies.pensions.${index}.inflationType`)}
+                        >
+                          {inflationTypeSchema.options.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          defaultValue={field.taxTreatment}
+                          {...register(`scenario.strategies.pensions.${index}.taxTreatment`)}
+                        >
+                          {taxTreatmentSchema.options.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => removePension(index)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <div className="stack">
@@ -2613,203 +2058,76 @@ const ScenarioDetailPage = () => {
               </label>
             </div>
           </div>
+        </div>
 
+        <div className="card stack">
+          <div className="row">
+            <h2>Spending</h2>
+          </div>
           <div className="stack">
-            <h3>Death & legacy</h3>
-            <div className="form-grid">
-              <label className="field checkbox">
-                <input type="checkbox" {...register('scenario.strategies.death.enabled')} />
-                <span>Enable death/legacy modeling</span>
-              </label>
+            <div className="row">
+              <h3>Budget</h3>
+            </div>
+            <div className="row">
               <label className="field">
-                <span>Funeral option</span>
+                <span>Budget</span>
                 <select
-                  {...register('scenario.strategies.death.funeralDisposition')}
-                  disabled={!deathEnabled}
+                  value={selectedSpendingStrategyId ?? ''}
+                  onChange={(event) => void handleSpendingStrategySelect(event.target.value)}
                 >
-                  {funeralDispositionSchema.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
+                  {spendingStrategies.length === 0 ? (
+                    <option value="">No spending strategies available</option>
+                  ) : null}
+                  {spendingStrategies.map((strategy) => (
+                    <option key={strategy.id} value={strategy.id}>
+                      {strategy.name}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className="field">
-                <span>Funeral cost override</span>
-                <input
-                  type="number"
-                  disabled={!deathEnabled}
-                  {...register('scenario.strategies.death.funeralCostOverride', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Estate tax exemption</span>
-                <input
-                  type="number"
-                  disabled={!deathEnabled}
-                  {...register('scenario.strategies.death.estateTaxExemption', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field">
-                <span>Estate tax rate</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  disabled={!deathEnabled}
-                  {...register('scenario.strategies.death.estateTaxRate', {
-                    valueAsNumber: true,
-                  })}
-                />
-              </label>
-              <label className="field checkbox">
-                <input
-                  type="checkbox"
-                  disabled={!deathEnabled}
-                  {...register('scenario.strategies.death.taxableStepUp')}
-                />
-                <span>Step-up basis for taxable holdings</span>
-              </label>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={!selectedSpendingStrategyId}
+                onClick={() =>
+                  selectedSpendingStrategyId
+                    ? navigate(`/spending-strategies/${selectedSpendingStrategyId}`, {
+                        state: { from: location.pathname },
+                      })
+                    : null
+                }
+              >
+                Edit budget
+              </button>
+              <button className="button secondary" type="button" onClick={handleAddSpendingStrategy}>
+                Add budget
+              </button>
             </div>
 
-            <div className="stack">
-              <div className="row">
-                <h4>Beneficiaries</h4>
-                <button
-                  className="button secondary"
-                  type="button"
-                  disabled={!deathEnabled}
-                  onClick={() =>
-                    appendBeneficiary({
-                      id: createUuid(),
-                      name: 'Beneficiary',
-                      sharePct: 1,
-                      stateOfResidence: 'none',
-                      relationship: 'child',
-                      assumedOrdinaryRate: 0.22,
-                      assumedCapitalGainsRate: 0.15,
-                    })
-                  }
-                >
-                  Add beneficiary
-                </button>
-              </div>
-              {beneficiaryRows.length === 0 ? (
-                <p className="muted">No beneficiaries yet.</p>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Relationship</th>
-                      <th>Share</th>
-                      <th>State of residence</th>
-                      <th>Assumed ordinary rate</th>
-                      <th>Assumed cap gains rate</th>
-                      <th>Actions</th>
+            {spendingSummaryRows.length === 0 ? (
+              <p className="muted">No spending line items for this strategy.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Start</th>
+                    <th>End</th>
+                    <th>Need total (monthly)</th>
+                    <th>Want total (monthly)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {spendingSummaryRows.map((row) => (
+                    <tr key={`${row.startLabel}-${row.endLabel}`}>
+                      <td>{row.startLabel}</td>
+                      <td>{row.endLabel}</td>
+                      <td>{formatCurrency(row.needTotal)}</td>
+                      <td>{formatCurrency(row.wantTotal)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {beneficiaryRows.map((field, index) => (
-                      <tr key={field.id}>
-                        <td>
-                          <input
-                            type="hidden"
-                            {...register(`scenario.strategies.death.beneficiaries.${index}.id`)}
-                          />
-                          <input
-                            defaultValue={field.name}
-                            disabled={!deathEnabled}
-                            {...register(
-                              `scenario.strategies.death.beneficiaries.${index}.name`,
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            defaultValue={field.relationship ?? 'child'}
-                            disabled={!deathEnabled}
-                            {...register(
-                              `scenario.strategies.death.beneficiaries.${index}.relationship`,
-                            )}
-                          >
-                            {beneficiaryRelationshipOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.sharePct}
-                            disabled={!deathEnabled}
-                            {...register(
-                              `scenario.strategies.death.beneficiaries.${index}.sharePct`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            defaultValue={field.stateOfResidence ?? 'none'}
-                            disabled={!deathEnabled}
-                            {...register(
-                              `scenario.strategies.death.beneficiaries.${index}.stateOfResidence`,
-                            )}
-                          >
-                            {stateTaxCodeOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.assumedOrdinaryRate}
-                            disabled={!deathEnabled}
-                            {...register(
-                              `scenario.strategies.death.beneficiaries.${index}.assumedOrdinaryRate`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            defaultValue={field.assumedCapitalGainsRate}
-                            disabled={!deathEnabled}
-                            {...register(
-                              `scenario.strategies.death.beneficiaries.${index}.assumedCapitalGainsRate`,
-                              { valueAsNumber: true },
-                            )}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            className="link-button"
-                            type="button"
-                            disabled={!deathEnabled}
-                            onClick={() => removeBeneficiary(index)}
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <div className="stack">
@@ -3074,109 +2392,807 @@ const ScenarioDetailPage = () => {
               </table>
             )}
           </div>
+        </div>
+
+        <div className="card stack">
+          <div className="row">
+            <h2>Asset management</h2>
+          </div>
+          <div className="stack">
+            <h3>Allocation</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Glidepath mode</span>
+                <select {...register('scenario.strategies.glidepath.mode')}>
+                  <option value="age">Age</option>
+                  <option value="year">Year</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Glidepath scope</span>
+                <select {...register('scenario.strategies.glidepath.scope')}>
+                  <option value="global">Global</option>
+                </select>
+              </label>
+            </div>
+          </div>
 
           <div className="stack">
             <div className="row">
-              <h3>Pensions</h3>
+              <h3>Glidepath targets</h3>
               <button
                 className="button secondary"
                 type="button"
-                onClick={() => {
-                  const today = new Date().toISOString().slice(0, 10)
-                  appendPension({
-                    id: createUuid(),
-                    name: 'Pension',
-                    startDate: today,
-                    endDate: '',
-                    monthlyAmount: 0,
-                    inflationType: 'cpi',
-                    taxTreatment: 'ordinary',
+                onClick={() =>
+                  appendGlidepathTarget({
+                    age: 65,
+                    equity: 0.6,
+                    bonds: 0.35,
+                    realEstate: 0.05,
+                    other: 0,
                   })
-                }}
+                }
               >
-                Add pension
+                Add target
               </button>
             </div>
-            {pensionRows.length === 0 ? (
-              <p className="muted">No pensions yet.</p>
+            {glidepathTargetFields.length === 0 ? (
+              <p className="muted">No glidepath targets yet.</p>
             ) : (
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Monthly</th>
-                    <th>Inflation</th>
-                    <th>Tax</th>
+                    <th>Age</th>
+                    <th>Equity</th>
+                    <th>Bonds</th>
+                    <th>Cash</th>
+                    <th>Real estate</th>
+                    <th>Other</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pensionRows.map((field, index) => (
+                  {glidepathTargetFields.map((field, index) => (
                     <tr key={field.id}>
                       <td>
                         <input
-                          type="hidden"
-                          {...register(`scenario.strategies.pensions.${index}.id`)}
-                        />
-                        <input
-                          defaultValue={field.name}
-                          {...register(`scenario.strategies.pensions.${index}.name`)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          defaultValue={field.startDate}
-                          {...register(`scenario.strategies.pensions.${index}.startDate`)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="date"
-                          defaultValue={field.endDate ?? ''}
-                          {...register(`scenario.strategies.pensions.${index}.endDate`)}
+                          type="number"
+                          defaultValue={field.age}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.age`,
+                            { valueAsNumber: true },
+                          )}
                         />
                       </td>
                       <td>
                         <input
                           type="number"
-                          defaultValue={field.monthlyAmount}
-                          {...register(`scenario.strategies.pensions.${index}.monthlyAmount`, {
-                            valueAsNumber: true,
-                          })}
+                          step="0.01"
+                          defaultValue={field.equity}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.equity`,
+                            { valueAsNumber: true },
+                          )}
                         />
                       </td>
                       <td>
-                        <select
-                          defaultValue={field.inflationType}
-                          {...register(`scenario.strategies.pensions.${index}.inflationType`)}
-                        >
-                          {inflationTypeSchema.options.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.bonds}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.bonds`,
+                            { valueAsNumber: true },
+                          )}
+                        />
                       </td>
                       <td>
-                        <select
-                          defaultValue={field.taxTreatment}
-                          {...register(`scenario.strategies.pensions.${index}.taxTreatment`)}
-                        >
-                          {taxTreatmentSchema.options.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
+                        <span className="muted">Using cash buffer</span>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.realEstate}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.realEstate`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.other}
+                          {...register(
+                            `scenario.strategies.glidepath.targets.${index}.other`,
+                            { valueAsNumber: true },
+                          )}
+                        />
                       </td>
                       <td>
                         <button
                           className="link-button"
                           type="button"
-                          onClick={() => removePension(index)}
+                          onClick={() => removeGlidepathTarget(index)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className="stack">
+            <h3>Rebalancing</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Rebalance frequency</span>
+                <select {...register('scenario.strategies.rebalancing.frequency')}>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="annual">Annual</option>
+                  <option value="threshold">Threshold</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Drift threshold</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.rebalancing.driftThreshold', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Min trade amount</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rebalancing.minTradeAmount', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rebalancing.useContributions')} />
+                <span>Use contributions first</span>
+              </label>
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rebalancing.taxAware')} />
+                <span>Tax aware</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Cash buffer</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Cash buffer target (months)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.cashBuffer.targetMonths', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.withdrawal.useCashFirst')}
+                />
+                <span>Use cash first</span>
+              </label>
+              <label className="field">
+                <span>Cash buffer min (months)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.cashBuffer.minMonths', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Cash buffer max (months)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.cashBuffer.maxMonths', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Withdrawal order</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Withdrawal order 1</span>
+                <select {...register('scenario.strategies.withdrawal.order.0')}>
+                  {withdrawalOrderOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Withdrawal order 2</span>
+                <select {...register('scenario.strategies.withdrawal.order.1')}>
+                  {withdrawalOrderOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Withdrawal order 3</span>
+                <select {...register('scenario.strategies.withdrawal.order.2')}>
+                  {withdrawalOrderOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Withdrawal order 4</span>
+                <select {...register('scenario.strategies.withdrawal.order.3')}>
+                  {withdrawalOrderOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Withdrawal order 5</span>
+                <select {...register('scenario.strategies.withdrawal.order.4')}>
+                  {withdrawalOrderOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Withdrawal guardrails</h3>
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.withdrawal.avoidEarlyPenalty')}
+                />
+                <span>Avoid early penalties</span>
+              </label>
+              <label className="field">
+                <span>Guardrail percent</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.withdrawal.guardrailPct', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Taxable gain harvest target</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.withdrawal.taxableGainHarvestTarget', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Taxable lots</h3>
+            <div className="form-grid">
+              <label className="field">
+                <span>Cost basis method</span>
+                <select {...register('scenario.strategies.taxableLot.costBasisMethod')}>
+                  <option value="average">Average</option>
+                  <option value="fifo">FIFO</option>
+                  <option value="lifo">LIFO</option>
+                </select>
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.taxableLot.harvestLosses')}
+                />
+                <span>Harvest losses</span>
+              </label>
+              <label className="field">
+                <span>Gain realization target</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.taxableLot.gainRealizationTarget', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="row">
+            <h2>Early retirement</h2>
+          </div>
+          <div className="stack">
+            <h3>Early retirement</h3>
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.earlyRetirement.allowPenalty')}
+                />
+                <span>Allow early penalties</span>
+              </label>
+              <label className="field">
+                <span>Penalty rate</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.earlyRetirement.penaltyRate', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.earlyRetirement.use72t')}
+                />
+                <span>Use 72(t)</span>
+              </label>
+              <label className="field">
+                <span>Bridge cash years</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.earlyRetirement.bridgeCashYears', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Roth conversions</h3>
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.rothConversion.enabled')}
+                />
+                <span>Enable Roth conversions</span>
+              </label>
+              <label className="field">
+                <span>Target tax bracket</span>
+                <select
+                  {...register('scenario.strategies.rothConversion.targetOrdinaryBracketRate', {
+                    setValueAs: (value) => (value === '' ? 0 : Number(value)),
+                  })}
+                >
+                  <option value={0}>None</option>
+                  {rothConversionBrackets.map((bracket) => (
+                    <option key={`${bracket.rate}-${bracket.upTo ?? 'top'}`} value={bracket.rate}>
+                      {`${Math.round(bracket.rate * 100)}% bracket${
+                        bracket.upTo ? ` (up to ${formatCurrency(bracket.upTo)})` : ''
+                      }`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Conversion start age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.startAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Conversion end age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.endAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Min conversion</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.minConversion', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Max conversion</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothConversion.maxConversion', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Conversion start date</span>
+                <input readOnly value={rothConversionStartDate} />
+              </label>
+              <label className="field">
+                <span>Conversion end date</span>
+                <input readOnly value={rothConversionEndDate} />
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.rothConversion.respectIrmaa')}
+                />
+                <span>Respect IRMAA</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Roth ladder</h3>
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  {...register('scenario.strategies.rothLadder.enabled')}
+                />
+                <span>Enable Roth ladder</span>
+              </label>
+              <label className="field">
+                <span>Ladder lead time (years)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.leadTimeYears', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Availability start age (after lead time)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.startAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Availability end age (after lead time)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.endAge', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <div className="muted">
+                Availability window:<br />
+                {ladderStartDate}–{ladderEndDate}
+              </div>
+              <div className="muted">
+                Conversion window:<br />
+                {ladderConversionStart.toFixed(1)}–{ladderConversionEnd.toFixed(1)}<br />
+                {ladderConversionStartDate}–{ladderConversionEndDate}
+              </div>
+              <div className="stack" style={{ gridColumn: '1 / -1' }}>
+                <span className="muted">Spending totals (availability window)</span>
+                {ladderSpendingRows.length === 0 ? (
+                  <p className="muted">No spending intervals in this availability range.</p>
+                ) : (
+                  <table className="table compact">
+                    <thead>
+                      <tr>
+                        <th>Start age</th>
+                        <th>End age</th>
+                        <th>Need total (annual)</th>
+                        <th>Want total (annual)</th>
+                        <th>Healthcare total (annual)</th>
+                        <th>Total (annual)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ladderSpendingRows.map((row) => (
+                        <tr key={`${row.startAgeLabel}-${row.endAgeLabel}`}>
+                          <td>{row.startAgeLabel}</td>
+                          <td>{row.endAgeLabel}</td>
+                          <td>{formatCurrency(row.annualNeed)}</td>
+                          <td>{formatCurrency(row.annualWant)}</td>
+                          <td>{formatCurrency(row.annualHealthcare)}</td>
+                          <td>{formatCurrency(row.annualTotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <label className="field">
+                <span>Target after-tax spending (annual)</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.targetAfterTaxSpending', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Annual conversion</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rothLadder.annualConversion', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <h3>Required minimum distributions</h3>
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.rmd.enabled')} />
+                <span>Apply RMDs</span>
+              </label>
+              <label className="field">
+                <span>RMD start age</span>
+                <input
+                  type="number"
+                  {...register('scenario.strategies.rmd.startAge', { valueAsNumber: true })}
+                />
+              </label>
+              <label className="field">
+                <span>Excess handling</span>
+                <select {...register('scenario.strategies.rmd.excessHandling')}>
+                  <option value="spend">Spend</option>
+                  <option value="taxable">Taxable</option>
+                  <option value="roth">Roth</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Withholding rate</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  {...register('scenario.strategies.rmd.withholdingRate', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <div className="field">
+                <span>RMD account types</span>
+                <div className="line-item-flags">
+                  {taxTypeSchema.options.map((taxType) => (
+                    <label className="field checkbox" key={taxType}>
+                      <input
+                        type="checkbox"
+                        value={taxType}
+                        {...register('scenario.strategies.rmd.accountTypes')}
+                      />
+                      <span>{taxType}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card stack">
+          <div className="row">
+            <h2>Legacy</h2>
+          </div>
+
+          <div className="stack">
+            <h3>Final expenses</h3>
+            <div className="form-grid">
+              <label className="field checkbox">
+                <input type="checkbox" {...register('scenario.strategies.death.enabled')} />
+                <span>Enable final expenses modeling</span>
+              </label>
+              <label className="field">
+                <span>Funeral option</span>
+                <select
+                  {...register('scenario.strategies.death.funeralDisposition')}
+                  disabled={!deathEnabled}
+                >
+                  {funeralDispositionSchema.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Funeral cost override</span>
+                <input
+                  type="number"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.funeralCostOverride', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Estate tax exemption</span>
+                <input
+                  type="number"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.estateTaxExemption', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field">
+                <span>Estate tax rate</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.estateTaxRate', {
+                    valueAsNumber: true,
+                  })}
+                />
+              </label>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  disabled={!deathEnabled}
+                  {...register('scenario.strategies.death.taxableStepUp')}
+                />
+                <span>Step-up basis for taxable holdings</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="stack">
+            <div className="row">
+              <h3>Beneficiaries</h3>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={!deathEnabled}
+                onClick={() =>
+                  appendBeneficiary({
+                    id: createUuid(),
+                    name: 'Beneficiary',
+                    sharePct: 1,
+                    stateOfResidence: 'none',
+                    relationship: 'child',
+                    assumedOrdinaryRate: 0.22,
+                    assumedCapitalGainsRate: 0.15,
+                  })
+                }
+              >
+                Add beneficiary
+              </button>
+            </div>
+            {beneficiaryRows.length === 0 ? (
+              <p className="muted">No beneficiaries yet.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Relationship</th>
+                    <th>Share</th>
+                    <th>State of residence</th>
+                    <th>Assumed ordinary rate</th>
+                    <th>Assumed cap gains rate</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {beneficiaryRows.map((field, index) => (
+                    <tr key={field.id}>
+                      <td>
+                        <input
+                          type="hidden"
+                          {...register(`scenario.strategies.death.beneficiaries.${index}.id`)}
+                        />
+                        <input
+                          defaultValue={field.name}
+                          disabled={!deathEnabled}
+                          {...register(
+                            `scenario.strategies.death.beneficiaries.${index}.name`,
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          defaultValue={field.relationship ?? 'child'}
+                          disabled={!deathEnabled}
+                          {...register(
+                            `scenario.strategies.death.beneficiaries.${index}.relationship`,
+                          )}
+                        >
+                          {beneficiaryRelationshipOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.sharePct}
+                          disabled={!deathEnabled}
+                          {...register(
+                            `scenario.strategies.death.beneficiaries.${index}.sharePct`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          defaultValue={field.stateOfResidence ?? 'none'}
+                          disabled={!deathEnabled}
+                          {...register(
+                            `scenario.strategies.death.beneficiaries.${index}.stateOfResidence`,
+                          )}
+                        >
+                          {stateTaxCodeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.assumedOrdinaryRate}
+                          disabled={!deathEnabled}
+                          {...register(
+                            `scenario.strategies.death.beneficiaries.${index}.assumedOrdinaryRate`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.assumedCapitalGainsRate}
+                          disabled={!deathEnabled}
+                          {...register(
+                            `scenario.strategies.death.beneficiaries.${index}.assumedCapitalGainsRate`,
+                            { valueAsNumber: true },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          disabled={!deathEnabled}
+                          onClick={() => removeBeneficiary(index)}
                         >
                           Remove
                         </button>
@@ -3188,7 +3204,6 @@ const ScenarioDetailPage = () => {
             )}
           </div>
         </div>
-
         <div className="button-row">
           <button className="button" type="submit" disabled={isSubmitting || !isDirty}>
             Save scenario

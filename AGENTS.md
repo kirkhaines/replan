@@ -31,6 +31,10 @@ RePlan is a local-first retirement planning web app.
 - Lint: `pnpm lint`
 - Format: `pnpm format`
 
+## Environment
+- Node.js is installed; use it for small scripting tasks.
+- Python is not installed.
+
 ## How to make changes (workflow)
 - Prefer small, reviewable diffs.
 - Before refactoring folders/architecture, propose the change and wait for approval.
