@@ -13,7 +13,7 @@ import {
 
 type BalanceDetail = 'none' | 'seasoning' | 'asset'
 
-type ChartDatum = Record<string, number | string | null | undefined>
+type ChartDatum = Record<string, unknown>
 
 type BalanceSeries = {
   key: string
@@ -42,7 +42,7 @@ type CashflowSeries = {
   key: string
   label: string
   color: string
-  bucket: 'cash' | 'taxable' | 'traditional' | 'roth' | 'hsa'
+  bucket: string
 }
 
 type CashflowChart = {

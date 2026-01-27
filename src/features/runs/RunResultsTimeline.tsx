@@ -6,7 +6,7 @@ type MonthlyTimelinePoint = NonNullable<SimulationResult['monthlyTimeline']>[num
 type AccountLookup = {
   cashById: Map<string, string>
   holdingById: Map<string, { name: string; investmentAccountId?: string | null }>
-  investmentById: Map<string, { name: string }>
+  investmentById: Map<string, string>
 }
 
 type YearDetailMode = 'none' | 'month' | 'module'
