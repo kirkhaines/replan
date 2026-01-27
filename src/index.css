@@ -219,6 +219,19 @@ h2 {
 .scenario-toc .link,
 .scenario-toc .link-button {
   display: inline-flex;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+.run-results-toc-primary {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.run-results-toc-secondary {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 0.75rem;
 }
 
 .stack {

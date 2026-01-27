@@ -705,7 +705,7 @@ test('saving persists name and spending strategy changes', async () => {
   const nameInput = screen.getByLabelText('Scenario name')
   fireEvent.change(nameInput, { target: { value: 'Updated plan' } })
 
-  const spendingSelect = screen.getByLabelText('Strategy')
+  const spendingSelect = screen.getByLabelText('Budget')
   fireEvent.change(spendingSelect, { target: { value: spendingStrategyTwo.id } })
 
   const saveButton = screen.getByRole('button', { name: /save scenario/i })
