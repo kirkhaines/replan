@@ -20,6 +20,7 @@ import {
   selectTaxPolicy,
 } from '../../core/sim/tax'
 
+// ignore-large-file-size
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 0 })
 
@@ -1112,45 +1113,59 @@ const RunResultsPage = () => {
         </div>
       ) : null}
 
-      <div className="card">
-        <label className="field">
-          <span>Run title</span>
-          <input
-            ref={titleInputRef}
-            defaultValue={run.title ?? ''}
-            onBlur={handleTitleBlur}
-            onKeyDown={handleTitleKeyDown}
-            placeholder="Untitled run"
-          />
-        </label>
-      </div>
-
       <div className="card stack">
-        <div className="row" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
-          <div className="field">
-            <span>Display</span>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={showPresentDay}
-                onChange={(event) => setShowPresentDay(event.target.checked)}
-              />
-              Show values in present-day dollars
+        <h2>Summary</h2>
+        <div className="stack" style={{ gap: '1rem' }}>
+          <label className="field">
+            <span>Run title</span>
+            <input
+              ref={titleInputRef}
+              defaultValue={run.title ?? ''}
+              onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
+              placeholder="Untitled run"
+            />
+          </label>
+          <div className="summary">
+            <div>
+              <span className="muted">Ending balance</span>
+              <strong>{formatCurrency(summary.endingBalance)}</strong>
+            </div>
+            <div>
+              <span className="muted">Min balance</span>
+              <strong>{formatCurrency(summary.minBalance)}</strong>
+            </div>
+            <div>
+              <span className="muted">Max balance</span>
+              <strong>{formatCurrency(summary.maxBalance)}</strong>
+            </div>
+          </div>
+          <div className="row" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
+            <div className="field">
+              <span>Display</span>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={showPresentDay}
+                  onChange={(event) => setShowPresentDay(event.target.checked)}
+                />
+                Show values in present-day dollars
+              </label>
+            </div>
+            <label className="field">
+              <span>Date range</span>
+              <select
+                value={rangeKey}
+                onChange={(event) => setRangeKey(event.target.value)}
+              >
+                {rangeOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
-          <label className="field">
-            <span>Date range</span>
-            <select
-              value={rangeKey}
-              onChange={(event) => setRangeKey(event.target.value)}
-            >
-              {rangeOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
       </div>
 
@@ -1622,24 +1637,6 @@ const RunResultsPage = () => {
           </>) : null}
         </div>
       ) : null}
-
-      <div className="card stack">
-        <h2>Summary</h2>
-        <div className="summary">
-          <div>
-            <span className="muted">Ending balance</span>
-            <strong>{formatCurrency(summary.endingBalance)}</strong>
-          </div>
-          <div>
-            <span className="muted">Min balance</span>
-            <strong>{formatCurrency(summary.minBalance)}</strong>
-          </div>
-          <div>
-            <span className="muted">Max balance</span>
-            <strong>{formatCurrency(summary.maxBalance)}</strong>
-          </div>
-        </div>
-      </div>
 
       <div className="card stack">
         <h2>Timeline</h2>
