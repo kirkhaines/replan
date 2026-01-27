@@ -1850,24 +1850,53 @@ const RunResultsPage = () => {
                                     const totals = module.totals
                                     return (
                                       <Fragment key={moduleKey}>
-                                        <tr
-                                          onClick={() =>
-                                            setExpandedModules((current) => {
-                                              const next = new Set(current)
-                                              if (next.has(moduleKey)) {
-                                                next.delete(moduleKey)
-                                              } else {
-                                                next.add(moduleKey)
-                                              }
-                                              return next
-                                            })
-                                          }
-                                        >
+                                        <tr>
                                           <td>
-                                            <span className="muted" aria-hidden="true">
-                                              {moduleExpanded ? '▾' : '▸'}
-                                            </span>{' '}
-                                            {moduleLabels[module.moduleId] ?? module.moduleId}
+                                            <div
+                                              style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                              }}
+                                            >
+                                              <div style={{ display: 'inline-flex', gap: '0.25rem' }}>
+                                                <button
+                                                  type="button"
+                                                  title="No detail"
+                                                  aria-label="No detail"
+                                                  onClick={() =>
+                                                    setExpandedModules((current) => {
+                                                      const next = new Set(current)
+                                                      next.delete(moduleKey)
+                                                      return next
+                                                    })
+                                                  }
+                                                  style={detailButtonStyle(!moduleExpanded)}
+                                                >
+                                                  <CancelIcon />
+                                                </button>
+                                                <button
+                                                  type="button"
+                                                  title="Month detail"
+                                                  aria-label="Month detail"
+                                                  onClick={() =>
+                                                    setExpandedModules((current) => {
+                                                      const next = new Set(current)
+                                                      if (next.has(moduleKey)) {
+                                                        next.delete(moduleKey)
+                                                      } else {
+                                                        next.add(moduleKey)
+                                                      }
+                                                      return next
+                                                    })
+                                                  }
+                                                  style={detailButtonStyle(moduleExpanded)}
+                                                >
+                                                  <CalendarIcon />
+                                                </button>
+                                              </div>
+                                              <span>{moduleLabels[module.moduleId] ?? module.moduleId}</span>
+                                            </div>
                                           </td>
                                           <td>
                                             {formatSignedCurrencyForDate(totals.cash, point.date)}
@@ -2383,24 +2412,54 @@ const RunResultsPage = () => {
                             : undefined
                         return (
                           <Fragment key={`${point.yearIndex}-${month.monthIndex}`}>
-                            <tr
-                              onClick={() =>
-                                setExpandedMonths((current) => {
-                                  const next = new Set(current)
-                                  if (next.has(month.monthIndex)) {
-                                    next.delete(month.monthIndex)
-                                  } else {
-                                    next.add(month.monthIndex)
-                                  }
-                                  return next
-                                })
-                              }
-                            >
+                            <tr>
                               <td className="muted">
-                                <span className="muted" aria-hidden="true">
-                                  {monthExpanded ? '▾' : '▸'}
-                                </span>{' '}
-                                {month.date}
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    marginLeft: '3.375rem',
+                                  }}
+                                >
+                                  <div style={{ display: 'inline-flex', gap: '0.25rem' }}>
+                                    <button
+                                      type="button"
+                                      title="No detail"
+                                      aria-label="No detail"
+                                      onClick={() =>
+                                        setExpandedMonths((current) => {
+                                          const next = new Set(current)
+                                          next.delete(month.monthIndex)
+                                          return next
+                                        })
+                                      }
+                                      style={detailButtonStyle(!monthExpanded)}
+                                    >
+                                      <CancelIcon />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Module detail"
+                                      aria-label="Module detail"
+                                      onClick={() =>
+                                        setExpandedMonths((current) => {
+                                          const next = new Set(current)
+                                          if (next.has(month.monthIndex)) {
+                                            next.delete(month.monthIndex)
+                                          } else {
+                                            next.add(month.monthIndex)
+                                          }
+                                          return next
+                                        })
+                                      }
+                                      style={detailButtonStyle(monthExpanded)}
+                                    >
+                                      <PieIcon />
+                                    </button>
+                                  </div>
+                                  <span>{month.date}</span>
+                                </div>
                               </td>
                               <td className="muted">{month.age}</td>
                               <td className="muted">
@@ -2466,24 +2525,57 @@ const RunResultsPage = () => {
                                                   const moduleExpanded = expandedModules.has(moduleKey)
                                                   return (
                                                     <Fragment key={moduleKey}>
-                                                      <tr
-                                                        onClick={() =>
-                                                          setExpandedModules((current) => {
-                                                            const next = new Set(current)
-                                                            if (next.has(moduleKey)) {
-                                                              next.delete(moduleKey)
-                                                            } else {
-                                                              next.add(moduleKey)
-                                                            }
-                                                            return next
-                                                          })
-                                                        }
-                                                      >
+                                                      <tr>
                                                         <td>
-                                                          <span className="muted" aria-hidden="true">
-                                                            {moduleExpanded ? '▾' : '▸'}
-                                                          </span>{' '}
-                                                          {moduleLabels[module.moduleId] ?? module.moduleId}
+                                                          <div
+                                                            style={{
+                                                              display: 'flex',
+                                                              alignItems: 'center',
+                                                              gap: '0.5rem',
+                                                            }}
+                                                          >
+                                                            <div
+                                                              style={{ display: 'inline-flex', gap: '0.25rem' }}
+                                                            >
+                                                              <button
+                                                                type="button"
+                                                                title="No detail"
+                                                                aria-label="No detail"
+                                                                onClick={() =>
+                                                                  setExpandedModules((current) => {
+                                                                    const next = new Set(current)
+                                                                    next.delete(moduleKey)
+                                                                    return next
+                                                                  })
+                                                                }
+                                                                style={detailButtonStyle(!moduleExpanded)}
+                                                              >
+                                                                <CancelIcon />
+                                                              </button>
+                                                              <button
+                                                                type="button"
+                                                                title="Module detail"
+                                                                aria-label="Module detail"
+                                                                onClick={() =>
+                                                                  setExpandedModules((current) => {
+                                                                    const next = new Set(current)
+                                                                    if (next.has(moduleKey)) {
+                                                                      next.delete(moduleKey)
+                                                                    } else {
+                                                                      next.add(moduleKey)
+                                                                    }
+                                                                    return next
+                                                                  })
+                                                                }
+                                                                style={detailButtonStyle(moduleExpanded)}
+                                                              >
+                                                                <PieIcon />
+                                                              </button>
+                                                            </div>
+                                                            <span>
+                                                              {moduleLabels[module.moduleId] ?? module.moduleId}
+                                                            </span>
+                                                          </div>
                                                         </td>
                                                         <td>
                                                           {formatSignedCurrencyForDate(
