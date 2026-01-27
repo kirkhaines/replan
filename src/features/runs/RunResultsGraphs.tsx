@@ -88,7 +88,7 @@ const RunResultsGraphs = ({
 
   return (
     <>
-      <div className="card">
+      <div className="card" id="section-balance">
         <div className="row">
           <h2>Balance over time</h2>
           <div className="row" style={{ gap: '0.75rem' }}>
@@ -213,7 +213,7 @@ const RunResultsGraphs = ({
       </div>
 
       {ordinaryIncomeChart.data.length > 0 ? (
-        <div className="card">
+        <div className="card" id="section-ordinary-income">
           <div className="row">
             <h2>Taxable ordinary income and bracket thresholds</h2>
             <button
@@ -393,7 +393,7 @@ const RunResultsGraphs = ({
       ) : null}
 
       {cashflowChart.data.length > 0 && cashflowChart.series.length > 0 ? (
-        <div className="card">
+        <div className="card" id="section-cashflow">
           <div className="row">
             <h2>Cash flow by module</h2>
             <div className="row" style={{ gap: '0.75rem' }}>

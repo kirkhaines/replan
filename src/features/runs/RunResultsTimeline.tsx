@@ -122,8 +122,7 @@ const RunResultsTimeline = ({
     yearDetailModes[yearIndex] ?? 'none'
 
   return (
-
-<div className="card stack">
+    <div className="card stack" id="section-timeline">
   <h2>Timeline</h2>
   <table className="table selectable">
     <thead>
@@ -136,10 +135,14 @@ const RunResultsTimeline = ({
       </tr>
     </thead>
     <tbody>
-      {filteredTimeline.map((point) => {
-        const monthRows = monthlyByYear.get(point.yearIndex) ?? []
-        const yearMode = getYearDetailMode(point.yearIndex)
-        const yearMonthEntries = monthRows.flatMap((month) => {
+          {filteredTimeline.map((point) => {
+            const monthRows = monthlyByYear.get(point.yearIndex) ?? []
+            const year = point.date ? new Date(point.date).getFullYear() : null
+            const decadeId = year !== null && !Number.isNaN(year) && year % 10 === 0
+              ? `timeline-decade-${year}`
+              : undefined
+            const yearMode = getYearDetailMode(point.yearIndex)
+            const yearMonthEntries = monthRows.flatMap((month) => {
           const explanation = explanationsByMonth.get(month.monthIndex)
           return explanation ? [{ month, explanation }] : []
         })
@@ -245,7 +248,7 @@ const RunResultsTimeline = ({
           )
         return (
           <Fragment key={point.yearIndex}>
-            <tr>
+                <tr id={decadeId}>
               <td>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <div style={{ display: 'inline-flex', gap: '0.25rem' }}>
