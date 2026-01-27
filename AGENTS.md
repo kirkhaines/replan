@@ -35,6 +35,12 @@ RePlan is a local-first retirement planning web app.
 - Node.js is installed; use it for small scripting tasks.
 - Python is not installed.
 
+## Coding standards
+- Keep code files under ~500–1,000 lines (or ~20–40 KB) when possible.
+- If starting work on a file exceeding those thresholds, stop and prompt to split it.
+- If instructed to ignore the file-size guidance, add a comment near the top with `ignore-large-file-size`.
+- Before prompting to split, check whether the file already has an `ignore-large-file-size` comment.
+
 ## How to make changes (workflow)
 - Prefer small, reviewable diffs.
 - Before refactoring folders/architecture, propose the change and wait for approval.

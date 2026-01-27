@@ -193,6 +193,34 @@ h2 {
   gap: 1.5rem;
 }
 
+.scenario-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.scenario-layout > .stack {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.scenario-toc {
+  position: sticky;
+  top: 5.5rem;
+  align-self: flex-start;
+  width: 220px;
+  padding: 1rem;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 24px rgba(25, 32, 42, 0.08);
+}
+
+.scenario-toc .link,
+.scenario-toc .link-button {
+  display: inline-flex;
+}
+
 .stack {
   display: grid;
   gap: 1.5rem;
@@ -285,6 +313,18 @@ h2 {
   gap: 1rem;
   flex-wrap: wrap;
   align-items: center;
+}
+
+@media (max-width: 980px) {
+  .scenario-layout {
+    flex-direction: column;
+  }
+
+  .scenario-toc {
+    position: static;
+    width: 100%;
+    order: -1;
+  }
 }
 
 .table {

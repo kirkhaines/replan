@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useFieldArray, useForm, type Resolver, type SubmitErrorHandler } from 'react-hook-form'
 import { z } from 'zod'
@@ -558,6 +558,18 @@ const ScenarioDetailPage = () => {
   const [selectedCashAccountId, setSelectedCashAccountId] = useState('')
   const [selectedInvestmentAccountId, setSelectedInvestmentAccountId] = useState('')
   const inflationDefaultsRef = useRef<InflationDefault[]>([])
+  const handleJumpTo =
+    useCallback(
+      (id: string) => (event: MouseEvent<HTMLButtonElement>) => {
+        event.preventDefault()
+        const target = document.getElementById(id)
+        if (!target) {
+          return
+        }
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      },
+      [],
+    )
 
   const defaultValues = useMemo(() => {
     const bundle = createDefaultScenarioBundle()
@@ -1544,48 +1556,50 @@ const ScenarioDetailPage = () => {
         }
       />
 
-      {selectionError ? (
-        <div className="card">
-          <p className="error">{selectionError}</p>
-        </div>
-      ) : null}
+      <div className="scenario-layout">
+        <div className="stack">
+          {selectionError ? (
+            <div className="card">
+              <p className="error">{selectionError}</p>
+            </div>
+          ) : null}
 
-      <form className="stack" onSubmit={handleSubmit(onSubmit, onInvalid)}>
-        <input type="hidden" {...register('scenario.id')} />
-        <input type="hidden" {...register('scenario.createdAt', { valueAsNumber: true })} />
-        <input type="hidden" {...register('scenario.updatedAt', { valueAsNumber: true })} />
-        {(personStrategyIds ?? scenario?.personStrategyIds ?? []).map((id, index) => (
-          <input key={id} type="hidden" {...register(`scenario.personStrategyIds.${index}`)} />
-        ))}
-        {(nonInvestmentAccountIds ?? scenario?.nonInvestmentAccountIds ?? []).map((id, index) => (
-          <input
-            key={id}
-            type="hidden"
-            {...register(`scenario.nonInvestmentAccountIds.${index}`)}
-          />
-        ))}
-        {(investmentAccountIds ?? scenario?.investmentAccountIds ?? []).map((id, index) => (
-          <input
-            key={id}
-            type="hidden"
-            {...register(`scenario.investmentAccountIds.${index}`)}
-          />
-        ))}
-        <input type="hidden" {...register('scenario.spendingStrategyId')} />
-        {inflationTypeSchema.options.map((type) => (
-          <input
-            key={type}
-            type="hidden"
-            {...register(`scenario.strategies.returnModel.inflationAssumptions.${type}`, {
-              valueAsNumber: true,
-            })}
-          />
-        ))}
+          <form className="stack" onSubmit={handleSubmit(onSubmit, onInvalid)}>
+            <input type="hidden" {...register('scenario.id')} />
+            <input type="hidden" {...register('scenario.createdAt', { valueAsNumber: true })} />
+            <input type="hidden" {...register('scenario.updatedAt', { valueAsNumber: true })} />
+            {(personStrategyIds ?? scenario?.personStrategyIds ?? []).map((id, index) => (
+              <input key={id} type="hidden" {...register(`scenario.personStrategyIds.${index}`)} />
+            ))}
+            {(nonInvestmentAccountIds ?? scenario?.nonInvestmentAccountIds ?? []).map((id, index) => (
+              <input
+                key={id}
+                type="hidden"
+                {...register(`scenario.nonInvestmentAccountIds.${index}`)}
+              />
+            ))}
+            {(investmentAccountIds ?? scenario?.investmentAccountIds ?? []).map((id, index) => (
+              <input
+                key={id}
+                type="hidden"
+                {...register(`scenario.investmentAccountIds.${index}`)}
+              />
+            ))}
+            <input type="hidden" {...register('scenario.spendingStrategyId')} />
+            {inflationTypeSchema.options.map((type) => (
+              <input
+                key={type}
+                type="hidden"
+                {...register(`scenario.strategies.returnModel.inflationAssumptions.${type}`, {
+                  valueAsNumber: true,
+                })}
+              />
+            ))}
 
-        <div className="card stack">
-          <div className="row">
-            <h2>Basic config</h2>
-          </div>
+            <div className="card stack" id="section-basic-config">
+              <div className="row">
+                <h2>Basic config</h2>
+              </div>
           <div className="form-grid">
             <label className="field">
               <span>Scenario name</span>
@@ -1675,10 +1689,10 @@ const ScenarioDetailPage = () => {
           </div>
         </div>
 
-        <div className="card stack">
-          <div className="row">
-            <h2>People and assets</h2>
-          </div>
+            <div className="card stack" id="section-people-assets">
+              <div className="row">
+                <h2>People and assets</h2>
+              </div>
           <div className="stack">
             <div className="row">
               <h3>People</h3>
@@ -2060,10 +2074,10 @@ const ScenarioDetailPage = () => {
           </div>
         </div>
 
-        <div className="card stack">
-          <div className="row">
-            <h2>Spending</h2>
-          </div>
+            <div className="card stack" id="section-spending">
+              <div className="row">
+                <h2>Spending</h2>
+              </div>
           <div className="stack">
             <div className="row">
               <h3>Budget</h3>
@@ -2394,10 +2408,10 @@ const ScenarioDetailPage = () => {
           </div>
         </div>
 
-        <div className="card stack">
-          <div className="row">
-            <h2>Asset management</h2>
-          </div>
+            <div className="card stack" id="section-asset-management">
+              <div className="row">
+                <h2>Asset management</h2>
+              </div>
           <div className="stack">
             <h3>Allocation</h3>
             <div className="form-grid">
@@ -2728,10 +2742,10 @@ const ScenarioDetailPage = () => {
           </div>
         </div>
 
-        <div className="card stack">
-          <div className="row">
-            <h2>Early retirement</h2>
-          </div>
+            <div className="card stack" id="section-early-retirement">
+              <div className="row">
+                <h2>Early retirement</h2>
+              </div>
           <div className="stack">
             <h3>Early retirement</h3>
             <div className="form-grid">
@@ -3001,10 +3015,10 @@ const ScenarioDetailPage = () => {
           </div>
         </div>
 
-        <div className="card stack">
-          <div className="row">
-            <h2>Legacy</h2>
-          </div>
+            <div className="card stack" id="section-legacy">
+              <div className="row">
+                <h2>Legacy</h2>
+              </div>
 
           <div className="stack">
             <h3>Final expenses</h3>
@@ -3204,26 +3218,26 @@ const ScenarioDetailPage = () => {
             )}
           </div>
         </div>
-        <div className="button-row">
-          <button className="button" type="submit" disabled={isSubmitting || !isDirty}>
-            Save scenario
-          </button>
-          <button
-            className="button secondary"
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleSubmit(onRun)}
-          >
-            Run simulation
-          </button>
-        </div>
-      </form>
+            <div className="button-row">
+              <button className="button" type="submit" disabled={isSubmitting || !isDirty}>
+                Save scenario
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleSubmit(onRun)}
+              >
+                Run simulation
+              </button>
+            </div>
+          </form>
 
-      <div className="card stack">
-        <div className="row">
-          <h2>Simulation runs</h2>
-          <span className="muted">{runs.length} total</span>
-        </div>
+          <div className="card stack" id="section-runs">
+            <div className="row">
+              <h2>Simulation runs</h2>
+              <span className="muted">{runs.length} total</span>
+            </div>
         {runs.length === 0 ? (
           <p className="muted">No runs yet. Save and run to generate results.</p>
         ) : (
@@ -3272,6 +3286,63 @@ const ScenarioDetailPage = () => {
             </tbody>
           </table>
         )}
+          </div>
+        </div>
+
+        <aside className="scenario-toc" aria-label="Jump to section">
+          <div className="stack">
+            <span className="muted">Jump to</span>
+            <button
+              className="link-button"
+              type="button"
+              onClick={handleJumpTo('section-basic-config')}
+            >
+              Basic config
+            </button>
+            <button
+              className="link-button"
+              type="button"
+              onClick={handleJumpTo('section-people-assets')}
+            >
+              People and assets
+            </button>
+            <button
+              className="link-button"
+              type="button"
+              onClick={handleJumpTo('section-spending')}
+            >
+              Spending
+            </button>
+            <button
+              className="link-button"
+              type="button"
+              onClick={handleJumpTo('section-asset-management')}
+            >
+              Asset management
+            </button>
+            <button
+              className="link-button"
+              type="button"
+              onClick={handleJumpTo('section-early-retirement')}
+            >
+              Early retirement
+            </button>
+            <button
+              className="link-button"
+              type="button"
+              onClick={handleJumpTo('section-legacy')}
+            >
+              Legacy
+            </button>
+            <button
+              className="link-button"
+              type="button"
+              onClick={handleJumpTo('section-runs')}
+            >
+              Simulation runs
+            </button>
+          </div>
+        </aside>
       </div>
     </section>
   )
