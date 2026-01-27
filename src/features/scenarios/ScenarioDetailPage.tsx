@@ -883,12 +883,6 @@ const ScenarioDetailPage = () => {
     }
   }, [longTermCareAnnualExpense, longTermCareLevel, setValue])
 
-  const handleInflationChange = (type: InflationDefault['type'], value: number) => {
-    setValue(`scenario.strategies.returnModel.inflationAssumptions.${type}`, value, {
-      shouldDirty: true,
-    })
-  }
-
   const loadHoldingsForAccount = useCallback(
     async (accountId: string) =>
       (await storage.investmentAccountHoldingRepo.listForAccount(accountId)).map(
@@ -1110,15 +1104,6 @@ const ScenarioDetailPage = () => {
     await storage.spendingStrategyRepo.upsert(strategy)
     await loadReferenceData()
     navigate(`/spending-strategies/${strategy.id}`, { state: { from: location.pathname } })
-  }
-
-  const handleEditSpendingStrategy = () => {
-    if (!selectedSpendingStrategyId) {
-      return
-    }
-    navigate(`/spending-strategies/${selectedSpendingStrategyId}`, {
-      state: { from: location.pathname },
-    })
   }
 
   const handleAddPersonStrategy = async () => {
@@ -1598,10 +1583,10 @@ const ScenarioDetailPage = () => {
 
             <BasicConfigSection
               register={register}
+              setValue={setValue}
               errors={errors}
               inflationAssumptions={inflationAssumptions}
               inflationByType={inflationByType}
-              onInflationChange={handleInflationChange}
             />
 
             <PeopleAssetsSection
@@ -1641,8 +1626,8 @@ const ScenarioDetailPage = () => {
               register={register}
               selectedSpendingStrategyId={selectedSpendingStrategyId}
               spendingStrategies={spendingStrategies}
+              locationPathname={location.pathname}
               onSpendingStrategySelect={handleSpendingStrategySelect}
-              onEditSpendingStrategy={handleEditSpendingStrategy}
               onAddSpendingStrategy={handleAddSpendingStrategy}
               spendingSummaryRows={spendingSummaryRows}
               formatCurrency={formatCurrency}
