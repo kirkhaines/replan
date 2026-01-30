@@ -50,12 +50,12 @@ export const createWorkerSimClient = (): ISimClient => {
         return
       }
       entry.busy = true
-      pending.set(next.requestId, {
-        resolve: next.resolve,
-        workerIndex: index,
-        kind: next.kind,
-      })
       if (next.kind === 'batch') {
+        pending.set(next.requestId, {
+          resolve: next.resolve,
+          workerIndex: index,
+          kind: 'batch',
+        })
         entry.worker.postMessage({
           type: 'runScenarioBatch',
           requestId: next.requestId,
@@ -63,6 +63,11 @@ export const createWorkerSimClient = (): ISimClient => {
         })
         return
       }
+      pending.set(next.requestId, {
+        resolve: next.resolve,
+        workerIndex: index,
+        kind: 'single',
+      })
       entry.worker.postMessage({
         type: 'runScenario',
         requestId: next.requestId,

@@ -10,6 +10,7 @@ import type {
   RunScenarioRequest,
   RunScenarioResponse,
 } from '../core/simClient/types'
+import type { SimulationRun } from '../core/models'
 import { createUuid } from '../core/utils/uuid'
 import type { ZodIssue } from 'zod'
 
@@ -74,7 +75,7 @@ const runScenarioOnce = (
   requestId: string,
   logEnabled = true,
   summaryOnly = false,
-) => {
+): SimulationRun => {
   const startedAt = Date.now()
   if (logEnabled) {
     console.info('[Simulation] Run requested.', {
@@ -160,7 +161,7 @@ const runScenarioOnce = (
       durationMs: finishedAt - startedAt,
     })
   }
-  const run = {
+  const run: SimulationRun = {
     id: createUuid(),
     scenarioId: parsed.data.snapshot.scenario.id,
     startedAt,

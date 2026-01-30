@@ -521,13 +521,21 @@ const formatLogValue = (value: unknown) => {
   }
 }
 
+const getSaveSubmitButton = () => {
+  const buttons = screen.queryAllByRole('button', { name: /save scenario/i })
+  if (buttons.length === 0) {
+    return null
+  }
+  return buttons.find((button) => button.getAttribute('type') === 'submit') ?? buttons[0]
+}
+
 const collectSaveDiagnostics = (
   storage: StorageClient,
   warnSpy: ReturnType<typeof vi.spyOn>,
   errorSpy: ReturnType<typeof vi.spyOn>,
   infoSpy: ReturnType<typeof vi.spyOn>,
 ) => {
-  const saveButton = screen.queryByRole('button', { name: /save scenario/i })
+  const saveButton = getSaveSubmitButton()
   const saveDisabled = saveButton ? saveButton.hasAttribute('disabled') : null
   const scenarioNameInput = screen.queryByLabelText('Scenario name') as
     | HTMLInputElement
@@ -577,7 +585,7 @@ const expectScenarioSave = async (storage: StorageClient, trigger?: () => void) 
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
   let submitCount = 0
-  const saveButton = screen.queryByRole('button', { name: /save scenario/i })
+  const saveButton = getSaveSubmitButton()
   const form =
     (saveButton?.closest('form') as HTMLFormElement | null) ??
     (document.querySelector('form') as HTMLFormElement | null)
@@ -708,7 +716,9 @@ test('saving persists name and spending strategy changes', async () => {
   const spendingSelect = screen.getByLabelText('Budget')
   fireEvent.change(spendingSelect, { target: { value: spendingStrategyTwo.id } })
 
-  const saveButton = screen.getByRole('button', { name: /save scenario/i })
+  const saveButtons = screen.getAllByRole('button', { name: /save scenario/i })
+  const saveButton =
+    saveButtons.find((button) => button.getAttribute('type') === 'submit') ?? saveButtons[0]
   const form = saveButton.closest('form')
   if (!form) {
     throw new Error('Missing scenario form')
@@ -780,7 +790,9 @@ test('saving persists strategy scalars, events, and pensions', async () => {
   fireEvent.change(pensionSelects[0], { target: { value: 'medical' } })
   fireEvent.change(pensionSelects[1], { target: { value: 'tax_exempt' } })
 
-  const saveButton = screen.getByRole('button', { name: /save scenario/i })
+  const saveButtons = screen.getAllByRole('button', { name: /save scenario/i })
+  const saveButton =
+    saveButtons.find((button) => button.getAttribute('type') === 'submit') ?? saveButtons[0]
   const form = saveButton.closest('form')
   if (!form) {
     throw new Error('Missing scenario form')
@@ -918,7 +930,9 @@ test('saving persists added person strategy, cash account, and investment accoun
   expect(cashAccounts.length).toBe(2)
   expect(investmentAccounts.length).toBe(2)
 
-  const saveButton = screen.getByRole('button', { name: /save scenario/i })
+  const saveButtons = screen.getAllByRole('button', { name: /save scenario/i })
+  const saveButton =
+    saveButtons.find((button) => button.getAttribute('type') === 'submit') ?? saveButtons[0]
   const form = saveButton.closest('form')
   if (!form) {
     throw new Error('Missing scenario form')
@@ -983,7 +997,9 @@ test('saving persists removed person strategy, cash account, and investment acco
     expect(screen.queryByText('IRA')).toBeNull()
   })
 
-  const saveButton = screen.getByRole('button', { name: /save scenario/i })
+  const saveButtons = screen.getAllByRole('button', { name: /save scenario/i })
+  const saveButton =
+    saveButtons.find((button) => button.getAttribute('type') === 'submit') ?? saveButtons[0]
   const form = saveButton.closest('form')
   if (!form) {
     throw new Error('Missing scenario form')
