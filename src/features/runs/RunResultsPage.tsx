@@ -5,6 +5,7 @@ import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import RunResultsGraphs from './RunResultsGraphs'
 import RunResultsTimeline from './RunResultsTimeline'
+import RunResultsDistributions from './RunResultsDistributions'
 import {
   computeTaxableSocialSecurity,
   selectSocialSecurityProvisionalIncomeBracket,
@@ -193,6 +194,7 @@ const RunResultsPage = () => {
   const [showPresentDay, setShowPresentDay] = useState(true)
   const [rangeKey, setRangeKey] = useState('all')
   const [balanceDetail, setBalanceDetail] = useState<BalanceDetail>('none')
+  const [showTimeline, setShowTimeline] = useState(false)
 
   const monthlyTimeline = useMemo(() => run?.result.monthlyTimeline ?? [], [run])
   const explanations = useMemo(() => run?.result.explanations ?? [], [run])
@@ -931,7 +933,7 @@ const RunResultsPage = () => {
       event.preventDefault()
       event.currentTarget.blur()
     },
-    [],
+    [setShowTimeline],
   )
 
   const summary = useMemo(() => {
@@ -979,6 +981,16 @@ const RunResultsPage = () => {
       const element = document.getElementById(sectionId)
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      if (sectionId === 'section-timeline' || sectionId.startsWith('timeline-')) {
+        setShowTimeline(true)
+        setTimeout(() => {
+          const next = document.getElementById(sectionId)
+          if (next) {
+            next.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+        }, 0)
       }
     },
     [],
@@ -1110,19 +1122,39 @@ const RunResultsPage = () => {
             formatSignedCurrency={formatSignedCurrency}
           />
 
-          <RunResultsTimeline
-            filteredTimeline={filteredTimeline}
-            monthlyByYear={monthlyByYear}
-            explanationsByMonth={explanationsByMonth}
-            addMonths={addMonths}
-            formatCurrencyForDate={formatCurrencyForDate}
-            formatSignedCurrencyForDate={formatSignedCurrencyForDate}
-            formatSignedCurrency={formatSignedCurrency}
-            getHoldingLabel={getHoldingLabel}
-            getAccountLabel={getAccountLabel}
-            accountLookup={accountLookup}
-            initialBalances={initialBalances}
-            adjustForInflation={adjustForInflation}
+          <div className="timeline-collapsible stack">
+            <div className="row">
+              <h2>Timeline</h2>
+              <button
+                className="link-button"
+                type="button"
+                onClick={() => setShowTimeline((current) => !current)}
+              >
+                {showTimeline ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {showTimeline ? (
+              <RunResultsTimeline
+                filteredTimeline={filteredTimeline}
+                monthlyByYear={monthlyByYear}
+                explanationsByMonth={explanationsByMonth}
+                addMonths={addMonths}
+                formatCurrencyForDate={formatCurrencyForDate}
+                formatSignedCurrencyForDate={formatSignedCurrencyForDate}
+                formatSignedCurrency={formatSignedCurrency}
+                getHoldingLabel={getHoldingLabel}
+                getAccountLabel={getAccountLabel}
+                accountLookup={accountLookup}
+                initialBalances={initialBalances}
+                adjustForInflation={adjustForInflation}
+              />
+            ) : null}
+          </div>
+
+          <RunResultsDistributions
+            stochasticRuns={run.result.stochasticRuns}
+            formatAxisValue={formatAxisValue}
+            formatCurrency={formatCurrency}
           />
         </div>
 
@@ -1180,6 +1212,15 @@ const RunResultsPage = () => {
                 ))}
               </div>
             ) : null}
+            <div className="run-results-toc-primary">
+              <button
+                className="link-button"
+                type="button"
+                onClick={handleJumpTo('section-distributions')}
+              >
+                Balance distributions
+              </button>
+            </div>
           </div>
         </aside>
       </div>

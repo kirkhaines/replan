@@ -478,7 +478,7 @@ const mockStore: { storage: StorageClient; simClient: ISimClient } = {
   storage: createStorageFixture(
     buildSeed().seed,
   ),
-  simClient: { runScenario: vi.fn() } as ISimClient,
+  simClient: { runScenario: vi.fn(), runScenarioBatch: vi.fn() } as ISimClient,
 }
 
 vi.mock('../../state/appStore', () => ({

@@ -30,6 +30,7 @@ import type { SimulationRequest } from '../../core/sim/input'
 import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import { createUuid } from '../../core/utils/uuid'
+import { hashStringToSeed } from '../../core/sim/random'
 import PageHeader from '../../components/PageHeader'
 import useUnsavedChangesWarning from '../../hooks/useUnsavedChangesWarning'
 import BasicConfigSection from './detail-sections/BasicConfigSection'
@@ -51,6 +52,8 @@ import { remapScenarioSeed } from '../../core/defaults/remapScenarioSeed'
 import type { LocalScenarioSeed } from '../../core/defaults/localSeedTypes'
 import { selectTaxPolicy } from '../../core/sim/tax'
 import type { ScenarioEditorValues, SpendingIntervalRow } from './scenarioEditorTypes'
+
+// ignore-large-file-size
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -378,6 +381,67 @@ const buildSimulationSnapshot = async (
     irmaaTables: irmaaTableSeed,
     rmdTable: rmdTableSeed,
   }
+}
+
+const buildStochasticInputs = (
+  snapshot: SimulationSnapshot,
+  startDate: string,
+  runCount: number,
+): Array<{ runIndex: number; seed: number; input: SimulationRequest }> => {
+  const returnModel = snapshot.scenario.strategies.returnModel
+  const baseSeed =
+    returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${startDate}`)
+  return Array.from({ length: runCount }, (_, runIndex) => {
+    const seed = baseSeed + runIndex + 1
+    const stochasticSnapshot: SimulationSnapshot = {
+      ...snapshot,
+      scenario: {
+        ...snapshot.scenario,
+        strategies: {
+          ...snapshot.scenario.strategies,
+          returnModel: {
+            ...returnModel,
+            mode: 'stochastic',
+            seed,
+            stochasticRuns: 0,
+          },
+        },
+      },
+    }
+    return {
+      runIndex,
+      seed,
+      input: {
+        snapshot: stochasticSnapshot,
+        startDate,
+      },
+    }
+  })
+}
+
+const chunk = <T,>(items: T[], size: number): T[][] => {
+  if (size <= 0) {
+    return [items]
+  }
+  const batches: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    batches.push(items.slice(i, i + size))
+  }
+  return batches
+}
+
+const getStochasticBatchSize = (runCount: number) => {
+  if (runCount <= 0) {
+    return 0
+  }
+  const coreHint =
+    typeof navigator !== 'undefined' ? Number(navigator.hardwareConcurrency) : NaN
+  const targetWorkers = Number.isFinite(coreHint)
+    ? Math.max(1, Math.floor(coreHint * 0.8))
+    : 16
+  const workerCount = Math.min(16, targetWorkers)
+  const idealSize = Math.ceil(runCount / workerCount)
+  return Math.min(16, Math.max(4, idealSize))
 }
 
 const normalizeSpendingLineItem = (item: SpendingLineItem): SpendingLineItem => ({
@@ -1370,12 +1434,52 @@ const ScenarioDetailPage = () => {
   const onRun = async (values: ScenarioEditorValues) => {
     const saved = await persistBundle(values, storage, setScenario, reset)
     const snapshot = await buildSimulationSnapshot(saved.scenario, storage)
+    // Default to today's date until scenarios have a configurable start date.
+    const startDate = new Date().toISOString().slice(0, 10)
     const input: SimulationRequest = {
       snapshot,
-      // Default to today's date until scenarios have a configurable start date.
-      startDate: new Date().toISOString().slice(0, 10),
+      startDate,
     }
-    const run = await simClient.runScenario(input)
+    const rawStochasticRuns = saved.scenario.strategies.returnModel.stochasticRuns
+    const stochasticTarget = Number.isFinite(rawStochasticRuns)
+      ? Math.max(0, Math.floor(rawStochasticRuns))
+      : 0
+    const baseRunPromise = simClient.runScenario(input)
+    const stochasticInputs =
+      stochasticTarget > 0 ? buildStochasticInputs(snapshot, startDate, stochasticTarget) : []
+    const stochasticRunsPromise =
+      stochasticInputs.length > 0
+        ? Promise.all(
+            chunk(stochasticInputs, getStochasticBatchSize(stochasticInputs.length)).map(
+              async (batch) => {
+                const runs = await simClient.runScenarioBatch(
+                  batch.map((entry) => entry.input),
+                )
+                return runs.map((stochasticRun, index) => {
+                  const meta = batch[index]
+                  return {
+                    runIndex: meta.runIndex,
+                    seed: meta.seed,
+                    endingBalance: stochasticRun.result.summary.endingBalance,
+                    minBalance: stochasticRun.result.summary.minBalance,
+                    maxBalance: stochasticRun.result.summary.maxBalance,
+                  }
+                })
+              },
+            ),
+          ).then((results) => results.flat())
+        : Promise.resolve([])
+    const [baseRun, stochasticRuns] = await Promise.all([
+      baseRunPromise,
+      stochasticRunsPromise,
+    ])
+    const run: SimulationRun = {
+      ...baseRun,
+      result: {
+        ...baseRun.result,
+        stochasticRuns,
+      },
+    }
     await storage.runRepo.add(run)
     await loadRuns(saved.scenario.id)
     navigate(`/runs/${run.id}`)
@@ -1507,36 +1611,6 @@ const ScenarioDetailPage = () => {
             <Link className="link" to={backTo}>
               Back
             </Link>
-            <button
-              className="button secondary"
-              type="button"
-              disabled={isSubmitting}
-              onClick={handleSubmit(onRun)}
-            >
-              <span
-                title="Development only. This runs the simulation without saving changes."
-                aria-hidden="true"
-                style={{ display: 'inline-flex', marginRight: '0.4rem', color: '#b32020' }}
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                  <path
-                    d="M12 3l9 16H3L12 3z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M12 9v5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                  <circle cx="12" cy="16.5" r="1" fill="currentColor" />
-                </svg>
-              </span>
-              Run simulation
-            </button>
           </div>
         }
       />
@@ -1749,6 +1823,24 @@ const ScenarioDetailPage = () => {
             >
               Simulation runs
             </button>
+            <div className="button-row">
+              <button
+                className="button"
+                type="button"
+                disabled={isSubmitting || !isDirty}
+                onClick={handleSubmit(onSubmit, onInvalid)}
+              >
+                Save scenario
+              </button>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleSubmit(onRun)}
+              >
+                Run simulation
+              </button>
+            </div>
           </div>
         </aside>
       </div>

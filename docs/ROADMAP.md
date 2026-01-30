@@ -12,6 +12,7 @@
 - Probability of success
 - Health volatility
 - Inflation volatility
+- Legacy goals
 
 ## Phase 3 (Spouse and Children)
  - Revamping things to _really_ support multiple people

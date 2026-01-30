@@ -177,10 +177,19 @@ export const monthlyTimelinePointSchema = z.object({
   deductions: z.number(),
 })
 
+export const stochasticRunSummarySchema = z.object({
+  runIndex: z.number().int().min(0),
+  seed: z.number().int(),
+  endingBalance: z.number(),
+  minBalance: z.number(),
+  maxBalance: z.number(),
+})
+
 export const simulationResultSchema = z.object({
   timeline: z.array(timelinePointSchema),
   monthlyTimeline: z.array(monthlyTimelinePointSchema).optional(),
   explanations: z.array(monthExplanationSchema).optional(),
+  stochasticRuns: z.array(stochasticRunSummarySchema).optional(),
   summary: z.object({
     endingBalance: z.number(),
     minBalance: z.number(),
@@ -209,3 +218,4 @@ export type MarketReturn = z.infer<typeof marketReturnSchema>
 export type AccountBalanceSnapshot = z.infer<typeof accountBalanceSchema>
 export type ModuleRunExplanation = z.infer<typeof moduleRunSchema>
 export type MonthExplanation = z.infer<typeof monthExplanationSchema>
+export type StochasticRunSummary = z.infer<typeof stochasticRunSummarySchema>

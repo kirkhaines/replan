@@ -223,6 +223,14 @@ h2 {
   white-space: nowrap;
 }
 
+.scenario-toc .button {
+  white-space: nowrap;
+}
+
+.timeline-collapsible #section-timeline > h2 {
+  display: none;
+}
+
 .run-results-toc-primary {
   display: grid;
   gap: 1.5rem;

@@ -96,6 +96,17 @@ const BasicConfigSection = ({
               })}
             />
           </label>
+          <label className="field">
+            <span>Stochastic runs</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              {...register('scenario.strategies.returnModel.stochasticRuns', {
+                setValueAs: (value) => (value === '' ? 0 : Number(value)),
+              })}
+            />
+          </label>
           {inflationTypeSchema.options.map((type) => {
             const currentValue =
               inflationAssumptions?.[type] ?? inflationByType.get(type)?.rate ?? 0
