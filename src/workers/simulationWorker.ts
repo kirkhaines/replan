@@ -185,16 +185,10 @@ const runScenarioOnce = (
 }
 
 const buildStochasticInput = (
-  snapshot: SimulationSnapshot | undefined,
-  startDate: string | undefined,
+  snapshot: SimulationSnapshot,
+  startDate: string,
   seed: number,
 ): RunScenarioRequest['input'] => {
-  if (!snapshot) {
-    return {
-      snapshot,
-      startDate: startDate ?? '',
-    } as RunScenarioRequest['input']
-  }
   const returnModel = snapshot.scenario.strategies.returnModel
   return {
     snapshot: {
@@ -212,14 +206,15 @@ const buildStochasticInput = (
         },
       },
     },
-    startDate: startDate ?? '',
+    startDate,
   }
 }
 
 self.onmessage = (event: MessageEvent<RunScenarioRequest | RunScenarioBatchRequest>) => {
   const { requestId } = event.data
   if (event.data.type === 'runScenarioBatch') {
-    const seeds = event.data.seeds ?? []
+    const batchRequest = event.data
+    const seeds = batchRequest.seeds ?? []
     const batchStart = Date.now()
     console.info('[Simulation] Batch run requested.', {
       requestId,
@@ -227,7 +222,7 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest | RunScenarioBatchReque
     })
     const runs = seeds.map((seed, index) =>
       runScenarioOnce(
-        buildStochasticInput(event.data.snapshot, event.data.startDate, seed),
+        buildStochasticInput(batchRequest.snapshot, batchRequest.startDate, seed),
         `${requestId}:${index + 1}`,
         false,
         true,
