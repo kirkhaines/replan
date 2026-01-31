@@ -10,7 +10,7 @@ import type {
   RunScenarioRequest,
   RunScenarioResponse,
 } from '../core/simClient/types'
-import type { SimulationRun } from '../core/models'
+import type { SimulationRun, SimulationSnapshot } from '../core/models'
 import { createUuid } from '../core/utils/uuid'
 import type { ZodIssue } from 'zod'
 
@@ -77,6 +77,7 @@ const runScenarioOnce = (
   summaryOnly = false,
 ): SimulationRun => {
   const startedAt = Date.now()
+  const includeSnapshot = !summaryOnly
   if (logEnabled) {
     console.info('[Simulation] Run requested.', {
       requestId,
@@ -104,7 +105,7 @@ const runScenarioOnce = (
       status: 'error',
       errorMessage: formatZodError(issue),
       result: emptyResult,
-      snapshot: input?.snapshot,
+      snapshot: includeSnapshot ? input?.snapshot : undefined,
       title: new Date(finishedAt).toLocaleString(),
     }
   }
@@ -136,7 +137,7 @@ const runScenarioOnce = (
       status: 'error',
       errorMessage: `${reason} ${summarizeSnapshot(parsed.data.snapshot)}`,
       result: emptyResult,
-      snapshot: parsed.data.snapshot,
+      snapshot: includeSnapshot ? parsed.data.snapshot : undefined,
       title: new Date(finishedAt).toLocaleString(),
     }
   }
@@ -168,7 +169,7 @@ const runScenarioOnce = (
     finishedAt,
     status: 'success',
     result,
-    snapshot: parsed.data.snapshot,
+    snapshot: includeSnapshot ? parsed.data.snapshot : undefined,
     title: new Date(finishedAt).toLocaleString(),
   }
   if (!summaryOnly) {
@@ -183,17 +184,54 @@ const runScenarioOnce = (
   }
 }
 
+const buildStochasticInput = (
+  snapshot: SimulationSnapshot | undefined,
+  startDate: string | undefined,
+  seed: number,
+): RunScenarioRequest['input'] => {
+  if (!snapshot) {
+    return {
+      snapshot,
+      startDate: startDate ?? '',
+    } as RunScenarioRequest['input']
+  }
+  const returnModel = snapshot.scenario.strategies.returnModel
+  return {
+    snapshot: {
+      ...snapshot,
+      scenario: {
+        ...snapshot.scenario,
+        strategies: {
+          ...snapshot.scenario.strategies,
+          returnModel: {
+            ...returnModel,
+            mode: 'stochastic',
+            seed,
+            stochasticRuns: 0,
+          },
+        },
+      },
+    },
+    startDate: startDate ?? '',
+  }
+}
+
 self.onmessage = (event: MessageEvent<RunScenarioRequest | RunScenarioBatchRequest>) => {
   const { requestId } = event.data
   if (event.data.type === 'runScenarioBatch') {
-    const inputs = event.data.inputs ?? []
+    const seeds = event.data.seeds ?? []
     const batchStart = Date.now()
     console.info('[Simulation] Batch run requested.', {
       requestId,
-      count: inputs.length,
+      count: seeds.length,
     })
-    const runs = inputs.map((input, index) =>
-      runScenarioOnce(input, `${requestId}:${index + 1}`, false, true),
+    const runs = seeds.map((seed, index) =>
+      runScenarioOnce(
+        buildStochasticInput(event.data.snapshot, event.data.startDate, seed),
+        `${requestId}:${index + 1}`,
+        false,
+        true,
+      ),
     )
     const batchFinished = Date.now()
     console.info('[Simulation] Batch run complete.', {

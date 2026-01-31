@@ -469,6 +469,7 @@ const SpendingSection = ({
                 date: today,
                 amount: 0,
                 taxTreatment: 'none',
+                inflationType: 'none',
               })
             }}
           >
@@ -484,6 +485,7 @@ const SpendingSection = ({
                 <th>Name</th>
                 <th>Date</th>
                 <th>Amount</th>
+                <th>Inflation</th>
                 <th>Tax treatment</th>
                 <th>Actions</th>
               </tr>
@@ -513,6 +515,18 @@ const SpendingSection = ({
                         valueAsNumber: true,
                       })}
                     />
+                  </td>
+                  <td>
+                    <select
+                      defaultValue={field.inflationType ?? 'none'}
+                      {...register(`scenario.strategies.events.${index}.inflationType`)}
+                    >
+                      {inflationTypeSchema.options.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <select

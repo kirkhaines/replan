@@ -3,7 +3,13 @@ import type { SimulationRequest } from '../sim/input'
 
 export interface ISimClient {
   runScenario: (input: SimulationRequest) => Promise<SimulationRun>
-  runScenarioBatch: (inputs: SimulationRequest[]) => Promise<SimulationRun[]>
+  runScenarioBatch: (input: RunScenarioBatchInput) => Promise<SimulationRun[]>
+}
+
+export type RunScenarioBatchInput = {
+  snapshot: SimulationRequest['snapshot']
+  startDate: SimulationRequest['startDate']
+  seeds: number[]
 }
 
 export type RunScenarioRequest = {
@@ -15,7 +21,9 @@ export type RunScenarioRequest = {
 export type RunScenarioBatchRequest = {
   type: 'runScenarioBatch'
   requestId: string
-  inputs: SimulationRequest[]
+  snapshot: SimulationRequest['snapshot']
+  startDate: SimulationRequest['startDate']
+  seeds: number[]
 }
 
 export type RunScenarioResponse = {

@@ -1,5 +1,6 @@
 import type {
   ISimClient,
+  RunScenarioBatchInput,
   RunScenarioBatchResponse,
   RunScenarioResponse,
 } from './types'
@@ -34,7 +35,7 @@ export const createWorkerSimClient = (): ISimClient => {
       }
     | {
         requestId: string
-        inputs: SimulationRequest[]
+        input: RunScenarioBatchInput
         resolve: (runs: SimulationRun[]) => void
         kind: 'batch'
       }
@@ -59,7 +60,9 @@ export const createWorkerSimClient = (): ISimClient => {
         entry.worker.postMessage({
           type: 'runScenarioBatch',
           requestId: next.requestId,
-          inputs: next.inputs,
+          snapshot: next.input.snapshot,
+          startDate: next.input.startDate,
+          seeds: next.input.seeds,
         })
         return
       }
@@ -110,10 +113,10 @@ export const createWorkerSimClient = (): ISimClient => {
       dispatchNext()
     })
 
-  const runScenarioBatch = (inputs: SimulationRequest[]) =>
+  const runScenarioBatch = (input: RunScenarioBatchInput) =>
     new Promise<SimulationRun[]>((resolve) => {
       const requestId = createUuid()
-      queue.push({ requestId, inputs, resolve, kind: 'batch' })
+      queue.push({ requestId, input, resolve, kind: 'batch' })
       dispatchNext()
     })
 

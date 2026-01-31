@@ -96,6 +96,7 @@ export const remapScenarioSeed = (seed: LocalScenarioSeed): LocalScenarioSeed =>
       events: seed.scenario.strategies.events.map((event) => ({
         ...event,
         id: remapId(event.id, idMap),
+        inflationType: event.inflationType ?? 'none',
       })),
       pensions: seed.scenario.strategies.pensions.map((pension) => ({
         ...pension,

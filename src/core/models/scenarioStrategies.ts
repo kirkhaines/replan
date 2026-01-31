@@ -156,6 +156,7 @@ export const cashflowEventSchema = z.object({
   date: isoDateStringSchema,
   amount: z.number(),
   taxTreatment: taxTreatmentSchema,
+  inflationType: inflationTypeSchema,
 })
 
 export const pensionIncomeSchema = z.object({
@@ -373,6 +374,13 @@ export const normalizeScenarioStrategies = (
           relationship: entry.relationship ?? defaults.death.beneficiaries[0].relationship,
         }))
       : defaults.death.beneficiaries
+  const events =
+    strategies?.events?.length
+      ? strategies.events.map((event) => ({
+          ...event,
+          inflationType: event.inflationType ?? 'none',
+        }))
+      : defaults.events
   return {
     ...defaults,
     ...strategies,
@@ -395,7 +403,7 @@ export const normalizeScenarioStrategies = (
     healthcare: { ...defaults.healthcare, ...strategies?.healthcare },
     tax: { ...defaults.tax, ...strategies?.tax },
     death: { ...defaults.death, ...strategies?.death, beneficiaries },
-    events: strategies?.events ?? defaults.events,
+    events,
     pensions: strategies?.pensions ?? defaults.pensions,
   }
 }

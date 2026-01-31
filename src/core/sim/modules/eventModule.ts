@@ -1,7 +1,7 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type { CashflowItem, SimulationModule } from '../types'
-import { isSameMonth } from './utils'
+import { inflateAmount, isSameMonth } from './utils'
 
 export const createEventModule = (snapshot: SimulationSnapshot): SimulationModule => {
   const events = snapshot.scenario.strategies.events
@@ -29,7 +29,14 @@ export const createEventModule = (snapshot: SimulationSnapshot): SimulationModul
         if (!isSameMonth(context.dateIso, event.date)) {
           return
         }
-        const amount = event.amount
+        const inflationRate =
+          snapshot.scenario.strategies.returnModel.inflationAssumptions[event.inflationType] ?? 0
+        const amount = inflateAmount(
+          event.amount,
+          context.settings.startDate,
+          context.dateIso,
+          inflationRate,
+        )
         const cashflow: CashflowItem = {
           id: `${event.id}-${context.monthIndex}`,
           label: event.name,

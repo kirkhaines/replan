@@ -754,13 +754,21 @@ test('saving persists strategy scalars, events, and pensions', async () => {
   const eventNameInput = eventRow.querySelector('input:not([type])')
   const eventDateInput = eventRow.querySelector('input[type="date"]')
   const eventAmountInput = eventRow.querySelector('input[type="number"]')
-  const eventTaxSelect = eventRow.querySelector('select')
-  if (!eventNameInput || !eventDateInput || !eventAmountInput || !eventTaxSelect) {
+  const eventSelects = eventRow.querySelectorAll('select')
+  if (
+    !eventNameInput ||
+    !eventDateInput ||
+    !eventAmountInput ||
+    eventSelects.length < 2
+  ) {
     throw new Error('Missing event row inputs')
   }
+  const eventInflationSelect = eventSelects[0]
+  const eventTaxSelect = eventSelects[1]
   fireEvent.change(eventNameInput, { target: { value: 'Windfall' } })
   fireEvent.change(eventDateInput, { target: { value: '2032-05-01' } })
   fireEvent.change(eventAmountInput, { target: { value: '5000' } })
+  fireEvent.change(eventInflationSelect, { target: { value: 'cpi' } })
   fireEvent.change(eventTaxSelect, { target: { value: 'ordinary' } })
 
   fireEvent.click(screen.getByRole('button', { name: /add pension/i }))
@@ -806,6 +814,7 @@ test('saving persists strategy scalars, events, and pensions', async () => {
   expect(lastCall?.strategies.events).toHaveLength(1)
   expect(lastCall?.strategies.events[0]?.name).toBe('Windfall')
   expect(lastCall?.strategies.events[0]?.amount).toBe(5000)
+  expect(lastCall?.strategies.events[0]?.inflationType).toBe('cpi')
   expect(lastCall?.strategies.events[0]?.taxTreatment).toBe('ordinary')
   expect(lastCall?.strategies.pensions).toHaveLength(1)
   expect(lastCall?.strategies.pensions[0]?.name).toBe('Company pension')

@@ -383,40 +383,18 @@ const buildSimulationSnapshot = async (
   }
 }
 
-const buildStochasticInputs = (
+const buildStochasticSeeds = (
   snapshot: SimulationSnapshot,
   startDate: string,
   runCount: number,
-): Array<{ runIndex: number; seed: number; input: SimulationRequest }> => {
+): Array<{ runIndex: number; seed: number }> => {
   const returnModel = snapshot.scenario.strategies.returnModel
   const baseSeed =
     returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${startDate}`)
-  return Array.from({ length: runCount }, (_, runIndex) => {
-    const seed = baseSeed + runIndex + 1
-    const stochasticSnapshot: SimulationSnapshot = {
-      ...snapshot,
-      scenario: {
-        ...snapshot.scenario,
-        strategies: {
-          ...snapshot.scenario.strategies,
-          returnModel: {
-            ...returnModel,
-            mode: 'stochastic',
-            seed,
-            stochasticRuns: 0,
-          },
-        },
-      },
-    }
-    return {
-      runIndex,
-      seed,
-      input: {
-        snapshot: stochasticSnapshot,
-        startDate,
-      },
-    }
-  })
+  return Array.from({ length: runCount }, (_, runIndex) => ({
+    runIndex,
+    seed: baseSeed + runIndex + 1,
+  }))
 }
 
 const chunk = <T,>(items: T[], size: number): T[][] => {
@@ -1457,16 +1435,18 @@ const ScenarioDetailPage = () => {
       ? Math.max(0, Math.floor(rawStochasticRuns))
       : 0
     const baseRunPromise = simClient.runScenario(input)
-    const stochasticInputs =
-      stochasticTarget > 0 ? buildStochasticInputs(snapshot, startDate, stochasticTarget) : []
+    const stochasticSeeds =
+      stochasticTarget > 0 ? buildStochasticSeeds(snapshot, startDate, stochasticTarget) : []
     const stochasticRunsPromise =
-      stochasticInputs.length > 0
+      stochasticSeeds.length > 0
         ? Promise.all(
-            chunk(stochasticInputs, getStochasticBatchSize(stochasticInputs.length)).map(
+            chunk(stochasticSeeds, getStochasticBatchSize(stochasticSeeds.length)).map(
               async (batch) => {
-                const runs = await simClient.runScenarioBatch(
-                  batch.map((entry) => entry.input),
-                )
+                const runs = await simClient.runScenarioBatch({
+                  snapshot,
+                  startDate,
+                  seeds: batch.map((entry) => entry.seed),
+                })
                 return runs.map((stochasticRun, index) => {
                   const meta = batch[index]
                   return {
