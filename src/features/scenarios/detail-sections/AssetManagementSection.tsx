@@ -295,21 +295,11 @@ const AssetManagementSection = ({
     </div>
 
     <div className="stack">
-      <h3>Withdrawal guardrails</h3>
+      <h3>Withdrawal settings</h3>
       <div className="form-grid">
         <label className="field checkbox">
           <input type="checkbox" {...register('scenario.strategies.withdrawal.avoidEarlyPenalty')} />
           <span>Avoid early penalties</span>
-        </label>
-        <label className="field">
-          <span>Guardrail percent</span>
-          <input
-            type="number"
-            step="0.01"
-            {...register('scenario.strategies.withdrawal.guardrailPct', {
-              valueAsNumber: true,
-            })}
-          />
         </label>
         <label className="field">
           <span>Taxable gain harvest target</span>

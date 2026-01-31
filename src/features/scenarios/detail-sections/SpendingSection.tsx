@@ -23,6 +23,17 @@ type SpendingSectionProps = {
   spendingSummaryRows: SpendingIntervalRow[]
   formatCurrency: (value: number) => string
   longTermCareLevel: string | undefined
+  guardrailStrategy: string | undefined
+  guardrailHealthPointFields: FieldArrayWithId<
+    ScenarioEditorValues,
+    'scenario.strategies.withdrawal.guardrailHealthPoints',
+    'id'
+  >[]
+  appendGuardrailHealthPoint: UseFieldArrayAppend<
+    ScenarioEditorValues,
+    'scenario.strategies.withdrawal.guardrailHealthPoints'
+  >
+  removeGuardrailHealthPoint: UseFieldArrayRemove
   appendEvent: UseFieldArrayAppend<ScenarioEditorValues, 'scenario.strategies.events'>
   removeEvent: UseFieldArrayRemove
   eventRows: FieldArrayWithId<ScenarioEditorValues, 'scenario.strategies.events', 'id'>[]
@@ -39,6 +50,10 @@ const SpendingSection = ({
   spendingSummaryRows,
   formatCurrency,
   longTermCareLevel,
+  guardrailStrategy,
+  guardrailHealthPointFields,
+  appendGuardrailHealthPoint,
+  removeGuardrailHealthPoint,
   appendEvent,
   removeEvent,
   eventRows,
@@ -117,6 +132,160 @@ const SpendingSection = ({
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="stack">
+        <div className="row">
+          <h3>Guardrails</h3>
+        </div>
+        <div className="form-grid">
+          <label className="field">
+            <span>Strategy</span>
+            <select {...register('scenario.strategies.withdrawal.guardrailStrategy')}>
+              <option value="none">None</option>
+              <option value="legacy">Legacy guardrail</option>
+              <option value="cap_wants">Cap wants by withdrawal rate</option>
+              <option value="portfolio_health">Portfolio health model</option>
+              <option value="guyton">Guyton</option>
+            </select>
+          </label>
+          {guardrailStrategy === 'legacy' ? (
+            <label className="field">
+              <span>Guardrail percent</span>
+              <input
+                type="number"
+                step="0.01"
+                {...register('scenario.strategies.withdrawal.guardrailPct', {
+                  valueAsNumber: true,
+                })}
+              />
+            </label>
+          ) : null}
+          {guardrailStrategy === 'cap_wants' ? (
+            <label className="field">
+              <span>Withdrawal rate limit</span>
+              <input
+                type="number"
+                step="0.001"
+                {...register('scenario.strategies.withdrawal.guardrailWithdrawalRateLimit', {
+                  valueAsNumber: true,
+                })}
+              />
+            </label>
+          ) : null}
+        </div>
+        {guardrailStrategy === 'cap_wants' ? (
+          <p className="muted">Uses the withdrawal rate limit to cap wants.</p>
+        ) : null}
+
+        {guardrailStrategy === 'portfolio_health' ? (
+          <div className="stack">
+            <div className="row">
+              <h4>Health points</h4>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() =>
+                  appendGuardrailHealthPoint({
+                    health: 1,
+                    factor: 1,
+                  })
+                }
+              >
+                Add point
+              </button>
+            </div>
+            {guardrailHealthPointFields.length === 0 ? (
+              <p className="muted">No health points configured.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Health</th>
+                    <th>Guardrail factor</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {guardrailHealthPointFields.map((field, index) => (
+                    <tr key={field.id}>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.health}
+                          {...register(
+                            `scenario.strategies.withdrawal.guardrailHealthPoints.${index}.health`,
+                            {
+                              valueAsNumber: true,
+                            },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.factor}
+                          {...register(
+                            `scenario.strategies.withdrawal.guardrailHealthPoints.${index}.factor`,
+                            {
+                              valueAsNumber: true,
+                            },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => removeGuardrailHealthPoint(index)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : null}
+
+        {guardrailStrategy === 'guyton' ? (
+          <div className="form-grid">
+            <label className="field">
+              <span>Trigger withdrawal rate increase</span>
+              <input
+                type="number"
+                step="0.01"
+                {...register('scenario.strategies.withdrawal.guardrailGuytonTriggerRateIncrease', {
+                  valueAsNumber: true,
+                })}
+              />
+            </label>
+            <label className="field">
+              <span>Applied guardrail percent</span>
+              <input
+                type="number"
+                step="0.01"
+                {...register('scenario.strategies.withdrawal.guardrailGuytonAppliedPct', {
+                  valueAsNumber: true,
+                })}
+              />
+            </label>
+            <label className="field">
+              <span>Applied duration (months)</span>
+              <input
+                type="number"
+                step="1"
+                {...register('scenario.strategies.withdrawal.guardrailGuytonDurationMonths', {
+                  valueAsNumber: true,
+                })}
+              />
+            </label>
+          </div>
+        ) : null}
       </div>
 
       <div className="stack">

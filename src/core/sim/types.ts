@@ -153,6 +153,11 @@ export type SimulationState = {
   yearContributionsByTaxType: Record<CashflowSeriesBucket, number>
   magiHistory: Record<number, number>
   initialBalance: number
+  guardrailTargetBalance: number | null
+  guardrailTargetDateIso: string | null
+  guardrailBaselineNeed: number
+  guardrailBaselineWant: number
+  guardrailGuytonMonthsRemaining: number
 }
 
 export type SimulationContext = {

@@ -466,6 +466,11 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     },
     magiHistory: {},
     initialBalance,
+    guardrailTargetBalance: null,
+    guardrailTargetDateIso: null,
+    guardrailBaselineNeed: 0,
+    guardrailBaselineWant: 0,
+    guardrailGuytonMonthsRemaining: 0,
   }
 }
 
@@ -485,6 +490,11 @@ const cloneState = (state: SimulationState): SimulationState => ({
   yearContributionsByTaxType: { ...state.yearContributionsByTaxType },
   magiHistory: { ...state.magiHistory },
   initialBalance: state.initialBalance,
+  guardrailTargetBalance: state.guardrailTargetBalance,
+  guardrailTargetDateIso: state.guardrailTargetDateIso,
+  guardrailBaselineNeed: state.guardrailBaselineNeed,
+  guardrailBaselineWant: state.guardrailBaselineWant,
+  guardrailGuytonMonthsRemaining: state.guardrailGuytonMonthsRemaining,
 })
 
 const getPrimaryPerson = (snapshot: SimulationInput['snapshot']): Person | null => {

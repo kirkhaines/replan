@@ -61,7 +61,18 @@ export const cashBufferStrategySchema = z.object({
 export const withdrawalStrategySchema = z.object({
   order: z.array(withdrawalOrderTypeSchema).min(1),
   useCashFirst: z.boolean(),
+  guardrailStrategy: z.enum(['none', 'legacy', 'cap_wants', 'portfolio_health', 'guyton']),
   guardrailPct: z.number().min(0).max(1),
+  guardrailWithdrawalRateLimit: z.number().min(0),
+  guardrailHealthPoints: z.array(
+    z.object({
+      health: z.number().min(0),
+      factor: z.number().min(0).max(1),
+    }),
+  ),
+  guardrailGuytonTriggerRateIncrease: z.number().min(0),
+  guardrailGuytonAppliedPct: z.number().min(0).max(1),
+  guardrailGuytonDurationMonths: z.number().int().min(0),
   avoidEarlyPenalty: z.boolean(),
   taxableGainHarvestTarget: z.number().min(0),
 })
@@ -234,7 +245,18 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
   withdrawal: {
     order: ['taxable', 'traditional', 'roth_basis', 'roth', 'hsa'],
     useCashFirst: true,
+    guardrailStrategy: 'none',
     guardrailPct: 0,
+    guardrailWithdrawalRateLimit: 0.04,
+    guardrailHealthPoints: [
+      { health: 1.05, factor: 1 },
+      { health: 0.95, factor: 0.75 },
+      { health: 0.85, factor: 0.5 },
+      { health: 0.8, factor: 0 },
+    ],
+    guardrailGuytonTriggerRateIncrease: 0.2,
+    guardrailGuytonAppliedPct: 0.1,
+    guardrailGuytonDurationMonths: 12,
     avoidEarlyPenalty: true,
     taxableGainHarvestTarget: 0,
   },
@@ -330,6 +352,11 @@ export const normalizeScenarioStrategies = (
   strategies?: Partial<ScenarioStrategies> | null,
 ): ScenarioStrategies => {
   const defaults = createDefaultScenarioStrategies()
+  const providedGuardrailPct =
+    strategies?.withdrawal?.guardrailPct ?? defaults.withdrawal.guardrailPct
+  const guardrailStrategy =
+    strategies?.withdrawal?.guardrailStrategy ??
+    (providedGuardrailPct > 0 ? 'legacy' : defaults.withdrawal.guardrailStrategy)
   const withdrawalOrder = (() => {
     const provided = strategies?.withdrawal?.order ?? defaults.withdrawal.order
     const remaining = defaults.withdrawal.order.filter((type) => !provided.includes(type))
@@ -353,7 +380,12 @@ export const normalizeScenarioStrategies = (
     glidepath: { ...defaults.glidepath, ...strategies?.glidepath, scope: 'global' },
     rebalancing: { ...defaults.rebalancing, ...strategies?.rebalancing },
     cashBuffer: { ...defaults.cashBuffer, ...strategies?.cashBuffer },
-    withdrawal: { ...defaults.withdrawal, ...strategies?.withdrawal, order: withdrawalOrder },
+    withdrawal: {
+      ...defaults.withdrawal,
+      ...strategies?.withdrawal,
+      order: withdrawalOrder,
+      guardrailStrategy,
+    },
     taxableLot: { ...defaults.taxableLot, ...strategies?.taxableLot },
     earlyRetirement: { ...defaults.earlyRetirement, ...strategies?.earlyRetirement },
     rothConversion: { ...defaults.rothConversion, ...strategies?.rothConversion },

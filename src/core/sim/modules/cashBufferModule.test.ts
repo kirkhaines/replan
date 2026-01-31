@@ -206,6 +206,11 @@ const makeState = (
   },
   magiHistory: {},
   initialBalance: cashBalance + holdings.reduce((sum, holding) => sum + holding.balance, 0),
+  guardrailTargetBalance: null,
+  guardrailTargetDateIso: null,
+  guardrailBaselineNeed: 0,
+  guardrailBaselineWant: 0,
+  guardrailGuytonMonthsRemaining: 0,
 })
 
 const makeContext = (snapshot: SimulationSnapshot, age: number): SimulationContext => {

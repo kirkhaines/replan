@@ -655,6 +655,7 @@ const ScenarioDetailPage = () => {
   const taxPolicyYear = watch('scenario.strategies.tax.policyYear')
   const taxFilingStatus = watch('scenario.strategies.tax.filingStatus')
   const deathEnabled = watch('scenario.strategies.death.enabled')
+  const guardrailStrategy = watch('scenario.strategies.withdrawal.guardrailStrategy')
   const rothConversionStartAge = watch('scenario.strategies.rothConversion.startAge')
   const rothConversionEndAge = watch('scenario.strategies.rothConversion.endAge')
   const ladderLeadTimeYears = watch('scenario.strategies.rothLadder.leadTimeYears')
@@ -691,6 +692,15 @@ const ScenarioDetailPage = () => {
   } = useFieldArray({
     control,
     name: 'scenario.strategies.events',
+  })
+  const {
+    fields: guardrailHealthPointFields,
+    append: appendGuardrailHealthPoint,
+    remove: removeGuardrailHealthPoint,
+    replace: replaceGuardrailHealthPoints,
+  } = useFieldArray({
+    control,
+    name: 'scenario.strategies.withdrawal.guardrailHealthPoints',
   })
   const {
     fields: pensionRows,
@@ -1078,6 +1088,7 @@ const ScenarioDetailPage = () => {
     reset({ scenario: normalizedScenario })
     replaceGlidepathTargets(normalizedScenario.strategies.glidepath.targets)
     replaceEvents(normalizedScenario.strategies.events)
+    replaceGuardrailHealthPoints(normalizedScenario.strategies.withdrawal.guardrailHealthPoints)
     replacePensions(normalizedScenario.strategies.pensions)
     replaceBeneficiaries(normalizedScenario.strategies.death.beneficiaries)
     setFutureWorkPeriods(futureWorkPeriods.map(normalizeFutureWorkPeriod))
@@ -1089,6 +1100,7 @@ const ScenarioDetailPage = () => {
     replaceBeneficiaries,
     replaceEvents,
     replaceGlidepathTargets,
+    replaceGuardrailHealthPoints,
     replacePensions,
     reset,
     storage,
@@ -1706,6 +1718,10 @@ const ScenarioDetailPage = () => {
               spendingSummaryRows={spendingSummaryRows}
               formatCurrency={formatCurrency}
               longTermCareLevel={longTermCareLevel}
+              guardrailStrategy={guardrailStrategy}
+              guardrailHealthPointFields={guardrailHealthPointFields}
+              appendGuardrailHealthPoint={appendGuardrailHealthPoint}
+              removeGuardrailHealthPoint={removeGuardrailHealthPoint}
               appendEvent={appendEvent}
               removeEvent={removeEvent}
               eventRows={eventRows}
