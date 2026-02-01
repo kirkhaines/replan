@@ -1435,7 +1435,7 @@ const ScenarioDetailPage = () => {
     }
     const batchSize = getStochasticBatchSize(seeds.length)
     const batches = chunk(seeds, batchSize)
-    let summaries =
+    const summaries =
       (await storage.runRepo.get(runId))?.result.stochasticRuns?.slice() ?? []
     const summarizeRuns = (runs: SimulationRun[], batch: typeof seeds) =>
       runs.map((stochasticRun, index) => {
@@ -1474,7 +1474,7 @@ const ScenarioDetailPage = () => {
         return
       }
       const sorted = [...summaries].sort((a, b) => a.runIndex - b.runIndex)
-      const nextCancelled = isCancelled || existing.result.stochasticRunsCancelled
+      const nextCancelled = Boolean(isCancelled || existing.result.stochasticRunsCancelled)
       await storage.runRepo.upsert({
         ...existing,
         result: {

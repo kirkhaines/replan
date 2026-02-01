@@ -198,6 +198,7 @@ const RunResultsPage = () => {
   const [balanceDetail, setBalanceDetail] = useState<BalanceDetail>('none')
   const [showTimeline, setShowTimeline] = useState(false)
   const [liveStochasticProgress, setLiveStochasticProgress] = useState<{
+    runId: string
     completed: number
     target: number
     cancelled: boolean
@@ -912,9 +913,11 @@ const RunResultsPage = () => {
   }, [run])
   const storedCompleted = run?.result.stochasticRuns?.length ?? 0
   const storedCancelled = run?.result.stochasticRunsCancelled ?? false
-  const liveCompleted = liveStochasticProgress?.completed ?? 0
-  const liveTarget = liveStochasticProgress?.target
-  const liveCancelled = liveStochasticProgress?.cancelled ?? false
+  const liveProgress =
+    id && liveStochasticProgress?.runId === id ? liveStochasticProgress : null
+  const liveCompleted = liveProgress?.completed ?? 0
+  const liveTarget = liveProgress?.target
+  const liveCancelled = liveProgress?.cancelled ?? false
   const stochasticCompleted = Math.max(storedCompleted, liveCompleted)
   const stochasticTargetResolved = liveTarget ?? stochasticTarget
   const stochasticCancelled = storedCancelled || liveCancelled
@@ -923,16 +926,16 @@ const RunResultsPage = () => {
     stochasticCompleted < stochasticTargetResolved &&
     !stochasticCancelled
   const needsStochasticSync =
-    (liveStochasticProgress?.completed ?? 0) > storedCompleted ||
-    (liveStochasticProgress?.cancelled ?? false) !== storedCancelled
+    (liveProgress?.completed ?? 0) > storedCompleted ||
+    (liveProgress?.cancelled ?? false) !== storedCancelled
 
   useEffect(() => {
     if (!id) {
-      setLiveStochasticProgress(null)
       return
     }
     return subscribeStochasticProgress(id, (update) => {
       setLiveStochasticProgress({
+        runId: update.runId,
         completed: update.completed,
         target: update.target,
         cancelled: update.cancelled,
@@ -1042,7 +1045,7 @@ const RunResultsPage = () => {
       event.preventDefault()
       event.currentTarget.blur()
     },
-    [setShowTimeline],
+    [],
   )
 
   const summary = useMemo(() => {
