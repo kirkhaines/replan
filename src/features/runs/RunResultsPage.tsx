@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import type { SimulationRun } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
+import { subscribeStochasticProgress } from '../../core/simClient/stochasticProgress'
 import PageHeader from '../../components/PageHeader'
 import RunResultsGraphs from './RunResultsGraphs'
 import RunResultsTimeline from './RunResultsTimeline'
@@ -46,6 +47,7 @@ const chartPalette = [
   '#0ea5e9',
   '#a3e635',
 ]
+const enableStochasticLogs = false
 
 const chartKeyColors: Record<string, string> = {
   'spending:cash': '#ef4444',
@@ -195,6 +197,12 @@ const RunResultsPage = () => {
   const [rangeKey, setRangeKey] = useState('all')
   const [balanceDetail, setBalanceDetail] = useState<BalanceDetail>('none')
   const [showTimeline, setShowTimeline] = useState(false)
+  const [liveStochasticProgress, setLiveStochasticProgress] = useState<{
+    completed: number
+    target: number
+    cancelled: boolean
+    updatedAt: number
+  } | null>(null)
 
   const monthlyTimeline = useMemo(() => run?.result.monthlyTimeline ?? [], [run])
   const explanations = useMemo(() => run?.result.explanations ?? [], [run])
@@ -898,6 +906,107 @@ const RunResultsPage = () => {
     void load()
   }, [id, storage])
 
+  const stochasticTarget = useMemo(() => {
+    const raw = run?.snapshot?.scenario.strategies.returnModel.stochasticRuns
+    return Number.isFinite(raw) ? Math.max(0, Math.floor(raw ?? 0)) : 0
+  }, [run])
+  const storedCompleted = run?.result.stochasticRuns?.length ?? 0
+  const storedCancelled = run?.result.stochasticRunsCancelled ?? false
+  const liveCompleted = liveStochasticProgress?.completed ?? 0
+  const liveTarget = liveStochasticProgress?.target
+  const liveCancelled = liveStochasticProgress?.cancelled ?? false
+  const stochasticCompleted = Math.max(storedCompleted, liveCompleted)
+  const stochasticTargetResolved = liveTarget ?? stochasticTarget
+  const stochasticCancelled = storedCancelled || liveCancelled
+  const stochasticPending =
+    stochasticTargetResolved > 0 &&
+    stochasticCompleted < stochasticTargetResolved &&
+    !stochasticCancelled
+  const needsStochasticSync =
+    (liveStochasticProgress?.completed ?? 0) > storedCompleted ||
+    (liveStochasticProgress?.cancelled ?? false) !== storedCancelled
+
+  useEffect(() => {
+    if (!id) {
+      setLiveStochasticProgress(null)
+      return
+    }
+    return subscribeStochasticProgress(id, (update) => {
+      setLiveStochasticProgress({
+        completed: update.completed,
+        target: update.target,
+        cancelled: update.cancelled,
+        updatedAt: update.updatedAt,
+      })
+    })
+  }, [id])
+
+  useEffect(() => {
+    if (!run) {
+      return
+    }
+    if (enableStochasticLogs) {
+      console.info('[RunResults] Stochastic progress updated.', {
+        ts: new Date().toISOString(),
+        runId: run.id,
+        completed: stochasticCompleted,
+        target: stochasticTargetResolved,
+        cancelled: stochasticCancelled,
+        pending: stochasticPending,
+      })
+    }
+  }, [
+    run,
+    stochasticCancelled,
+    stochasticCompleted,
+    stochasticPending,
+    stochasticTargetResolved,
+  ])
+
+  const handleCancelStochastic = useCallback(async () => {
+    if (!run) {
+      return
+    }
+    const updated = {
+      ...run,
+      result: {
+        ...run.result,
+        stochasticRunsCancelled: true,
+      },
+    }
+    await storage.runRepo.upsert(updated)
+    setRun(updated)
+  }, [run, storage])
+
+  useEffect(() => {
+    if (!id || (!stochasticPending && !needsStochasticSync)) {
+      return
+    }
+    let cancelled = false
+    const interval = setInterval(async () => {
+      const data = await storage.runRepo.get(id)
+      if (cancelled) {
+        return
+      }
+      if (data) {
+        if (enableStochasticLogs) {
+          console.info('[RunResults] Polled run update.', {
+            ts: new Date().toISOString(),
+            runId: data.id,
+            completed: data.result.stochasticRuns?.length ?? 0,
+            target: data.snapshot?.scenario.strategies.returnModel.stochasticRuns ?? 0,
+            cancelled: data.result.stochasticRunsCancelled ?? false,
+          })
+        }
+        setRun(data)
+      }
+    }, 1500)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [id, needsStochasticSync, stochasticPending, storage])
+
   useEffect(() => {
     if (titleInputRef.current) {
       titleInputRef.current.value = run?.title ?? ''
@@ -1110,6 +1219,16 @@ const RunResultsPage = () => {
             </div>
           </div>
 
+          <RunResultsDistributions
+            stochasticRuns={run.result.stochasticRuns}
+            formatAxisValue={formatAxisValue}
+            formatCurrency={formatCurrency}
+            stochasticTarget={stochasticTargetResolved}
+            stochasticCompleted={stochasticCompleted}
+            stochasticCancelled={stochasticCancelled}
+            onCancelStochastic={stochasticPending ? handleCancelStochastic : undefined}
+          />
+
           <RunResultsGraphs
             balanceDetail={balanceDetail}
             balanceDetailOptions={balanceDetailOptions}
@@ -1150,12 +1269,6 @@ const RunResultsPage = () => {
               />
             ) : null}
           </div>
-
-          <RunResultsDistributions
-            stochasticRuns={run.result.stochasticRuns}
-            formatAxisValue={formatAxisValue}
-            formatCurrency={formatCurrency}
-          />
         </div>
 
         <aside className="scenario-toc" aria-label="Jump to section">
@@ -1168,6 +1281,13 @@ const RunResultsPage = () => {
                 onClick={handleJumpTo('section-summary')}
               >
                 Summary
+              </button>
+              <button
+                className="link-button"
+                type="button"
+                onClick={handleJumpTo('section-distributions')}
+              >
+                Balance distributions
               </button>
               <button
                 className="link-button"
@@ -1212,15 +1332,6 @@ const RunResultsPage = () => {
                 ))}
               </div>
             ) : null}
-            <div className="run-results-toc-primary">
-              <button
-                className="link-button"
-                type="button"
-                onClick={handleJumpTo('section-distributions')}
-              >
-                Balance distributions
-              </button>
-            </div>
           </div>
         </aside>
       </div>

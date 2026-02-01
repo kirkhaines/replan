@@ -27,6 +27,7 @@ import {
 } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import type { SimulationRequest } from '../../core/sim/input'
+import { publishStochasticProgress } from '../../core/simClient/stochasticProgress'
 import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
 import { createUuid } from '../../core/utils/uuid'
@@ -415,11 +416,12 @@ const getStochasticBatchSize = (runCount: number) => {
   const coreHint =
     typeof navigator !== 'undefined' ? Number(navigator.hardwareConcurrency) : NaN
   const targetWorkers = Number.isFinite(coreHint)
-    ? Math.max(1, Math.floor(coreHint * 0.8))
+    ? Math.max(1, Math.round(coreHint * 0.8))
     : 16
   const workerCount = Math.min(16, targetWorkers)
-  const idealSize = Math.ceil(runCount / workerCount)
-  return Math.min(16, Math.max(4, idealSize))
+  const batchCount = Math.min(runCount, Math.max(1, workerCount))
+  const idealSize = Math.ceil(runCount / batchCount)
+  return Math.min(16, Math.max(1, idealSize))
 }
 
 const normalizeSpendingLineItem = (item: SpendingLineItem): SpendingLineItem => ({
@@ -1421,6 +1423,119 @@ const ScenarioDetailPage = () => {
     }
   }
 
+  const runStochasticTrials = async (
+    runId: string,
+    snapshot: SimulationSnapshot,
+    startDate: string,
+    runCount: number,
+  ) => {
+    const seeds = buildStochasticSeeds(snapshot, startDate, runCount)
+    if (seeds.length === 0) {
+      return
+    }
+    const batchSize = getStochasticBatchSize(seeds.length)
+    const batches = chunk(seeds, batchSize)
+    let summaries =
+      (await storage.runRepo.get(runId))?.result.stochasticRuns?.slice() ?? []
+    const summarizeRuns = (runs: SimulationRun[], batch: typeof seeds) =>
+      runs.map((stochasticRun, index) => {
+        const meta = batch[index]
+        return {
+          runIndex: meta.runIndex,
+          seed: meta.seed,
+          endingBalance: stochasticRun.result.summary.endingBalance,
+          minBalance: stochasticRun.result.summary.minBalance,
+          maxBalance: stochasticRun.result.summary.maxBalance,
+          guardrailFactorAvg: stochasticRun.result.summary.guardrailFactorAvg,
+          guardrailFactorMin: stochasticRun.result.summary.guardrailFactorMin,
+          guardrailFactorBelowPct: stochasticRun.result.summary.guardrailFactorBelowPct,
+        }
+      })
+    const target = seeds.length
+    let cancelled = false
+    let finalized = false
+    const publishProgress = (completed: number, isCancelled: boolean) => {
+      publishStochasticProgress({
+        runId,
+        completed,
+        target,
+        cancelled: isCancelled,
+        updatedAt: Date.now(),
+      })
+    }
+    publishProgress(summaries.length, false)
+    const finalize = async (isCancelled: boolean) => {
+      if (finalized) {
+        return
+      }
+      finalized = true
+      const existing = await storage.runRepo.get(runId)
+      if (!existing) {
+        return
+      }
+      const sorted = [...summaries].sort((a, b) => a.runIndex - b.runIndex)
+      const nextCancelled = isCancelled || existing.result.stochasticRunsCancelled
+      await storage.runRepo.upsert({
+        ...existing,
+        result: {
+          ...existing.result,
+          stochasticRuns: sorted,
+          stochasticRunsCancelled: nextCancelled,
+        },
+      })
+      publishProgress(sorted.length, nextCancelled)
+    }
+    let cancelInterval: ReturnType<typeof setInterval> | null = null
+    const stopCancelWatch = () => {
+      if (cancelInterval) {
+        clearInterval(cancelInterval)
+        cancelInterval = null
+      }
+    }
+    const cancelSignal = new Promise<'cancel'>((resolve) => {
+      cancelInterval = setInterval(async () => {
+        const existing = await storage.runRepo.get(runId)
+        if (existing?.result.stochasticRunsCancelled) {
+          cancelled = true
+          stopCancelWatch()
+          publishProgress(summaries.length, true)
+          resolve('cancel')
+        }
+      }, 600)
+    })
+    const batchPromises = batches.map(async (batch) => {
+      if (cancelled || finalized) {
+        return
+      }
+      const existing = await storage.runRepo.get(runId)
+      if (existing?.result.stochasticRunsCancelled) {
+        cancelled = true
+        return
+      }
+      const runs = await simClient.runScenarioBatch({
+        snapshot,
+        startDate,
+        seeds: batch.map((entry) => entry.seed),
+      })
+      if (cancelled || finalized) {
+        return
+      }
+      const nextSummaries = summarizeRuns(runs, batch)
+      summaries.push(...nextSummaries)
+      publishProgress(summaries.length, false)
+    })
+    const allDone = Promise.allSettled(batchPromises).then(() => {
+      stopCancelWatch()
+      return 'done' as const
+    })
+    const result = await Promise.race([allDone, cancelSignal])
+    if (result === 'cancel') {
+      await finalize(true)
+      return
+    }
+    await finalize(cancelled)
+  }
+
   const onRun = async (values: ScenarioEditorValues) => {
     const saved = await persistBundle(values, storage, setScenario, reset)
     const snapshot = await buildSimulationSnapshot(saved.scenario, storage)
@@ -1434,50 +1549,21 @@ const ScenarioDetailPage = () => {
     const stochasticTarget = Number.isFinite(rawStochasticRuns)
       ? Math.max(0, Math.floor(rawStochasticRuns))
       : 0
-    const baseRunPromise = simClient.runScenario(input)
-    const stochasticSeeds =
-      stochasticTarget > 0 ? buildStochasticSeeds(snapshot, startDate, stochasticTarget) : []
-    const stochasticRunsPromise =
-      stochasticSeeds.length > 0
-        ? Promise.all(
-            chunk(stochasticSeeds, getStochasticBatchSize(stochasticSeeds.length)).map(
-              async (batch) => {
-                const runs = await simClient.runScenarioBatch({
-                  snapshot,
-                  startDate,
-                  seeds: batch.map((entry) => entry.seed),
-                })
-                return runs.map((stochasticRun, index) => {
-                  const meta = batch[index]
-                  return {
-                    runIndex: meta.runIndex,
-                    seed: meta.seed,
-                    endingBalance: stochasticRun.result.summary.endingBalance,
-                    minBalance: stochasticRun.result.summary.minBalance,
-                    maxBalance: stochasticRun.result.summary.maxBalance,
-                    guardrailFactorAvg: stochasticRun.result.summary.guardrailFactorAvg,
-                    guardrailFactorMin: stochasticRun.result.summary.guardrailFactorMin,
-                    guardrailFactorBelowPct: stochasticRun.result.summary.guardrailFactorBelowPct,
-                  }
-                })
-              },
-            ),
-          ).then((results) => results.flat())
-        : Promise.resolve([])
-    const [baseRun, stochasticRuns] = await Promise.all([
-      baseRunPromise,
-      stochasticRunsPromise,
-    ])
+    const baseRun = await simClient.runScenario(input)
     const run: SimulationRun = {
       ...baseRun,
       result: {
         ...baseRun.result,
-        stochasticRuns,
+        stochasticRuns: [],
+        stochasticRunsCancelled: false,
       },
     }
     await storage.runRepo.add(run)
     await loadRuns(saved.scenario.id)
     navigate(`/runs/${run.id}`)
+    if (stochasticTarget > 0) {
+      void runStochasticTrials(run.id, snapshot, startDate, stochasticTarget)
+    }
   }
 
   const formatRunTitle = (run: SimulationRun) =>

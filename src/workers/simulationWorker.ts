@@ -32,6 +32,13 @@ const formatZodError = (issue?: ZodIssue) => {
   return path ? `Invalid scenario at ${path}: ${message}` : `Invalid scenario: ${message}`
 }
 
+const enableBatchLogs = false
+const logBatch = (...args: Parameters<typeof console.info>) => {
+  if (enableBatchLogs) {
+    console.info(...args)
+  }
+}
+
 const summarizeSnapshot = (snapshot?: { [key: string]: unknown }) => {
   if (!snapshot || typeof snapshot !== 'object') {
     return 'snapshot missing'
@@ -223,8 +230,10 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest | RunScenarioBatchReque
     const batchRequest = event.data
     const seeds = batchRequest.seeds ?? []
     const batchStart = Date.now()
-    console.info('[Simulation] Batch run requested.', {
+    logBatch('[Simulation] Batch run requested.', {
+      ts: new Date(batchStart).toISOString(),
       requestId,
+      workerId: batchRequest.workerId ?? 'unknown',
       count: seeds.length,
     })
     const runs = seeds.map((seed, index) =>
@@ -236,10 +245,18 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest | RunScenarioBatchReque
       ),
     )
     const batchFinished = Date.now()
-    console.info('[Simulation] Batch run complete.', {
+    logBatch('[Simulation] Batch run complete.', {
+      ts: new Date(batchFinished).toISOString(),
       requestId,
+      workerId: batchRequest.workerId ?? 'unknown',
       count: runs.length,
       durationMs: batchFinished - batchStart,
+    })
+    logBatch('[Simulation] Posting batch results.', {
+      ts: new Date().toISOString(),
+      requestId,
+      workerId: batchRequest.workerId ?? 'unknown',
+      count: runs.length,
     })
     const response: RunScenarioBatchResponse = {
       type: 'runScenarioBatchResult',
@@ -247,13 +264,33 @@ self.onmessage = (event: MessageEvent<RunScenarioRequest | RunScenarioBatchReque
       runs,
     }
     self.postMessage(response)
+    logBatch('[Simulation] Batch results posted.', {
+      ts: new Date().toISOString(),
+      requestId,
+      workerId: batchRequest.workerId ?? 'unknown',
+    })
     return
   }
+  console.info('[Simulation] Single run received.', {
+    ts: new Date().toISOString(),
+    requestId,
+    workerId: event.data.workerId ?? 'unknown',
+  })
   const run = runScenarioOnce(event.data.input, requestId)
+  console.info('[Simulation] Posting single run result.', {
+    ts: new Date().toISOString(),
+    requestId,
+    workerId: event.data.workerId ?? 'unknown',
+  })
   const response: RunScenarioResponse = {
     type: 'runScenarioResult',
     requestId,
     run,
   }
   self.postMessage(response)
+  console.info('[Simulation] Single run result posted.', {
+    ts: new Date().toISOString(),
+    requestId,
+    workerId: event.data.workerId ?? 'unknown',
+  })
 }

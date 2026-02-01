@@ -16,6 +16,7 @@ export type RunScenarioRequest = {
   type: 'runScenario'
   requestId: string
   input: SimulationRequest
+  workerId?: number
 }
 
 export type RunScenarioBatchRequest = {
@@ -24,6 +25,7 @@ export type RunScenarioBatchRequest = {
   snapshot: SimulationRequest['snapshot']
   startDate: SimulationRequest['startDate']
   seeds: number[]
+  workerId?: number
 }
 
 export type RunScenarioResponse = {

@@ -13,8 +13,14 @@ export const createWorkerSimClient = (): ISimClient => {
   const coreHint =
     typeof navigator !== 'undefined' ? Number(navigator.hardwareConcurrency) : NaN
   const workerCount = Number.isFinite(coreHint)
-    ? Math.max(1, Math.floor(coreHint * 0.8))
+    ? Math.max(1, Math.round(coreHint * 0.8))
     : defaultWorkers
+  const enableBatchLogs = false
+  const logBatch = (...args: Parameters<typeof console.info>) => {
+    if (enableBatchLogs) {
+      console.info(...args)
+    }
+  }
 
   const workers = Array.from({ length: workerCount }, () => ({
     worker: new Worker(new URL('../../workers/simulationWorker.ts', import.meta.url), {
@@ -50,6 +56,23 @@ export const createWorkerSimClient = (): ISimClient => {
       if (!next) {
         return
       }
+      if (next.kind === 'batch') {
+        logBatch('[SimClient] Dispatching queued request.', {
+          ts: new Date().toISOString(),
+          requestId: next.requestId,
+          kind: next.kind,
+          workerId: index,
+          queueRemaining: queue.length,
+        })
+      } else {
+        console.info('[SimClient] Dispatching queued request.', {
+          ts: new Date().toISOString(),
+          requestId: next.requestId,
+          kind: next.kind,
+          workerId: index,
+          queueRemaining: queue.length,
+        })
+      }
       entry.busy = true
       if (next.kind === 'batch') {
         pending.set(next.requestId, {
@@ -57,12 +80,24 @@ export const createWorkerSimClient = (): ISimClient => {
           workerIndex: index,
           kind: 'batch',
         })
+        logBatch('[SimClient] Posting batch to worker.', {
+          ts: new Date().toISOString(),
+          requestId: next.requestId,
+          workerId: index,
+          batchCount: next.input.seeds.length,
+        })
         entry.worker.postMessage({
           type: 'runScenarioBatch',
           requestId: next.requestId,
           snapshot: next.input.snapshot,
           startDate: next.input.startDate,
           seeds: next.input.seeds,
+          workerId: index,
+        })
+        logBatch('[SimClient] Batch posted to worker.', {
+          ts: new Date().toISOString(),
+          requestId: next.requestId,
+          workerId: index,
         })
         return
       }
@@ -71,10 +106,21 @@ export const createWorkerSimClient = (): ISimClient => {
         workerIndex: index,
         kind: 'single',
       })
+      console.info('[SimClient] Posting run to worker.', {
+        ts: new Date().toISOString(),
+        requestId: next.requestId,
+        workerId: index,
+      })
       entry.worker.postMessage({
         type: 'runScenario',
         requestId: next.requestId,
         input: next.input,
+        workerId: index,
+      })
+      console.info('[SimClient] Run posted to worker.', {
+        ts: new Date().toISOString(),
+        requestId: next.requestId,
+        workerId: index,
       })
     })
   }
@@ -89,13 +135,41 @@ export const createWorkerSimClient = (): ISimClient => {
       if (!pendingEntry) {
         return
       }
+      if (pendingEntry.kind === 'batch') {
+        logBatch('[SimClient] Worker response received.', {
+          ts: new Date().toISOString(),
+          requestId: message.requestId,
+          type: message.type,
+          workerId: pendingEntry.workerIndex,
+          pendingRemaining: pending.size - 1,
+        })
+      } else {
+        console.info('[SimClient] Worker response received.', {
+          ts: new Date().toISOString(),
+          requestId: message.requestId,
+          type: message.type,
+          workerId: pendingEntry.workerIndex,
+          pendingRemaining: pending.size - 1,
+        })
+      }
       pending.delete(message.requestId)
       workers[pendingEntry.workerIndex].busy = false
       if (message.type === 'runScenarioBatchResult') {
         if (pendingEntry.kind === 'batch') {
+          logBatch('[SimClient] Resolving batch request.', {
+            ts: new Date().toISOString(),
+            requestId: message.requestId,
+            workerId: pendingEntry.workerIndex,
+            runCount: message.runs.length,
+          })
           pendingEntry.resolve(message.runs)
         }
       } else if (pendingEntry.kind === 'single') {
+        console.info('[SimClient] Resolving run request.', {
+          ts: new Date().toISOString(),
+          requestId: message.requestId,
+          workerId: pendingEntry.workerIndex,
+        })
         pendingEntry.resolve(message.run)
       }
       dispatchNext()
@@ -109,6 +183,11 @@ export const createWorkerSimClient = (): ISimClient => {
   const runScenario = (input: SimulationRequest) =>
     new Promise<SimulationRun>((resolve) => {
       const requestId = createUuid()
+      console.info('[SimClient] Enqueue run request.', {
+        ts: new Date().toISOString(),
+        requestId,
+        queueLength: queue.length,
+      })
       queue.push({ requestId, input, resolve, kind: 'single' })
       dispatchNext()
     })
@@ -116,6 +195,12 @@ export const createWorkerSimClient = (): ISimClient => {
   const runScenarioBatch = (input: RunScenarioBatchInput) =>
     new Promise<SimulationRun[]>((resolve) => {
       const requestId = createUuid()
+      logBatch('[SimClient] Enqueue batch request.', {
+        ts: new Date().toISOString(),
+        requestId,
+        batchCount: input.seeds.length,
+        queueLength: queue.length,
+      })
       queue.push({ requestId, input, resolve, kind: 'batch' })
       dispatchNext()
     })

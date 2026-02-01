@@ -118,7 +118,7 @@ const RunResultsGraphs = ({
         {showBalanceChart ? (
           <>
             <div className="chart">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={320} minWidth={300}>
                 <AreaChart data={balanceOverTime.data}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" />
@@ -227,7 +227,7 @@ const RunResultsGraphs = ({
           {showOrdinaryChart ? (
             <>
               <div className="chart">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minHeight={320} minWidth={300}>
                   <AreaChart data={ordinaryIncomeChart.data}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <ReferenceLine y={0} stroke="var(--text-muted)" strokeWidth={1} />
@@ -453,7 +453,7 @@ const RunResultsGraphs = ({
           {showCashflowChart ? (
             <>
               <div className="chart">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minHeight={320} minWidth={300}>
                   <AreaChart data={cashflowChart.data}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <ReferenceLine y={0} stroke="var(--text-muted)" strokeWidth={1.5} />

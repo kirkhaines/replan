@@ -193,6 +193,7 @@ export const simulationResultSchema = z.object({
   monthlyTimeline: z.array(monthlyTimelinePointSchema).optional(),
   explanations: z.array(monthExplanationSchema).optional(),
   stochasticRuns: z.array(stochasticRunSummarySchema).optional(),
+  stochasticRunsCancelled: z.boolean().optional(),
   summary: z.object({
     endingBalance: z.number(),
     minBalance: z.number(),
