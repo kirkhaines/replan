@@ -1455,6 +1455,9 @@ const ScenarioDetailPage = () => {
                     endingBalance: stochasticRun.result.summary.endingBalance,
                     minBalance: stochasticRun.result.summary.minBalance,
                     maxBalance: stochasticRun.result.summary.maxBalance,
+                    guardrailFactorAvg: stochasticRun.result.summary.guardrailFactorAvg,
+                    guardrailFactorMin: stochasticRun.result.summary.guardrailFactorMin,
+                    guardrailFactorBelowPct: stochasticRun.result.summary.guardrailFactorBelowPct,
                   }
                 })
               },

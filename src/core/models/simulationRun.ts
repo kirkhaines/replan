@@ -183,6 +183,9 @@ export const stochasticRunSummarySchema = z.object({
   endingBalance: z.number(),
   minBalance: z.number(),
   maxBalance: z.number(),
+  guardrailFactorAvg: z.number(),
+  guardrailFactorMin: z.number(),
+  guardrailFactorBelowPct: z.number(),
 })
 
 export const simulationResultSchema = z.object({
@@ -194,6 +197,9 @@ export const simulationResultSchema = z.object({
     endingBalance: z.number(),
     minBalance: z.number(),
     maxBalance: z.number(),
+    guardrailFactorAvg: z.number(),
+    guardrailFactorMin: z.number(),
+    guardrailFactorBelowPct: z.number(),
   }),
 })
 

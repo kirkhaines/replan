@@ -158,6 +158,10 @@ export type SimulationState = {
   guardrailBaselineNeed: number
   guardrailBaselineWant: number
   guardrailGuytonMonthsRemaining: number
+  guardrailFactorSum: number
+  guardrailFactorMin: number
+  guardrailFactorCount: number
+  guardrailFactorBelowCount: number
 }
 
 export type SimulationContext = {

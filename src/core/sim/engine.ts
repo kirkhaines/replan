@@ -471,6 +471,10 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     guardrailBaselineNeed: 0,
     guardrailBaselineWant: 0,
     guardrailGuytonMonthsRemaining: 0,
+    guardrailFactorSum: 0,
+    guardrailFactorMin: Number.POSITIVE_INFINITY,
+    guardrailFactorCount: 0,
+    guardrailFactorBelowCount: 0,
   }
 }
 
@@ -495,6 +499,10 @@ const cloneState = (state: SimulationState): SimulationState => ({
   guardrailBaselineNeed: state.guardrailBaselineNeed,
   guardrailBaselineWant: state.guardrailBaselineWant,
   guardrailGuytonMonthsRemaining: state.guardrailGuytonMonthsRemaining,
+  guardrailFactorSum: state.guardrailFactorSum,
+  guardrailFactorMin: state.guardrailFactorMin,
+  guardrailFactorCount: state.guardrailFactorCount,
+  guardrailFactorBelowCount: state.guardrailFactorBelowCount,
 })
 
 const getPrimaryPerson = (snapshot: SimulationInput['snapshot']): Person | null => {
@@ -1248,6 +1256,15 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
 
   const endingBalance =
     monthlyTimeline.length > 0 ? monthlyTimeline[monthlyTimeline.length - 1].totalBalance : 0
+  const guardrailCount = state.guardrailFactorCount
+  const guardrailAvg =
+    guardrailCount > 0 ? state.guardrailFactorSum / guardrailCount : 1
+  const guardrailMin =
+    guardrailCount > 0 && Number.isFinite(state.guardrailFactorMin)
+      ? state.guardrailFactorMin
+      : 1
+  const guardrailPctBelow =
+    guardrailCount > 0 ? state.guardrailFactorBelowCount / guardrailCount : 0
 
   return {
     timeline: timeline.map((point) => ({
@@ -1270,6 +1287,9 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       endingBalance,
       minBalance: Number.isFinite(minBalance) ? minBalance : 0,
       maxBalance: Number.isFinite(maxBalance) ? maxBalance : 0,
+      guardrailFactorAvg: guardrailAvg,
+      guardrailFactorMin: guardrailMin,
+      guardrailFactorBelowPct: guardrailPctBelow,
     },
   }
 }

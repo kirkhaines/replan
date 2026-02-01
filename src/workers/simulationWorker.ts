@@ -16,7 +16,14 @@ import type { ZodIssue } from 'zod'
 
 const emptyResult = {
   timeline: [],
-  summary: { endingBalance: 0, minBalance: 0, maxBalance: 0 },
+  summary: {
+    endingBalance: 0,
+    minBalance: 0,
+    maxBalance: 0,
+    guardrailFactorAvg: 1,
+    guardrailFactorMin: 1,
+    guardrailFactorBelowPct: 0,
+  },
 }
 
 const formatZodError = (issue?: ZodIssue) => {

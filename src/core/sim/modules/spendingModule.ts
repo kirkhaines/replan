@@ -247,6 +247,12 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
       explain.addInput('Guardrail active', guardrailActive)
       explain.addInput('Guardrail health', guardrailHealth ?? 'n/a')
       explain.addInput('Guardrail factor', guardrailFactor)
+      state.guardrailFactorSum += guardrailFactor
+      state.guardrailFactorCount += 1
+      state.guardrailFactorMin = Math.min(state.guardrailFactorMin, guardrailFactor)
+      if (guardrailFactor < 1) {
+        state.guardrailFactorBelowCount += 1
+      }
       const needTotal = Math.abs(
         cashflows.reduce(
           (sum, flow) => (flow.category === 'spending_need' ? sum + flow.cash : sum),

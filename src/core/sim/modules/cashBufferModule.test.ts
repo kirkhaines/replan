@@ -211,6 +211,10 @@ const makeState = (
   guardrailBaselineNeed: 0,
   guardrailBaselineWant: 0,
   guardrailGuytonMonthsRemaining: 0,
+  guardrailFactorSum: 0,
+  guardrailFactorMin: Number.POSITIVE_INFINITY,
+  guardrailFactorCount: 0,
+  guardrailFactorBelowCount: 0,
 })
 
 const makeContext = (snapshot: SimulationSnapshot, age: number): SimulationContext => {
