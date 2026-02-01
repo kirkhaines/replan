@@ -12,6 +12,11 @@ import {
 import type { SimulationResult } from '../../core/models'
 
 type DistributionMetric = 'minBalance' | 'endingBalance'
+type ColorMetric =
+  | 'none'
+  | 'guardrailFactorAvg'
+  | 'guardrailFactorMin'
+  | 'guardrailFactorBelowPct'
 
 type DistributionBin = {
   bucket: number
@@ -20,6 +25,7 @@ type DistributionBin = {
   x: number
   count: number
   probability: number
+  bandValues: number[]
 }
 
 type RunResultsDistributionsProps = {
@@ -31,6 +37,12 @@ type RunResultsDistributionsProps = {
 const metricOptions: Array<{ value: DistributionMetric; label: string }> = [
   { value: 'minBalance', label: 'Minimum balance' },
   { value: 'endingBalance', label: 'Ending balance' },
+]
+const colorOptions: Array<{ value: ColorMetric; label: string }> = [
+  { value: 'none', label: 'None' },
+  { value: 'guardrailFactorAvg', label: 'Guardrail avg' },
+  { value: 'guardrailFactorMin', label: 'Guardrail min' },
+  { value: 'guardrailFactorBelowPct', label: 'Guardrail below pct' },
 ]
 
 const logLinearThreshold = 1000
@@ -76,17 +88,42 @@ const ZeroLineLabel = ({ viewBox, value }: ReferenceLineLabelProps) => {
   )
 }
 
+const bandCount = 10
+
 const buildHistogram = (
-  values: number[],
+  runs: NonNullable<SimulationResult['stochasticRuns']>,
+  metric: DistributionMetric,
+  colorMetric: ColorMetric,
   bins: number,
 ): { bins: DistributionBin[]; domain: [number, number] | null } => {
+  const values = runs
+    .map((run) => run[metric])
+    .filter((value) => Number.isFinite(value))
   if (values.length === 0) {
     return { bins: [], domain: null }
   }
   const transformed = values.map((value) => symlog(value))
   const min = Math.min(...transformed)
   const max = Math.max(...transformed)
+  const bands = colorMetric === 'none' ? 1 : bandCount
+  const toBandIndex = (value: number) => {
+    if (colorMetric === 'none') {
+      return 0
+    }
+    const clamped = Math.min(1, Math.max(0, value))
+    return Math.min(bandCount - 1, Math.floor(clamped * bandCount))
+  }
   if (min === max) {
+    const bandCounts = Array.from({ length: bands }, () => 0)
+    runs.forEach((run) => {
+      const colorValue =
+        colorMetric === 'none' ? 0 : run[colorMetric] ?? 0
+      bandCounts[toBandIndex(colorValue)] += 1
+    })
+    const bandValues = bandCounts.map((count) => count / values.length)
+    const bandEntries = Object.fromEntries(
+      bandValues.map((value, index) => [`band${index}`, value]),
+    )
     return {
       bins: [
         {
@@ -96,6 +133,8 @@ const buildHistogram = (
           x: min,
           count: values.length,
           probability: 1,
+          bandValues,
+          ...bandEntries,
         },
       ],
       domain: [min, max],
@@ -109,22 +148,34 @@ const buildHistogram = (
     start: min + index * binSize,
     end: index === bins - 1 ? max : min + (index + 1) * binSize,
     count: 0,
+    bandCounts: Array.from({ length: bands }, () => 0),
   }))
-  transformed.forEach((value) => {
+  transformed.forEach((value, valueIndex) => {
     const rawIndex = Math.floor((value - min) / binSize)
-    const index = Math.min(Math.max(rawIndex, 0), bins - 1)
-    buckets[index].count += 1
+    const bucketIndex = Math.min(Math.max(rawIndex, 0), bins - 1)
+    buckets[bucketIndex].count += 1
+    const colorValue =
+      colorMetric === 'none' ? 0 : runs[valueIndex]?.[colorMetric] ?? 0
+    buckets[bucketIndex].bandCounts[toBandIndex(colorValue)] += 1
   })
 
   return {
-    bins: buckets.map((bucket) => ({
-      bucket: bucket.bucket,
-      start: symexp(bucket.start),
-      end: symexp(bucket.end),
-      x: (bucket.start + bucket.end) / 2,
-      count: bucket.count,
-      probability: bucket.count / values.length,
-    })),
+    bins: buckets.map((bucket) => {
+      const bandValues = bucket.bandCounts.map((count) => count / values.length)
+      const bandEntries = Object.fromEntries(
+        bandValues.map((value, index) => [`band${index}`, value]),
+      )
+      return {
+        bucket: bucket.bucket,
+        start: symexp(bucket.start),
+        end: symexp(bucket.end),
+        x: (bucket.start + bucket.end) / 2,
+        count: bucket.count,
+        probability: bucket.count / values.length,
+        bandValues,
+        ...bandEntries,
+      }
+    }),
     domain: [min, max],
   }
 }
@@ -135,15 +186,25 @@ const RunResultsDistributions = ({
   formatCurrency,
 }: RunResultsDistributionsProps) => {
   const [metric, setMetric] = useState<DistributionMetric>('endingBalance')
+  const [colorMetric, setColorMetric] = useState<ColorMetric>('none')
   const [showChart, setShowChart] = useState(true)
 
-  const values = useMemo(
-    () =>
-      (stochasticRuns ?? [])
-        .map((run) => run[metric])
-        .filter((value) => Number.isFinite(value)),
-    [metric, stochasticRuns],
-  )
+  const isLowerBetter = colorMetric === 'guardrailFactorBelowPct'
+  const bands = colorMetric === 'none' ? 1 : bandCount
+  const bandOrder = useMemo(() => {
+    if (bands === 1) {
+      return [0]
+    }
+    return isLowerBetter
+      ? Array.from({ length: bands }, (_, index) => index)
+      : Array.from({ length: bands }, (_, index) => bands - 1 - index)
+  }, [bands, isLowerBetter])
+  const getBandColor = (bandIndex: number) => {
+    const ratio = bands === 1 ? 1 : bandIndex / (bands - 1)
+    const effective = isLowerBetter ? 1 - ratio : ratio
+    const hue = 20 + (140 - 20) * effective
+    return `hsl(${hue}, 70%, 50%)`
+  }
 
   const endingBelowZeroLabel = useMemo(() => {
     const endingValues =
@@ -159,12 +220,15 @@ const RunResultsDistributions = ({
   }, [stochasticRuns])
 
   const histogram = useMemo(() => {
-    if (values.length === 0) {
+    const runs = (stochasticRuns ?? []).filter((run) =>
+      Number.isFinite(run[metric]),
+    )
+    if (runs.length === 0) {
       return { bins: [], domain: null }
     }
-    const binCount = Math.min(24, Math.max(6, Math.round(Math.sqrt(values.length))))
-    return buildHistogram(values, binCount)
-  }, [values])
+    const binCount = Math.min(24, Math.max(6, Math.round(Math.sqrt(runs.length))))
+    return buildHistogram(runs, metric, colorMetric, binCount)
+  }, [colorMetric, metric, stochasticRuns])
 
   return (
     <div className="card" id="section-distributions">
@@ -177,6 +241,18 @@ const RunResultsDistributions = ({
               onChange={(event) => setMetric(event.target.value as DistributionMetric)}
             >
               {metricOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <select
+              value={colorMetric}
+              onChange={(event) => setColorMetric(event.target.value as ColorMetric)}
+            >
+              {colorOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -225,6 +301,16 @@ const RunResultsDistributions = ({
                     if (!entry) {
                       return null
                     }
+                    const bandEntries =
+                      colorMetric === 'none'
+                        ? []
+                        : bandOrder
+                            .map((bandIndex) => ({
+                              bandIndex,
+                              value: entry.bandValues[bandIndex] ?? 0,
+                              color: getBandColor(bandIndex),
+                            }))
+                            .filter((band) => band.value > 0)
                     return (
                       <div
                         style={{
@@ -240,12 +326,53 @@ const RunResultsDistributions = ({
                         </div>
                         <div>Probability: {(entry.probability * 100).toFixed(1)}%</div>
                         <div>Samples: {entry.count}</div>
+                        {colorMetric !== 'none' && bandEntries.length > 0 ? (
+                          <div style={{ marginTop: '6px' }}>
+                            {bandEntries.map((band) => (
+                              <div
+                                key={band.bandIndex}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  fontSize: '12px',
+                                  color: 'var(--text-muted)',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: '10px',
+                                    height: '10px',
+                                    borderRadius: '50%',
+                                    background: band.color,
+                                  }}
+                                />
+                                <span>
+                                  {`${band.bandIndex * 10}-${(band.bandIndex + 1) * 10}%`}:{' '}
+                                  {(band.value * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     )
                   }}
                   wrapperStyle={{ zIndex: 10, pointerEvents: 'none' }}
                 />
-                <Bar dataKey="probability" name="Probability" fill="var(--accent)" radius={4} />
+                {bandOrder.map((bandIndex) => {
+                  const dataKey = `band${bandIndex}`
+                  return (
+                    <Bar
+                      key={dataKey}
+                      dataKey={dataKey}
+                      name="Probability"
+                      stackId="probability"
+                      fill={getBandColor(bandIndex)}
+                      radius={4}
+                    />
+                  )
+                })}
               </BarChart>
             </ResponsiveContainer>
           </div>
