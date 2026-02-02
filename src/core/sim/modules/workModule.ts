@@ -6,10 +6,14 @@ import type {
   CashflowSeriesEntry,
   SimulationContext,
   SimulationModule,
+  SimulationSettings,
 } from '../types'
 import { inflateAmount, isWithinRange } from './utils'
 
-export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createWorkModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const scenario = snapshot.scenario
   const activeStrategyIds = new Set(scenario.personStrategyIds)
   const activePersonStrategies = snapshot.personStrategies.filter((strategy) =>
@@ -27,7 +31,7 @@ export const createWorkModule = (snapshot: SimulationSnapshot): SimulationModule
   )
   const contributionLimits = snapshot.contributionLimits ?? []
   const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   const getActivePeriods = (context: SimulationContext): FutureWorkPeriod[] =>
     periods.filter((period) => isWithinRange(context.dateIso, period.startDate, period.endDate))

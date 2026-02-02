@@ -1,6 +1,12 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import type { CashflowItem, SimulationContext, SimulationModule, SimulationState } from '../types'
+import type {
+  CashflowItem,
+  SimulationContext,
+  SimulationModule,
+  SimulationSettings,
+  SimulationState,
+} from '../types'
 import { computeInheritanceTax, selectInheritanceTaxPolicy } from '../stateTaxes'
 import type { InheritanceTaxAssetTag } from '../stateTaxes/types'
 import { getHoldingGain, inflateAmount } from './utils'
@@ -97,11 +103,14 @@ const sumInheritanceAssets = (
   }, 0)
 }
 
-export const createDeathModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createDeathModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const strategy = snapshot.scenario.strategies.death
   const taxStrategy = snapshot.scenario.strategies.tax
   const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   const resolveFuneralCost = (context: SimulationContext) => {
     const base =

@@ -226,6 +226,7 @@ const makeContext = (snapshot: SimulationSnapshot, age: number): SimulationConte
       endDate: dateIso,
       months: 1,
       stepMonths: 1,
+      summaryOnly: false,
     },
     monthIndex: 0,
     yearIndex: 0,
@@ -235,6 +236,7 @@ const makeContext = (snapshot: SimulationSnapshot, age: number): SimulationConte
     isStartOfYear: true,
     isEndOfYear: false,
     planMode: 'apply',
+    summaryOnly: false,
   }
 }
 

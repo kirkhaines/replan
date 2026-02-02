@@ -1,11 +1,20 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import type { ActionIntent, SimulationContext, SimulationModule, SimulationState } from '../types'
+import type {
+  ActionIntent,
+  SimulationContext,
+  SimulationModule,
+  SimulationSettings,
+  SimulationState,
+} from '../types'
 import { buildActionCashflowSeries } from './utils'
 
-export const createRmdModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createRmdModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const strategy = snapshot.scenario.strategies.rmd
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   const computeRmd = (state: SimulationState, context: SimulationContext) => {
     if (!strategy.enabled || !context.isStartOfYear) {

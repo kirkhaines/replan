@@ -41,7 +41,7 @@ export const createHealthcareModule = (
       lastHealthEndDate = endDate
     }
   })
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings.summaryOnly)
 
   return {
     id: 'healthcare',

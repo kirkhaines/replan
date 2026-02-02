@@ -1,11 +1,14 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import type { ActionIntent, SimulationModule } from '../types'
+import type { ActionIntent, SimulationModule, SimulationSettings } from '../types'
 import { buildActionCashflowSeries } from './utils'
 
-export const createCharitableModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createCharitableModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const strategy = snapshot.scenario.strategies.charitable
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   return {
     id: 'charitable',

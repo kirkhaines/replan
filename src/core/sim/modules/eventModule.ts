@@ -1,11 +1,14 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import type { CashflowItem, SimulationModule } from '../types'
+import type { CashflowItem, SimulationModule, SimulationSettings } from '../types'
 import { inflateAmount, isSameMonth } from './utils'
 
-export const createEventModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createEventModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const events = snapshot.scenario.strategies.events
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
   return {
     id: 'events',
     explain,

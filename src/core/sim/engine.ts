@@ -15,6 +15,7 @@ import type {
   MonthlyRecord,
   SimulationContext,
   SimulationModule,
+  SimulationSettings,
   SimulationState,
   YearRecord,
 } from './types'
@@ -957,8 +958,15 @@ const buildYearRecord = (
   }
 }
 
-export const runSimulation = (input: SimulationInput): SimulationResult => {
-  const { snapshot, settings } = input
+export const runSimulation = (
+  input: SimulationInput,
+  options: { summaryOnly?: boolean } = {},
+): SimulationResult => {
+  const summaryOnly = Boolean(
+    options.summaryOnly ?? (input.settings as SimulationSettings).summaryOnly,
+  )
+  const settings: SimulationSettings = { ...input.settings, summaryOnly }
+  const { snapshot } = input
   const previewModules = createSimulationModules(snapshot, settings)
   const runModules = createSimulationModules(snapshot, settings)
   const holdingTaxTypeById = new Map(
@@ -977,6 +985,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
   const totalMonths = settings.months
   let minBalance = Number.POSITIVE_INFINITY
   let maxBalance = Number.NEGATIVE_INFINITY
+  let lastBalance = 0
 
   const runYearPass = ({
     startMonthIndex,
@@ -1038,6 +1047,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
         isStartOfYear,
         isEndOfYear,
         planMode,
+        summaryOnly,
         yearPlan,
       }
 
@@ -1055,10 +1065,10 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       }))
       const cashflows = cashflowsByModule.flatMap((entry) => entry.cashflows)
       applyCashflows(state, cashflows, monthTotals)
-      const extraCashflowsByModule = new Map<string, CashflowItem[]>()
+      const extraCashflowsByModule = record ? new Map<string, CashflowItem[]>() : null
       const extraCashflows = modules.flatMap((module) => {
         const extras = module.onAfterCashflows?.(cashflows, state, context) ?? []
-        if (extras.length > 0) {
+        if (extras.length > 0 && extraCashflowsByModule) {
           extraCashflowsByModule.set(module.id, extras)
         }
         return extras
@@ -1078,14 +1088,16 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       const actions = resolveIntents(intents, state)
       applyActions(state, actions, monthTotals, context)
 
-      const cashflowsByModuleId = new Map<string, CashflowItem[]>()
-      cashflowsByModule.forEach((entry) => {
-        cashflowsByModuleId.set(entry.moduleId, entry.cashflows)
-      })
-      extraCashflowsByModule.forEach((extras, moduleId) => {
-        const list = cashflowsByModuleId.get(moduleId) ?? []
-        cashflowsByModuleId.set(moduleId, [...list, ...extras])
-      })
+      const cashflowsByModuleId = record ? new Map<string, CashflowItem[]>() : null
+      if (cashflowsByModuleId) {
+        cashflowsByModule.forEach((entry) => {
+          cashflowsByModuleId.set(entry.moduleId, entry.cashflows)
+        })
+        extraCashflowsByModule?.forEach((extras, moduleId) => {
+          const list = cashflowsByModuleId.get(moduleId) ?? []
+          cashflowsByModuleId.set(moduleId, [...list, ...extras])
+        })
+      }
 
       const actionsByModuleId = new Map<string, ActionRecord[]>()
       actions.forEach((action) => {
@@ -1099,7 +1111,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
         module.onActionsResolved?.(moduleActions, state, context)
       })
 
-      const marketReturnsByModuleId = new Map<string, MarketReturn[]>()
+      const marketReturnsByModuleId = record ? new Map<string, MarketReturn[]>() : null
       modules.forEach((module) => {
         if (!module.onEndOfMonth) {
           return
@@ -1112,9 +1124,9 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
             state.holdings.map((holding) => [holding.id, holding.balance]),
           )
           module.onEndOfMonth(state, context)
-          const marketReturns = buildMarketReturns(state, beforeCash, beforeHoldings)
-          marketReturnsByModuleId.set(module.id, marketReturns)
-          if (record) {
+          if (marketReturnsByModuleId) {
+            const marketReturns = buildMarketReturns(state, beforeCash, beforeHoldings)
+            marketReturnsByModuleId.set(module.id, marketReturns)
             module.onMarketReturns?.(marketReturns, state, context)
           }
           return
@@ -1133,11 +1145,12 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
         deductions: yearTotals.deductions + monthTotals.deductions,
       }
 
+      let totalBalance = 0
       if (record) {
         const moduleRuns: ModuleRunExplanation[] = modules.map((module) => {
-          const moduleCashflows = cashflowsByModuleId.get(module.id) ?? []
+          const moduleCashflows = cashflowsByModuleId?.get(module.id) ?? []
           const moduleActions = actionsByModuleId.get(module.id) ?? []
-          const moduleMarketReturns = marketReturnsByModuleId.get(module.id) ?? []
+          const moduleMarketReturns = marketReturnsByModuleId?.get(module.id) ?? []
           const cashflowTotals = sumCashflowTotals(moduleCashflows)
           const actionTotals = sumActionTotals(moduleActions)
           const marketTotals =
@@ -1183,11 +1196,14 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
 
         const monthRecord = buildMonthlyRecord(monthIndex, dateIso, age, monthTotals, state)
         monthlyTimeline.push(monthRecord)
-
-        const totalBalance = monthRecord.totalBalance
-        minBalance = Math.min(minBalance, totalBalance)
-        maxBalance = Math.max(maxBalance, totalBalance)
+        totalBalance = monthRecord.totalBalance
+      } else {
+        totalBalance = sumCash(state) + sumHoldings(state)
       }
+
+      minBalance = Math.min(minBalance, totalBalance)
+      maxBalance = Math.max(maxBalance, totalBalance)
+      lastBalance = totalBalance
 
       if (isEndOfYear) {
         modules.forEach((module) => module.onEndOfYear?.(state, context))
@@ -1223,6 +1239,7 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       isStartOfYear: true,
       isEndOfYear: monthsInYear <= settings.stepMonths,
       planMode: 'preview',
+      summaryOnly,
     }
 
     runYearPass({
@@ -1249,13 +1266,12 @@ export const runSimulation = (input: SimulationInput): SimulationResult => {
       yearIndex,
       planMode: 'apply',
       yearPlan,
-      record: true,
+      record: !summaryOnly,
       modules: runModules,
     })
   }
 
-  const endingBalance =
-    monthlyTimeline.length > 0 ? monthlyTimeline[monthlyTimeline.length - 1].totalBalance : 0
+  const endingBalance = Number.isFinite(lastBalance) ? lastBalance : 0
   const guardrailCount = state.guardrailFactorCount
   const guardrailAvg =
     guardrailCount > 0 ? state.guardrailFactorSum / guardrailCount : 1

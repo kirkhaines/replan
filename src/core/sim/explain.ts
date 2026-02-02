@@ -13,9 +13,18 @@ const toMetric = (label: string, value: ExplainMetric['value']): ExplainMetric =
   value,
 })
 
-export const createExplainTracker = (): ModuleExplainTracker => {
+export const createExplainTracker = (enabled = true): ModuleExplainTracker => {
   const inputs: ExplainMetric[] = []
   const checkpoints: ExplainMetric[] = []
+  if (!enabled) {
+    return {
+      inputs,
+      checkpoints,
+      addInput: () => {},
+      addCheckpoint: () => {},
+      reset: () => {},
+    }
+  }
   return {
     inputs,
     checkpoints,

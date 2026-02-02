@@ -165,7 +165,7 @@ const runScenarioOnce = (
       stepMonths: simulationInput.settings.stepMonths,
     })
   }
-  const result = runSimulation(simulationInput)
+  const result = runSimulation(simulationInput, { summaryOnly })
   const finishedAt = Date.now()
   if (logEnabled) {
     console.info('[Simulation] Run complete.', {

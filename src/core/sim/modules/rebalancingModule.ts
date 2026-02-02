@@ -2,7 +2,13 @@ import type { SimulationSnapshot } from '../../models'
 import { holdingTypeDefaultsSeed } from '../../defaults/defaultData'
 import { createUuid } from '../../utils/uuid'
 import { createExplainTracker } from '../explain'
-import type { ActionIntent, SimulationContext, SimulationModule, SimHolding } from '../types'
+import type {
+  ActionIntent,
+  SimulationContext,
+  SimulationModule,
+  SimulationSettings,
+  SimHolding,
+} from '../types'
 import {
   buildActionCashflowSeries,
   interpolateTargets,
@@ -107,9 +113,12 @@ const formatTargetWeights = (target: TargetWeights | null) => {
   ].join(', ')
 }
 
-export const createRebalancingModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createRebalancingModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const { glidepath, rebalancing } = snapshot.scenario.strategies
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
   let baselineTarget: TargetWeights | null = null
   const createdHoldingIds = new Map<string, string>()
 

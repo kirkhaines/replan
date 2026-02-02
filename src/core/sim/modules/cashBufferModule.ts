@@ -5,6 +5,7 @@ import type {
   CashflowSeriesEntry,
   SimulationContext,
   SimulationModule,
+  SimulationSettings,
   SimulationState,
 } from '../types'
 import { getHoldingGain, inflateAmount, sumMonthlySpending } from './utils'
@@ -152,7 +153,10 @@ export const estimateCashBufferWithdrawals = (
   return { total: amount - remaining, byTaxType }
 }
 
-export const createCashBufferModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createCashBufferModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const scenario = snapshot.scenario
   const strategy = scenario.strategies.cashBuffer
   const withdrawal = scenario.strategies.withdrawal
@@ -163,7 +167,7 @@ export const createCashBufferModule = (snapshot: SimulationSnapshot): Simulation
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId && !item.isPreTax,
   )
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   const getContributionLimit = (
     type: (typeof contributionLimits)[number]['type'],

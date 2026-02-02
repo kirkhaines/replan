@@ -37,6 +37,7 @@ export type SimulationSettings = {
   endDate: string
   months: number
   stepMonths: number
+  summaryOnly?: boolean
 }
 
 export type TaxLedger = {
@@ -175,6 +176,7 @@ export type SimulationContext = {
   isStartOfYear: boolean
   isEndOfYear: boolean
   planMode: 'preview' | 'apply'
+  summaryOnly: boolean
   yearPlan?: SimulationYearPlan
 }
 

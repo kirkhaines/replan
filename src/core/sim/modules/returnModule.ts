@@ -9,7 +9,7 @@ export const createReturnModule = (
   settings: SimulationSettings,
 ): SimulationModule => {
   const returnModel = snapshot.scenario.strategies.returnModel
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings.summaryOnly)
   const seed =
     returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${settings.startDate}`)
   const random = createSeededRandom(seed)

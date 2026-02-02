@@ -7,13 +7,17 @@ import type {
   CashflowSeriesEntry,
   SimulationContext,
   SimulationModule,
+  SimulationSettings,
   SimulationState,
 } from '../types'
 
-export const createTaxModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createTaxModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const taxStrategy = snapshot.scenario.strategies.tax
   const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   const inflateTaxPolicy = (policy: TaxPolicy, year: number) => {
     if (year <= policy.year || cpiRate <= 0) {

@@ -192,6 +192,7 @@ const makeContext = (snapshot: SimulationSnapshot): SimulationContext => {
       endDate: dateIso,
       months: 1,
       stepMonths: 1,
+      summaryOnly: false,
     },
     monthIndex: 0,
     yearIndex: 0,
@@ -201,6 +202,7 @@ const makeContext = (snapshot: SimulationSnapshot): SimulationContext => {
     isStartOfYear: true,
     isEndOfYear: false,
     planMode: 'apply',
+    summaryOnly: false,
   }
 }
 

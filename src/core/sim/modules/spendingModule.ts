@@ -1,9 +1,12 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
-import type { CashflowItem, SimulationModule } from '../types'
+import type { CashflowItem, SimulationModule, SimulationSettings } from '../types'
 import { inflateAmount, isSameMonth, isWithinRange } from './utils'
 
-export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createSpendingModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const scenario = snapshot.scenario
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId,
@@ -18,7 +21,7 @@ export const createSpendingModule = (snapshot: SimulationSnapshot): SimulationMo
   const futureWorkPeriods = snapshot.futureWorkPeriods.filter((period) =>
     futureWorkStrategyIds.has(period.futureWorkStrategyId),
   )
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
   const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const taxDiscountByType: Record<
     'taxable' | 'traditional' | 'roth' | 'hsa',

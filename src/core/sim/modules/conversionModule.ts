@@ -12,14 +12,18 @@ import type {
   ActionIntent,
   CashflowSeriesEntry,
   SimulationModule,
+  SimulationSettings,
 } from '../types'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
 import { inflateAmount } from './utils'
 
-export const createConversionModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createConversionModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const { rothConversion, rothLadder, tax } = snapshot.scenario.strategies
   const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   const isAgeInRange = (age: number, startAge: number, endAge: number) => {
     if (startAge > 0 && age < startAge) {

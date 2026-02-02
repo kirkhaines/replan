@@ -1,10 +1,13 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import { buildSsaEstimate } from '../ssa'
-import type { CashflowItem, SimulationModule } from '../types'
+import type { CashflowItem, SimulationModule, SimulationSettings } from '../types'
 import { isWithinRange, monthsBetween } from './utils'
 
-export const createSocialSecurityModule = (snapshot: SimulationSnapshot): SimulationModule => {
+export const createSocialSecurityModule = (
+  snapshot: SimulationSnapshot,
+  settings?: SimulationSettings,
+): SimulationModule => {
   const scenario = snapshot.scenario
   const activeStrategyIds = new Set(scenario.personStrategyIds)
   const activePersonStrategies = snapshot.personStrategies.filter((strategy) =>
@@ -25,7 +28,7 @@ export const createSocialSecurityModule = (snapshot: SimulationSnapshot): Simula
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId,
   )
-  const explain = createExplainTracker()
+  const explain = createExplainTracker(!settings?.summaryOnly)
 
   const benefits = activePersonStrategies
     .map((strategy) => {
