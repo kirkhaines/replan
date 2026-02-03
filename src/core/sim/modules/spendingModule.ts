@@ -156,6 +156,9 @@ export const createSpendingModule = (
       if (!guardrailTargetMonthIso) {
         guardrailTargetMonthIso = getGuardrailTargetMonthIso(context.settings.startDate)
       }
+      const retirementStartIso = guardrailTargetMonthIso ?? context.settings.startDate
+      const guardrailsEnabled =
+        futureWorkPeriods.length === 0 || context.dateIso >= retirementStartIso
       if (
         !state.guardrailTargetDateIso &&
         guardrailTargetMonthIso &&
@@ -171,54 +174,56 @@ export const createSpendingModule = (
       let guardrailFactor = 1
       let guardrailActive = false
       let guardrailHealth: number | null = null
-      if (guardrailStrategy === 'legacy') {
-        const guardrailPct = guardrailConfig.guardrailPct
-        const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
-        guardrailActive =
-          guardrailPct > 0 && currentDiscountedBalance < targetBalance * (1 - guardrailPct)
-        guardrailFactor = guardrailActive ? 1 - guardrailPct : 1
-      } else if (guardrailStrategy === 'cap_wants') {
-        if (totalWant > 0 && guardrailConfig.guardrailWithdrawalRateLimit > 0) {
-          const monthlyLimit =
-            (currentDiscountedBalance * guardrailConfig.guardrailWithdrawalRateLimit) / 12
-          const availableForWants = monthlyLimit - totalNeed
-          guardrailFactor = clamp01(availableForWants / totalWant)
-        }
-      } else if (guardrailStrategy === 'portfolio_health') {
-        const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
-        const targetDate = state.guardrailTargetDateIso ?? context.dateIso
-        const inflatedTarget = inflateAmount(targetBalance, targetDate, context.dateIso, cpiRate)
-        guardrailHealth = inflatedTarget > 0 ? currentDiscountedBalance / inflatedTarget : 1
-        guardrailFactor = interpolateHealthFactor(
-          guardrailHealth,
-          guardrailConfig.guardrailHealthPoints,
-        )
-      } else if (guardrailStrategy === 'guyton') {
-        const baselineBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
-        const baselineSpending = state.guardrailBaselineNeed + state.guardrailBaselineWant
-        const baselineRate =
-          baselineBalance > 0 ? (baselineSpending / baselineBalance) * 12 : 0
-        const currentRate =
-          currentDiscountedBalance > 0
-            ? ((totalNeed + totalWant) / currentDiscountedBalance) * 12
-            : 0
-        if (
-          baselineRate > 0 &&
-          currentRate >
-            baselineRate * (1 + guardrailConfig.guardrailGuytonTriggerRateIncrease)
-        ) {
-          state.guardrailGuytonMonthsRemaining = Math.max(
-            state.guardrailGuytonMonthsRemaining,
-            guardrailConfig.guardrailGuytonDurationMonths,
+      if (guardrailsEnabled) {
+        if (guardrailStrategy === 'legacy') {
+          const guardrailPct = guardrailConfig.guardrailPct
+          const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
+          guardrailActive =
+            guardrailPct > 0 && currentDiscountedBalance < targetBalance * (1 - guardrailPct)
+          guardrailFactor = guardrailActive ? 1 - guardrailPct : 1
+        } else if (guardrailStrategy === 'cap_wants') {
+          if (totalWant > 0 && guardrailConfig.guardrailWithdrawalRateLimit > 0) {
+            const monthlyLimit =
+              (currentDiscountedBalance * guardrailConfig.guardrailWithdrawalRateLimit) / 12
+            const availableForWants = monthlyLimit - totalNeed
+            guardrailFactor = clamp01(availableForWants / totalWant)
+          }
+        } else if (guardrailStrategy === 'portfolio_health') {
+          const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
+          const targetDate = state.guardrailTargetDateIso ?? context.dateIso
+          const inflatedTarget = inflateAmount(targetBalance, targetDate, context.dateIso, cpiRate)
+          guardrailHealth = inflatedTarget > 0 ? currentDiscountedBalance / inflatedTarget : 1
+          guardrailFactor = interpolateHealthFactor(
+            guardrailHealth,
+            guardrailConfig.guardrailHealthPoints,
           )
-        }
-        if (state.guardrailGuytonMonthsRemaining > 0) {
-          guardrailActive = true
-          guardrailFactor = clamp01(1 - guardrailConfig.guardrailGuytonAppliedPct)
-          state.guardrailGuytonMonthsRemaining = Math.max(
-            0,
-            state.guardrailGuytonMonthsRemaining - 1,
-          )
+        } else if (guardrailStrategy === 'guyton') {
+          const baselineBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
+          const baselineSpending = state.guardrailBaselineNeed + state.guardrailBaselineWant
+          const baselineRate =
+            baselineBalance > 0 ? (baselineSpending / baselineBalance) * 12 : 0
+          const currentRate =
+            currentDiscountedBalance > 0
+              ? ((totalNeed + totalWant) / currentDiscountedBalance) * 12
+              : 0
+          if (
+            baselineRate > 0 &&
+            currentRate >
+              baselineRate * (1 + guardrailConfig.guardrailGuytonTriggerRateIncrease)
+          ) {
+            state.guardrailGuytonMonthsRemaining = Math.max(
+              state.guardrailGuytonMonthsRemaining,
+              guardrailConfig.guardrailGuytonDurationMonths,
+            )
+          }
+          if (state.guardrailGuytonMonthsRemaining > 0) {
+            guardrailActive = true
+            guardrailFactor = clamp01(1 - guardrailConfig.guardrailGuytonAppliedPct)
+            state.guardrailGuytonMonthsRemaining = Math.max(
+              0,
+              state.guardrailGuytonMonthsRemaining - 1,
+            )
+          }
         }
       }
 
@@ -247,6 +252,7 @@ export const createSpendingModule = (
       explain.addInput('Line items', spendingItems.length)
       explain.addInput('Guardrail strategy', guardrailStrategy)
       explain.addInput('Guardrail pct', guardrailConfig.guardrailPct)
+      explain.addInput('Guardrails enabled', guardrailsEnabled)
       explain.addInput('Guardrail active', guardrailActive)
       explain.addInput('Guardrail health', guardrailHealth ?? 'n/a')
       explain.addInput('Guardrail factor', guardrailFactor)

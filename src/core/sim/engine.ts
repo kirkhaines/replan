@@ -38,9 +38,15 @@ type ActionRecordWithModule = ActionRecord & { moduleId: string }
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
 
 const addMonths = (date: Date, months: number) => {
-  const next = new Date(date)
-  next.setMonth(next.getMonth() + months)
-  return next
+  const year = date.getUTCFullYear()
+  const month = date.getUTCMonth()
+  const day = date.getUTCDate()
+  const targetMonthIndex = month + months
+  const targetYear = year + Math.floor(targetMonthIndex / 12)
+  const targetMonth = ((targetMonthIndex % 12) + 12) % 12
+  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
+  const clampedDay = Math.min(day, daysInTargetMonth)
+  return new Date(Date.UTC(targetYear, targetMonth, clampedDay))
 }
 
 const getCalendarYear = (dateIso: string) => Number(dateIso.slice(0, 4))
