@@ -1240,16 +1240,14 @@ export const runSimulation = (
     }
   }
 
-  const totalYears = Math.ceil(totalMonths / 12)
-  for (let yearIndex = 0; yearIndex < totalYears; yearIndex += 1) {
-    const startMonthIndex = yearIndex * 12
-    if (startMonthIndex >= totalMonths) {
-      break
-    }
-    const monthsInYear = Math.min(12, totalMonths - startMonthIndex)
+  let startMonthIndex = 0
+  while (startMonthIndex < totalMonths) {
     const yearStartState = cloneState(state)
     const yearStartDate = addMonths(start, startMonthIndex)
     const yearStartIso = toIsoDate(yearStartDate)
+    const calendarMonth = getCalendarMonth(yearStartIso)
+    const monthsRemainingInCalendarYear = 12 - (calendarMonth - 1)
+    const monthsInYear = Math.min(monthsRemainingInCalendarYear, totalMonths - startMonthIndex)
     const {
       yearIndex: yearStartYearIndex,
       isStartOfYear: yearStartIsStartOfYear,
@@ -1297,6 +1295,7 @@ export const runSimulation = (
       record: !summaryOnly,
       modules: runModules,
     })
+    startMonthIndex += monthsInYear
   }
 
   const endingBalance = Number.isFinite(lastBalance) ? lastBalance : 0
