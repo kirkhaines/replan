@@ -28,6 +28,30 @@ type RunResultsTimelineProps = {
 
 const formatRate = (value: number) => `${(value * 100).toFixed(2)}%`
 
+const formatMonthYear = (dateIso: string) => {
+  const date = new Date(dateIso)
+  if (Number.isNaN(date.getTime())) {
+    return dateIso
+  }
+  return date.toLocaleString(undefined, { month: 'short', year: 'numeric' })
+}
+
+const formatMonthShort = (dateIso: string) => {
+  const date = new Date(dateIso)
+  if (Number.isNaN(date.getTime())) {
+    return dateIso
+  }
+  return date.toLocaleString(undefined, { month: 'short' })
+}
+
+const formatYearLabel = (dateIso: string | null) => {
+  if (!dateIso) {
+    return '-'
+  }
+  const year = new Date(dateIso).getFullYear()
+  return Number.isNaN(year) ? '-' : String(year)
+}
+
 const formatMetricValue = (value: unknown) => {
   if (typeof value === 'number') {
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
@@ -127,7 +151,7 @@ const RunResultsTimeline = ({
   <table className="table selectable">
     <thead>
       <tr>
-        <th>Start date</th>
+        <th>Year</th>
         <th>Age (end of year)</th>
         <th>Balance</th>
         <th>Contribution</th>
@@ -147,7 +171,7 @@ const RunResultsTimeline = ({
           return explanation ? [{ month, explanation }] : []
         })
         const yearStartMonth = monthRows.length > 0 ? monthRows[0] : null
-        const yearStartDate =
+            const yearStartDate =
           yearStartMonth?.date ?? (point.date ? addMonths(point.date, -11) : null)
         const yearEndMonth = monthRows.length > 0 ? monthRows[monthRows.length - 1] : null
         const yearEndExplanation = yearEndMonth
@@ -300,7 +324,7 @@ const RunResultsTimeline = ({
                       <PieIcon />
                     </button>
                   </div>
-                  <span>{yearStartDate ?? '-'}</span>
+                  <span>{formatYearLabel(yearStartDate)}</span>
                 </div>
               </td>
               <td>{point.age}</td>
@@ -490,7 +514,7 @@ const RunResultsTimeline = ({
                                                             <th>Metric</th>
                                                             {months.map((entry) => (
                                                               <th key={entry.month.monthIndex}>
-                                                                {entry.month.date}
+                                                                {formatMonthShort(entry.month.date)}
                                                               </th>
                                                             ))}
                                                           </tr>
@@ -528,7 +552,7 @@ const RunResultsTimeline = ({
                                                             <th>Metric</th>
                                                             {months.map((entry) => (
                                                               <th key={entry.month.monthIndex}>
-                                                                {entry.month.date}
+                                                                {formatMonthShort(entry.month.date)}
                                                               </th>
                                                             ))}
                                                           </tr>
@@ -635,7 +659,7 @@ const RunResultsTimeline = ({
                                                         <tbody>
                                                           {actionRows.map(({ month, action }) => (
                                                             <tr key={`${month.monthIndex}-${action.id}`}>
-                                                              <td>{month.date}</td>
+                                                              <td>{formatMonthShort(month.date)}</td>
                                                               <td>{action.label ?? action.id}</td>
                                                               <td className="muted">{action.kind}</td>
                                                               <td>
@@ -945,7 +969,7 @@ const RunResultsTimeline = ({
                                 <PieIcon />
                               </button>
                             </div>
-                            <span>{month.date}</span>
+                            <span>{formatMonthYear(month.date)}</span>
                           </div>
                         </td>
                         <td className="muted">{month.age}</td>

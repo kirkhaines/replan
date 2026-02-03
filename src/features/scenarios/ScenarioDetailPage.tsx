@@ -1541,7 +1541,11 @@ const ScenarioDetailPage = () => {
     const saved = await persistBundle(values, storage, setScenario, reset)
     const snapshot = await buildSimulationSnapshot(saved.scenario, storage)
     // Default to today's date until scenarios have a configurable start date.
-    const startDate = new Date().toISOString().slice(0, 10)
+    const startDate = (() => {
+      const today = new Date()
+      today.setDate(1)
+      return today.toISOString().slice(0, 10)
+    })()
     const input: SimulationRequest = {
       snapshot,
       startDate,
