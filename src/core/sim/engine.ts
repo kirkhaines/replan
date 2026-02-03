@@ -1,3 +1,4 @@
+// ignore-large-file-size
 import type {
   AccountBalanceSnapshot,
   MarketReturn,
@@ -42,6 +43,10 @@ const addMonths = (date: Date, months: number) => {
   return next
 }
 
+const getCalendarYear = (dateIso: string) => Number(dateIso.slice(0, 4))
+
+const getCalendarMonth = (dateIso: string) => Number(dateIso.slice(5, 7))
+
 const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
   const birth = new Date(dateOfBirth)
   const target = new Date(dateValue)
@@ -64,6 +69,17 @@ const createEmptyTotals = (): MonthTotals => ({
   capitalGains: 0,
   deductions: 0,
 })
+
+const resetTotals = (totals: MonthTotals) => {
+  totals.income = 0
+  totals.spending = 0
+  totals.contributions = 0
+  totals.withdrawals = 0
+  totals.taxes = 0
+  totals.ordinaryIncome = 0
+  totals.capitalGains = 0
+  totals.deductions = 0
+}
 
 const createEmptyCashflowTotals = () => ({
   cash: 0,
@@ -982,15 +998,25 @@ export const runSimulation = (
 
   const primaryPerson = getPrimaryPerson(snapshot)
   const start = new Date(settings.startDate)
+  const startCalendarYear = getCalendarYear(settings.startDate)
   const totalMonths = settings.months
   let minBalance = Number.POSITIVE_INFINITY
   let maxBalance = Number.NEGATIVE_INFINITY
   let lastBalance = 0
+  const applyYearTotals = createEmptyTotals()
+
+  const getYearContext = (dateIso: string, monthIndex: number) => {
+    const calendarMonth = getCalendarMonth(dateIso)
+    const isStartOfYear = calendarMonth === 1
+    const isFinalMonth = monthIndex + settings.stepMonths >= totalMonths
+    const isEndOfYear = calendarMonth === 12 || isFinalMonth
+    const yearIndex = getCalendarYear(dateIso) - startCalendarYear
+    return { yearIndex, isStartOfYear, isEndOfYear }
+  }
 
   const runYearPass = ({
     startMonthIndex,
     monthsInYear,
-    yearIndex,
     planMode,
     yearPlan,
     record,
@@ -998,22 +1024,23 @@ export const runSimulation = (
   }: {
     startMonthIndex: number
     monthsInYear: number
-    yearIndex: number
     planMode: SimulationContext['planMode']
     yearPlan?: SimulationContext['yearPlan']
     record: boolean
     modules: SimulationModule[]
   }) => {
-    let yearTotals = createEmptyTotals()
+    const yearTotals = record ? applyYearTotals : createEmptyTotals()
     for (let offset = 0; offset < monthsInYear; offset += settings.stepMonths) {
       const monthIndex = startMonthIndex + offset
       const date = addMonths(start, monthIndex)
       const dateIso = toIsoDate(date)
-      const isStartOfYear = offset === 0
-      const isEndOfYear = offset + settings.stepMonths >= monthsInYear
+      const { yearIndex: calendarYearIndex, isStartOfYear, isEndOfYear } = getYearContext(
+        dateIso,
+        monthIndex,
+      )
       const age = primaryPerson
         ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, dateIso)
-        : yearIndex
+        : calendarYearIndex
 
       if (isStartOfYear) {
         state.yearLedger = {
@@ -1033,14 +1060,14 @@ export const runSimulation = (
           roth: 0,
           hsa: 0,
         }
-        yearTotals = createEmptyTotals()
+        resetTotals(yearTotals)
       }
 
       const context: SimulationContext = {
         snapshot,
         settings,
         monthIndex,
-        yearIndex,
+        yearIndex: calendarYearIndex,
         age,
         date,
         dateIso,
@@ -1134,16 +1161,14 @@ export const runSimulation = (
         module.onEndOfMonth(state, context)
       })
 
-      yearTotals = {
-        income: yearTotals.income + monthTotals.income,
-        spending: yearTotals.spending + monthTotals.spending,
-        contributions: yearTotals.contributions + monthTotals.contributions,
-        withdrawals: yearTotals.withdrawals + monthTotals.withdrawals,
-        taxes: yearTotals.taxes + monthTotals.taxes,
-        ordinaryIncome: yearTotals.ordinaryIncome + monthTotals.ordinaryIncome,
-        capitalGains: yearTotals.capitalGains + monthTotals.capitalGains,
-        deductions: yearTotals.deductions + monthTotals.deductions,
-      }
+      yearTotals.income += monthTotals.income
+      yearTotals.spending += monthTotals.spending
+      yearTotals.contributions += monthTotals.contributions
+      yearTotals.withdrawals += monthTotals.withdrawals
+      yearTotals.taxes += monthTotals.taxes
+      yearTotals.ordinaryIncome += monthTotals.ordinaryIncome
+      yearTotals.capitalGains += monthTotals.capitalGains
+      yearTotals.deductions += monthTotals.deductions
 
       let totalBalance = 0
       if (record) {
@@ -1208,7 +1233,7 @@ export const runSimulation = (
       if (isEndOfYear) {
         modules.forEach((module) => module.onEndOfYear?.(state, context))
         if (record) {
-          const yearRecord = buildYearRecord(yearIndex, age, dateIso, yearTotals, state)
+          const yearRecord = buildYearRecord(calendarYearIndex, age, dateIso, yearTotals, state)
           timeline.push(yearRecord)
         }
       }
@@ -1225,19 +1250,24 @@ export const runSimulation = (
     const yearStartState = cloneState(state)
     const yearStartDate = addMonths(start, startMonthIndex)
     const yearStartIso = toIsoDate(yearStartDate)
+    const {
+      yearIndex: yearStartYearIndex,
+      isStartOfYear: yearStartIsStartOfYear,
+      isEndOfYear: yearStartIsEndOfYear,
+    } = getYearContext(yearStartIso, startMonthIndex)
     const yearStartAge = primaryPerson
       ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, yearStartIso)
-      : yearIndex
+      : yearStartYearIndex
     const yearStartContext: SimulationContext = {
       snapshot,
       settings,
       monthIndex: startMonthIndex,
-      yearIndex,
+      yearIndex: yearStartYearIndex,
       age: yearStartAge,
       date: yearStartDate,
       dateIso: yearStartIso,
-      isStartOfYear: true,
-      isEndOfYear: monthsInYear <= settings.stepMonths,
+      isStartOfYear: yearStartIsStartOfYear,
+      isEndOfYear: yearStartIsEndOfYear,
       planMode: 'preview',
       summaryOnly,
     }
@@ -1245,7 +1275,6 @@ export const runSimulation = (
     runYearPass({
       startMonthIndex,
       monthsInYear,
-      yearIndex,
       planMode: 'preview',
       record: false,
       modules: previewModules,
@@ -1263,7 +1292,6 @@ export const runSimulation = (
     runYearPass({
       startMonthIndex,
       monthsInYear,
-      yearIndex,
       planMode: 'apply',
       yearPlan,
       record: !summaryOnly,
