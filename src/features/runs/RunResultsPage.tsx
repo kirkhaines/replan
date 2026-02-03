@@ -365,15 +365,37 @@ const RunResultsPage = () => {
       return year >= rangeYearBounds.startYear && year <= rangeYearBounds.endYear
     })
   }, [rangeYearBounds, run])
+  const runStartYear = useMemo(() => {
+    const startDate =
+      run?.result.timeline?.[0]?.date ?? run?.result.monthlyTimeline?.[0]?.date
+    if (!startDate) {
+      return null
+    }
+    const year = new Date(startDate).getFullYear()
+    return Number.isNaN(year) ? null : year
+  }, [run])
+  const getCalendarYearIndex = useCallback(
+    (dateIso?: string) => {
+      if (!dateIso || runStartYear === null) {
+        return 0
+      }
+      const year = new Date(dateIso).getFullYear()
+      if (Number.isNaN(year)) {
+        return 0
+      }
+      return year - runStartYear
+    },
+    [runStartYear],
+  )
   const monthlyByYear = useMemo(() => {
     return filteredMonthlyTimeline.reduce<Map<number, typeof monthlyTimeline>>((acc, entry) => {
-      const yearIndex = Math.floor(entry.monthIndex / 12)
+      const yearIndex = getCalendarYearIndex(entry.date)
       const list = acc.get(yearIndex) ?? []
       list.push(entry)
       acc.set(yearIndex, list)
       return acc
     }, new Map())
-  }, [filteredMonthlyTimeline])
+  }, [filteredMonthlyTimeline, getCalendarYearIndex])
   const accountLookup = useMemo(() => {
     const cashById = new Map<string, string>()
     const investmentById = new Map<string, string>()
@@ -639,7 +661,7 @@ const RunResultsPage = () => {
       }
     >()
     explanations.forEach((month) => {
-      const yearIndex = Math.floor(month.monthIndex / 12)
+      const yearIndex = getCalendarYearIndex(month.date)
       const totals = totalsByYear.get(yearIndex) ?? {
         salary: 0,
         investment: 0,
@@ -788,7 +810,7 @@ const RunResultsPage = () => {
     }, 0)
 
     return { data, bracketLines, maxValue }
-  }, [adjustForInflation, explanations, filteredTimeline, run])
+  }, [adjustForInflation, explanations, filteredTimeline, getCalendarYearIndex, run])
 
   const cashflowChart = useMemo(() => {
     if (!run?.snapshot) {
@@ -821,7 +843,7 @@ const RunResultsPage = () => {
 
     const rowByYear = new Map<number, Record<string, number | string>>()
     filteredMonthlyTimeline.forEach((month) => {
-      const yearIndex = Math.floor(month.monthIndex / 12)
+      const yearIndex = getCalendarYearIndex(month.date)
       const point = filteredTimeline.find((entry) => entry.yearIndex === yearIndex)
       const row =
         rowByYear.get(yearIndex) ??
@@ -890,7 +912,14 @@ const RunResultsPage = () => {
     })
 
     return { data: normalizedData, series }
-  }, [adjustForInflation, explanationsByMonth, filteredMonthlyTimeline, filteredTimeline, run])
+  }, [
+    adjustForInflation,
+    explanationsByMonth,
+    filteredMonthlyTimeline,
+    filteredTimeline,
+    getCalendarYearIndex,
+    run,
+  ])
 
   useEffect(() => {
     const load = async () => {

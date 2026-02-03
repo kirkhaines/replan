@@ -142,11 +142,13 @@ const RunResultsTimeline = ({
               ? `timeline-decade-${year}`
               : undefined
             const yearMode = getYearDetailMode(point.yearIndex)
-            const yearMonthEntries = monthRows.flatMap((month) => {
+        const yearMonthEntries = monthRows.flatMap((month) => {
           const explanation = explanationsByMonth.get(month.monthIndex)
           return explanation ? [{ month, explanation }] : []
         })
         const yearStartMonth = monthRows.length > 0 ? monthRows[0] : null
+        const yearStartDate =
+          yearStartMonth?.date ?? (point.date ? addMonths(point.date, -11) : null)
         const yearEndMonth = monthRows.length > 0 ? monthRows[monthRows.length - 1] : null
         const yearEndExplanation = yearEndMonth
           ? explanationsByMonth.get(yearEndMonth.monthIndex)
@@ -298,7 +300,7 @@ const RunResultsTimeline = ({
                       <PieIcon />
                     </button>
                   </div>
-                  <span>{point.date ? addMonths(point.date, -11) ?? '-' : '-'}</span>
+                  <span>{yearStartDate ?? '-'}</span>
                 </div>
               </td>
               <td>{point.age}</td>
