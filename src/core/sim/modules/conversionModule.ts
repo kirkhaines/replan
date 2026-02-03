@@ -72,6 +72,13 @@ export const createConversionModule = (
         bracket: socialSecurityBracket,
       })
       const currentTaxableOrdinary = state.yearLedger.ordinaryIncome + taxableSocialSecurity
+      const standardDeduction = tax.useStandardDeduction
+        ? inflateFromPolicyYear(policy.standardDeduction, policyBaseYear)
+        : 0
+      const taxableOrdinaryAfterDeduction = Math.max(
+        0,
+        currentTaxableOrdinary - standardDeduction,
+      )
 
       let conversionCandidate = 0
       let irmaaHeadroom = Number.POSITIVE_INFINITY
@@ -81,7 +88,7 @@ export const createConversionModule = (
         )
         if (bracket?.upTo !== null && bracket?.upTo !== undefined) {
           const bracketCeiling = inflateFromPolicyYear(bracket.upTo, policyBaseYear)
-          conversionCandidate = Math.max(0, bracketCeiling - currentTaxableOrdinary)
+          conversionCandidate = Math.max(0, bracketCeiling - taxableOrdinaryAfterDeduction)
         }
       }
 
@@ -308,9 +315,16 @@ export const createConversionModule = (
             if (bracket?.upTo !== null && bracket?.upTo !== undefined) {
               const policyBaseYear = policy?.year ?? policyYear
               const bracketCeiling = inflateFromPolicyYear(bracket.upTo, policyBaseYear)
+              const standardDeduction = tax.useStandardDeduction
+                ? inflateFromPolicyYear(policy?.standardDeduction ?? 0, policyBaseYear)
+                : 0
+              const taxableOrdinaryAfterDeduction = Math.max(
+                0,
+                currentTaxableOrdinary - standardDeduction,
+              )
               conversionCandidate = Math.max(
                 0,
-                bracketCeiling - currentTaxableOrdinary,
+                bracketCeiling - taxableOrdinaryAfterDeduction,
               )
             }
           }

@@ -33,3 +33,8 @@
   Repro: N/A
   Notes: Identify utility functions in `ssa.ts` that are not SSA-specific and relocate/refactor.
   Status: open
+- Title: policyYear setting seems unnecessary and possibly not inflating taxes correctly
+  Impact: low
+  Repro: N/A
+  Notes: policyYear may be being used to inflate tax brackets instead of sim context date?
+  Status: open
