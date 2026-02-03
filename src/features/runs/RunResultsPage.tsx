@@ -486,8 +486,12 @@ const RunResultsPage = () => {
       return { data: [], series: [] }
     }
     const series: Array<{ key: string; label: string; color: string }> = []
+    const lineSeries: Array<{ key: string; label: string; color: string }> = []
     const registerSeries = (key: string, label: string) => {
       series.push({ key, label, color: colorForBalanceSeriesKey(key) })
+    }
+    const registerLineSeries = (key: string, label: string, color: string) => {
+      lineSeries.push({ key, label, color })
     }
     if (balanceDetail === 'none') {
       registerSeries('cash', 'Cash')
@@ -516,6 +520,24 @@ const RunResultsPage = () => {
           const key = `${taxType}-${assetClass}`
           registerSeries(key, `${taxType} - ${assetClassLabel[assetClass]}`)
         })
+      })
+    }
+    const minBalanceRun = run.result.minBalanceRun
+    const minBalanceByYear = new Map<number, number>()
+    if (minBalanceRun?.timeline?.length) {
+      registerLineSeries(
+        'minBalanceRun',
+        'Minimum average successful balance',
+        '#111111',
+      )
+      minBalanceRun.timeline.forEach((point) => {
+        const yearIndex = point.date
+          ? getCalendarYearIndex(point.date)
+          : point.yearIndex
+        const value = point.date
+          ? adjustForInflation(point.balance, point.date)
+          : point.balance
+        minBalanceByYear.set(yearIndex, value)
       })
     }
     const data = filteredTimeline.map((point) => {
@@ -623,14 +645,21 @@ const RunResultsPage = () => {
           totals.hsaUnrealized += hsaSplit.unrealized
         }
       }
-      return { ...point, year, ...totals }
+      const minBalanceValue = minBalanceByYear.get(point.yearIndex)
+      return {
+        ...point,
+        year,
+        ...totals,
+        ...(minBalanceValue !== undefined ? { minBalanceRun: minBalanceValue } : {}),
+      }
     })
-    return { data, series }
+    return { data, series, lineSeries }
   }, [
     adjustForInflation,
     balanceDetail,
     explanationsByMonth,
     filteredTimeline,
+    getCalendarYearIndex,
     holdingMetaById,
     monthlyByYear,
     run,

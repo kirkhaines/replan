@@ -24,6 +24,7 @@ type BalanceSeries = {
 type BalanceOverTime = {
   data: ChartDatum[]
   series: BalanceSeries[]
+  lineSeries?: BalanceSeries[]
 }
 
 type BracketLine = {
@@ -78,6 +79,11 @@ const RunResultsGraphs = ({
   const [showBalanceChart, setShowBalanceChart] = useState(true)
   const [showOrdinaryChart, setShowOrdinaryChart] = useState(true)
   const [showCashflowChart, setShowCashflowChart] = useState(true)
+  const [useBalanceLogScale, setUseBalanceLogScale] = useState(false)
+  const lineKeys = useMemo(
+    () => new Set(balanceOverTime.lineSeries?.map((entry) => entry.key) ?? []),
+    [balanceOverTime.lineSeries],
+  )
 
   const visibleCashflowSeries = useMemo(() => {
     if (bucketFilter === 'all') {
@@ -106,6 +112,14 @@ const RunResultsGraphs = ({
                 ))}
               </select>
             </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={useBalanceLogScale}
+                onChange={(event) => setUseBalanceLogScale(event.target.checked)}
+              />
+              Log y-axis
+            </label>
             <button
               className="link-button"
               type="button"
@@ -122,7 +136,12 @@ const RunResultsGraphs = ({
                 <AreaChart data={balanceOverTime.data}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" />
-                  <YAxis tickFormatter={(value) => formatAxisValue(Number(value))} width={70} />
+                  <YAxis
+                    tickFormatter={(value) => formatAxisValue(Number(value))}
+                    width={70}
+                    scale={useBalanceLogScale ? 'symlog' : 'linear'}
+                    domain={['auto', 'auto']}
+                  />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload || payload.length === 0) {
@@ -133,10 +152,13 @@ const RunResultsGraphs = ({
                       const label = row?.year
                         ? `${row.year} (age ${row.age ?? '-'})`
                         : `${row?.age ?? ''}`
-                      const total = payload.reduce(
-                        (sum, entry) => sum + Number(entry.value ?? 0),
-                        0,
-                      )
+                      const total = payload.reduce((sum, entry) => {
+                        const key = String(entry.dataKey ?? '')
+                        if (lineKeys.has(key)) {
+                          return sum
+                        }
+                        return sum + Number(entry.value ?? 0)
+                      }, 0)
                       return (
                         <div
                           style={{
@@ -176,6 +198,17 @@ const RunResultsGraphs = ({
                       fill={`color-mix(in srgb, ${series.color} 35%, transparent)`}
                     />
                   ))}
+                  {balanceOverTime.lineSeries?.map((series) => (
+                    <Line
+                      key={series.key}
+                      type="monotone"
+                      dataKey={series.key}
+                      name={series.label}
+                      stroke={series.color}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -201,6 +234,23 @@ const RunResultsGraphs = ({
                       height: '10px',
                       borderRadius: '999px',
                       background: item.color,
+                      display: 'inline-block',
+                    }}
+                  />
+                  {item.label}
+                </span>
+              ))}
+              {balanceOverTime.lineSeries?.map((item) => (
+                <span
+                  key={item.key}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                >
+                  <span
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '999px',
+                      border: `2px solid ${item.color}`,
                       display: 'inline-block',
                     }}
                   />

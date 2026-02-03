@@ -177,6 +177,19 @@ export const monthlyTimelinePointSchema = z.object({
   deductions: z.number(),
 })
 
+const minimumBalanceRunPointSchema = z.object({
+  yearIndex: z.number().int().min(0),
+  age: z.number(),
+  balance: z.number(),
+  date: isoDateStringSchema.optional(),
+})
+
+const minimumBalanceRunSchema = z.object({
+  multiplier: z.number().min(0),
+  endingBalance: z.number(),
+  timeline: z.array(minimumBalanceRunPointSchema),
+})
+
 export const stochasticRunSummarySchema = z.object({
   runIndex: z.number().int().min(0),
   seed: z.number().int(),
@@ -194,6 +207,7 @@ export const simulationResultSchema = z.object({
   explanations: z.array(monthExplanationSchema).optional(),
   stochasticRuns: z.array(stochasticRunSummarySchema).optional(),
   stochasticRunsCancelled: z.boolean().optional(),
+  minBalanceRun: minimumBalanceRunSchema.optional(),
   summary: z.object({
     endingBalance: z.number(),
     minBalance: z.number(),

@@ -399,6 +399,50 @@ const buildStochasticSeeds = (
   }))
 }
 
+const buildMinimumBalanceSnapshot = (
+  snapshot: SimulationSnapshot,
+  multiplier: number,
+): SimulationSnapshot => {
+  const scale = (value: number) => value * multiplier
+  return {
+    ...snapshot,
+    nonInvestmentAccounts: snapshot.nonInvestmentAccounts.map((account) => ({
+      ...account,
+      balance: scale(account.balance),
+    })),
+    investmentAccounts: snapshot.investmentAccounts.map((account) => ({
+      ...account,
+      contributionEntries: (account.contributionEntries ?? []).map((entry) => ({
+        ...entry,
+        amount: scale(entry.amount),
+      })),
+    })),
+    investmentAccountHoldings: snapshot.investmentAccountHoldings.map((holding) => ({
+      ...holding,
+      balance: scale(holding.balance),
+      costBasisEntries: holding.costBasisEntries.map((entry) => ({
+        ...entry,
+        amount: scale(entry.amount),
+      })),
+    })),
+    scenario: {
+      ...snapshot.scenario,
+      strategies: {
+        ...snapshot.scenario.strategies,
+        returnModel: {
+          ...snapshot.scenario.strategies.returnModel,
+          mode: 'deterministic',
+        },
+        withdrawal: {
+          ...snapshot.scenario.strategies.withdrawal,
+          guardrailStrategy: 'none',
+          guardrailPct: 0,
+        },
+      },
+    },
+  }
+}
+
 const chunk = <T,>(items: T[], size: number): T[][] => {
   if (size <= 0) {
     return [items]
@@ -1537,6 +1581,69 @@ const ScenarioDetailPage = () => {
     await finalize(cancelled)
   }
 
+  const runMinimumBalanceTrial = async (
+    snapshot: SimulationSnapshot,
+    startDate: string,
+  ): Promise<SimulationRun['result']['minBalanceRun'] | null> => {
+    const runTrial = async (multiplier: number) => {
+      const trialSnapshot = buildMinimumBalanceSnapshot(snapshot, multiplier)
+      const run = await simClient.runScenario({
+        snapshot: trialSnapshot,
+        startDate,
+      })
+      return { multiplier, run }
+    }
+    const isSuccess = (run: SimulationRun) =>
+      run.status === 'success' && run.result.summary.endingBalance >= 0
+    let lowFail = 0
+    let highSuccess: number | null = null
+    let lastSuccess: { multiplier: number; run: SimulationRun } | null = null
+    let current = await runTrial(1)
+    if (isSuccess(current.run)) {
+      highSuccess = current.multiplier
+      lastSuccess = current
+    } else {
+      lowFail = current.multiplier
+      let multiplier = current.multiplier * 2
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        current = await runTrial(multiplier)
+        if (isSuccess(current.run)) {
+          highSuccess = current.multiplier
+          lastSuccess = current
+          break
+        }
+        lowFail = current.multiplier
+        multiplier *= 2
+      }
+    }
+    if (highSuccess === null || !lastSuccess) {
+      return null
+    }
+    let low = lowFail
+    let high = highSuccess
+    for (let iteration = 0; iteration < 10; iteration += 1) {
+      const mid = (low + high) / 2
+      current = await runTrial(mid)
+      if (isSuccess(current.run)) {
+        high = mid
+        lastSuccess = current
+      } else {
+        low = mid
+      }
+    }
+    const finalRun = lastSuccess ?? current
+    return {
+      multiplier: finalRun.multiplier,
+      endingBalance: finalRun.run.result.summary.endingBalance,
+      timeline: finalRun.run.result.timeline.map((point) => ({
+        yearIndex: point.yearIndex,
+        age: point.age,
+        balance: point.balance,
+        date: point.date,
+      })),
+    }
+  }
+
   const onRun = async (values: ScenarioEditorValues) => {
     const saved = await persistBundle(values, storage, setScenario, reset)
     const snapshot = await buildSimulationSnapshot(saved.scenario, storage)
@@ -1555,10 +1662,19 @@ const ScenarioDetailPage = () => {
       ? Math.max(0, Math.floor(rawStochasticRuns))
       : 0
     const baseRun = await simClient.runScenario(input)
+    let minBalanceRun: SimulationRun['result']['minBalanceRun'] | undefined
+    if (baseRun.status === 'success') {
+      try {
+        minBalanceRun = (await runMinimumBalanceTrial(snapshot, startDate)) ?? undefined
+      } catch (error) {
+        console.error('[Scenario] Minimum balance trial failed.', error)
+      }
+    }
     const run: SimulationRun = {
       ...baseRun,
       result: {
         ...baseRun.result,
+        minBalanceRun,
         stochasticRuns: [],
         stochasticRunsCancelled: false,
       },
