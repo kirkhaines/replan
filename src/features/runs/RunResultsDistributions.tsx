@@ -329,6 +329,7 @@ const RunResultsDistributions = ({
                   dataKey="x"
                   tickFormatter={(value) => formatAxisValue(symexp(Number(value)))}
                   domain={histogram.domain ?? ['dataMin', 'dataMax']}
+                  tickCount={12}
                 />
                 <YAxis
                   tickFormatter={(value) => `${Math.round(Number(value) * 100)}%`}

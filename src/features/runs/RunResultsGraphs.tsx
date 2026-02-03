@@ -1,4 +1,6 @@
 import { Fragment, useMemo, useState } from 'react'
+import { scaleSymlog } from 'd3-scale'
+import type { RechartsScale } from 'recharts/types/util/ChartUtils'
 import {
   AreaChart,
   Area,
@@ -84,6 +86,64 @@ const RunResultsGraphs = ({
     () => new Set(balanceOverTime.lineSeries?.map((entry) => entry.key) ?? []),
     [balanceOverTime.lineSeries],
   )
+  const balanceYAxisConfig = useMemo<{
+    scale: 'linear' | RechartsScale
+    ticks: number[] | undefined
+  }>(() => {
+    if (!useBalanceLogScale) {
+      return { scale: 'linear' as const, ticks: undefined as number[] | undefined }
+    }
+    const symlogConstant = 10_000
+    const keys = balanceOverTime.series.map((series) => series.key)
+    let min = 0
+    let max = 0
+    balanceOverTime.data.forEach((row) => {
+      const total = keys.reduce((sum, key) => {
+        const value = Number(row[key] ?? 0)
+        return sum + (Number.isFinite(value) ? value : 0)
+      }, 0)
+      min = Math.min(min, total)
+      max = Math.max(max, total)
+    })
+    min = Math.min(min, -symlogConstant)
+    max = Math.max(max, symlogConstant)
+    if (min === max) {
+      return { scale: 'linear' as const, ticks: undefined as number[] | undefined }
+    }
+    const scale = scaleSymlog().constant(symlogConstant).domain([min, max])
+    const ticks = scale.ticks(10)
+    const positiveTicks = ticks
+      .filter((value: number) => value > 0)
+      .sort((a: number, b: number) => a - b)
+    const negativeTicks = ticks
+      .filter((value: number) => value < 0)
+      .sort((a: number, b: number) => b - a)
+    positiveTicks.slice(0, 2).forEach((value: number) => {
+      let candidate = value / 10
+      while (candidate > symlogConstant) {
+        if (!ticks.includes(candidate)) {
+          ticks.push(candidate)
+        }
+        candidate /= 10
+      }
+    })
+    if (negativeTicks.length > 0) {
+      negativeTicks.slice(0, 2).forEach((value: number) => {
+        let candidate = value / 10
+        while (Math.abs(candidate) > symlogConstant) {
+          if (!ticks.includes(candidate)) {
+            ticks.push(candidate)
+          }
+          candidate /= 10
+        }
+      })
+    }
+    if (!ticks.includes(0)) {
+      ticks.push(0)
+    }
+    ticks.sort((a: number, b: number) => a - b)
+    return { scale: scale as unknown as RechartsScale, ticks }
+  }, [balanceOverTime.data, balanceOverTime.series, useBalanceLogScale])
 
   const visibleCashflowSeries = useMemo(() => {
     if (bucketFilter === 'all') {
@@ -139,8 +199,9 @@ const RunResultsGraphs = ({
                   <YAxis
                     tickFormatter={(value) => formatAxisValue(Number(value))}
                     width={70}
-                    scale={useBalanceLogScale ? 'symlog' : 'linear'}
+                    scale={balanceYAxisConfig.scale}
                     domain={['auto', 'auto']}
+                    ticks={balanceYAxisConfig.ticks}
                   />
                   <Tooltip
                     content={({ active, payload }) => {

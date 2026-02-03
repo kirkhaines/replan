@@ -14,8 +14,19 @@ import {
 } from '../../core/sim/tax'
 
 // ignore-large-file-size
-const formatCurrency = (value: number) =>
-  value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+const formatCurrency = (value: number) => {
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000_000) {
+    return `$${(value / 1_000_000_000).toFixed(1)}B`
+  }
+  if (abs >= 1_000_000) {
+    return `$${(value / 1_000_000).toFixed(1)}M`
+  }
+  if (abs >= 1_000) {
+    return `$${(value / 1_000).toFixed(1)}k`
+  }
+  return `$${Math.round(value)}`
+}
 
 const formatSignedCurrency = (value: number) => {
   if (Math.abs(value) < 0.005) {
@@ -26,6 +37,9 @@ const formatSignedCurrency = (value: number) => {
 
 const formatAxisValue = (value: number) => {
   const abs = Math.abs(value)
+  if (abs >= 1_000_000_000) {
+    return `$${(value / 1_000_000_000).toFixed(1)}B`
+  }
   if (abs >= 1_000_000) {
     return `$${(value / 1_000_000).toFixed(1)}M`
   }

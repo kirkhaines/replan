@@ -1585,11 +1585,18 @@ const ScenarioDetailPage = () => {
     snapshot: SimulationSnapshot,
     startDate: string,
   ): Promise<SimulationRun['result']['minBalanceRun'] | null> => {
-    const runTrial = async (multiplier: number) => {
+    const runTrial = async (multiplier: number, label: string) => {
       const trialSnapshot = buildMinimumBalanceSnapshot(snapshot, multiplier)
       const run = await simClient.runScenario({
         snapshot: trialSnapshot,
         startDate,
+      })
+      console.info('[Scenario] Minimum balance trial iteration.', {
+        ts: new Date().toISOString(),
+        label,
+        multiplier,
+        status: run.status,
+        endingBalance: run.result.summary.endingBalance,
       })
       return { multiplier, run }
     }
@@ -1598,7 +1605,7 @@ const ScenarioDetailPage = () => {
     let lowFail = 0
     let highSuccess: number | null = null
     let lastSuccess: { multiplier: number; run: SimulationRun } | null = null
-    let current = await runTrial(1)
+    let current = await runTrial(1, 'seed')
     if (isSuccess(current.run)) {
       highSuccess = current.multiplier
       lastSuccess = current
@@ -1606,7 +1613,7 @@ const ScenarioDetailPage = () => {
       lowFail = current.multiplier
       let multiplier = current.multiplier * 2
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        current = await runTrial(multiplier)
+        current = await runTrial(multiplier, `doubling:${attempt + 1}`)
         if (isSuccess(current.run)) {
           highSuccess = current.multiplier
           lastSuccess = current
@@ -1623,7 +1630,7 @@ const ScenarioDetailPage = () => {
     let high = highSuccess
     for (let iteration = 0; iteration < 10; iteration += 1) {
       const mid = (low + high) / 2
-      current = await runTrial(mid)
+      current = await runTrial(mid, `binary:${iteration + 1}`)
       if (isSuccess(current.run)) {
         high = mid
         lastSuccess = current
