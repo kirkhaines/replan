@@ -9,7 +9,6 @@ import type {
   SimulationSettings,
   SimHolding,
 } from '../types'
-import { getSimulationYearIndex } from '../helpers'
 import {
   buildActionCashflowSeries,
   interpolateTargets,
@@ -153,8 +152,7 @@ export const createRebalancingModule = (
     context: SimulationContext,
   ): TargetWeights | null => {
     if (glidepath.targets.length > 0) {
-      const key =
-        glidepath.mode === 'year' ? getSimulationYearIndex(context) : context.age
+      const key = glidepath.mode === 'year' ? context.yearIndex : context.age
       const target = interpolateTargets(glidepath.targets, key)
       if (!target) {
         return null
