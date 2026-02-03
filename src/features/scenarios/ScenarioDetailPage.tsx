@@ -1593,6 +1593,23 @@ const ScenarioDetailPage = () => {
     setRuns((current) => current.filter((run) => run.id !== runId))
   }
 
+  const handleRunExport = useCallback(
+    (run: SimulationRun) => {
+      const scenarioName = scenario?.name?.trim() ? scenario.name.trim() : 'scenario'
+      const filenameBase = scenarioName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      const blob = new Blob([JSON.stringify(run, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${filenameBase || 'scenario'}-run-${run.id}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+    },
+    [scenario?.name],
+  )
+
   const handleRunImport = async (run: SimulationRun) => {
     if (!run.snapshot) {
       window.alert('This run does not include the scenario snapshot needed for import.')
@@ -1852,6 +1869,7 @@ const ScenarioDetailPage = () => {
             formatRunTitle={formatRunTitle}
             formatRunEndingBalance={formatRunEndingBalance}
             onRunImport={handleRunImport}
+            onRunExport={handleRunExport}
             onRunRemove={handleRunRemove}
           />
         </div>

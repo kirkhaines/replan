@@ -7,6 +7,7 @@ type SimulationRunsSectionProps = {
   formatRunTitle: (run: SimulationRun) => string
   formatRunEndingBalance: (run: SimulationRun) => number
   onRunImport: (run: SimulationRun) => void
+  onRunExport: (run: SimulationRun) => void
   onRunRemove: (id: string) => void
 }
 
@@ -16,6 +17,7 @@ const SimulationRunsSection = ({
   formatRunTitle,
   formatRunEndingBalance,
   onRunImport,
+  onRunExport,
   onRunRemove,
 }: SimulationRunsSectionProps) => (
   <div className="card stack" id="section-runs">
@@ -56,6 +58,13 @@ const SimulationRunsSection = ({
                     disabled={!run.snapshot}
                   >
                     Import as scenario
+                  </button>
+                  <button
+                    className="link-button"
+                    type="button"
+                    onClick={() => onRunExport(run)}
+                  >
+                    Export run
                   </button>
                   <button className="link-button" type="button" onClick={() => onRunRemove(run.id)}>
                     Remove
