@@ -218,6 +218,17 @@ export const simulationRunSchema = z.object({
 
 export type SimulationResult = z.infer<typeof simulationResultSchema>
 export type SimulationRun = z.infer<typeof simulationRunSchema>
+export type SimulationRunSummary = {
+  id: SimulationRun['id']
+  scenarioId: SimulationRun['scenarioId']
+  title?: SimulationRun['title']
+  startedAt: SimulationRun['startedAt']
+  finishedAt: SimulationRun['finishedAt']
+  status: SimulationRun['status']
+  errorMessage?: SimulationRun['errorMessage']
+  resultSummary: SimulationResult['summary']
+  endingBalanceToday: number
+}
 export type CashflowItem = z.infer<typeof cashflowItemSchema>
 export type ActionRecord = z.infer<typeof actionRecordSchema>
 export type ExplainMetric = z.infer<typeof explainMetricSchema>

@@ -2,6 +2,7 @@ import { db } from '../../db/db'
 import type {
   Scenario,
   SimulationRun,
+  SimulationRunSummary,
   Person,
   SocialSecurityEarnings,
   SocialSecurityStrategy,
@@ -89,12 +90,43 @@ class DexieScenarioRepo implements ScenarioRepo {
 }
 
 class DexieRunRepo implements RunRepo {
+  private computeEndingBalanceToday(run: SimulationRun) {
+    const endingBalance = run.result.summary.endingBalance
+    const dateIso = run.result.timeline.at(-1)?.date
+    const cpiRate = run.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+    if (!dateIso || cpiRate === 0) {
+      return endingBalance
+    }
+    const year = new Date(dateIso).getFullYear()
+    const baseYear = new Date().getFullYear()
+    if (Number.isNaN(year)) {
+      return endingBalance
+    }
+    const yearDelta = year - baseYear
+    return endingBalance / Math.pow(1 + cpiRate, yearDelta)
+  }
+
   async listForScenario(scenarioId: string) {
     const runs = await db.runs
       .where('scenarioId')
       .equals(scenarioId)
       .sortBy('finishedAt')
     return runs.reverse()
+  }
+
+  async listSummariesForScenario(scenarioId: string) {
+    const runs = await this.listForScenario(scenarioId)
+    return runs.map<SimulationRunSummary>((run) => ({
+      id: run.id,
+      scenarioId: run.scenarioId,
+      title: run.title,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      status: run.status,
+      errorMessage: run.errorMessage,
+      resultSummary: run.result.summary,
+      endingBalanceToday: this.computeEndingBalanceToday(run),
+    }))
   }
 
   async add(run: SimulationRun) {

@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom'
-import type { SimulationRun } from '../../../core/models'
+import type { SimulationRunSummary } from '../../../core/models'
 
 type SimulationRunsSectionProps = {
-  runs: SimulationRun[]
+  runs: SimulationRunSummary[]
   locationPathname: string
-  formatRunTitle: (run: SimulationRun) => string
-  formatRunEndingBalance: (run: SimulationRun) => number
-  onRunImport: (run: SimulationRun) => void
-  onRunExport: (run: SimulationRun) => void
+  formatRunTitle: (run: SimulationRunSummary) => string
+  formatRunEndingBalance: (run: SimulationRunSummary) => number
+  onRunImport: (run: SimulationRunSummary) => void
+  onRunExport: (run: SimulationRunSummary) => void
   onRunRemove: (id: string) => void
 }
 
@@ -55,7 +55,6 @@ const SimulationRunsSection = ({
                     className="link-button"
                     type="button"
                     onClick={() => onRunImport(run)}
-                    disabled={!run.snapshot}
                   >
                     Import as scenario
                   </button>

@@ -13,6 +13,7 @@ import {
   type InflationDefault,
   type Scenario,
   type SimulationRun,
+  type SimulationRunSummary,
   type SimulationSnapshot,
   type Person,
   type SocialSecurityStrategy,
@@ -573,7 +574,7 @@ const ScenarioDetailPage = () => {
   const from = (location.state as { from?: string } | null)?.from
   const backTo = from && from.startsWith('/runs/') ? '/scenarios' : from ?? '/scenarios'
   const [scenario, setScenario] = useState<Scenario | null>(null)
-  const [runs, setRuns] = useState<SimulationRun[]>([])
+  const [runs, setRuns] = useState<SimulationRunSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
@@ -1088,7 +1089,7 @@ const ScenarioDetailPage = () => {
 
   const loadRuns = useCallback(
     async (scenarioId: string) => {
-      const data = await storage.runRepo.listForScenario(scenarioId)
+      const data = await storage.runRepo.listSummariesForScenario(scenarioId)
       setRuns(data)
     },
     [storage],
@@ -1566,24 +1567,10 @@ const ScenarioDetailPage = () => {
     }
   }
 
-  const formatRunTitle = (run: SimulationRun) =>
+  const formatRunTitle = (run: SimulationRunSummary) =>
     run.title?.trim() ? run.title.trim() : new Date(run.finishedAt).toLocaleString()
 
-  const formatRunEndingBalance = (run: SimulationRun) => {
-    const endingBalance = run.result.summary.endingBalance
-    const dateIso = run.result.timeline.at(-1)?.date
-    const cpiRate = run.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-    if (!dateIso || cpiRate === 0) {
-      return endingBalance
-    }
-    const year = new Date(dateIso).getFullYear()
-    const baseYear = new Date().getFullYear()
-    if (Number.isNaN(year)) {
-      return endingBalance
-    }
-    const yearDelta = year - baseYear
-    return endingBalance / Math.pow(1 + cpiRate, yearDelta)
-  }
+  const formatRunEndingBalance = (run: SimulationRunSummary) => run.endingBalanceToday
 
   const handleRunRemove = async (runId: string) => {
     if (!window.confirm('Remove this run?')) {
@@ -1594,10 +1581,15 @@ const ScenarioDetailPage = () => {
   }
 
   const handleRunExport = useCallback(
-    (run: SimulationRun) => {
+    async (run: SimulationRunSummary) => {
+      const fullRun = await storage.runRepo.get(run.id)
+      if (!fullRun) {
+        window.alert('Run could not be loaded for export.')
+        return
+      }
       const scenarioName = scenario?.name?.trim() ? scenario.name.trim() : 'scenario'
       const filenameBase = scenarioName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-      const blob = new Blob([JSON.stringify(run, null, 2)], {
+      const blob = new Blob([JSON.stringify(fullRun, null, 2)], {
         type: 'application/json',
       })
       const url = URL.createObjectURL(blob)
@@ -1607,15 +1599,16 @@ const ScenarioDetailPage = () => {
       link.click()
       URL.revokeObjectURL(url)
     },
-    [scenario?.name],
+    [scenario?.name, storage],
   )
 
-  const handleRunImport = async (run: SimulationRun) => {
-    if (!run.snapshot) {
+  const handleRunImport = async (run: SimulationRunSummary) => {
+    const fullRun = await storage.runRepo.get(run.id)
+    if (!fullRun?.snapshot) {
       window.alert('This run does not include the scenario snapshot needed for import.')
       return
     }
-    const seed = buildScenarioSeedFromSnapshot(run.snapshot)
+    const seed = buildScenarioSeedFromSnapshot(fullRun.snapshot)
     const remapped = remapScenarioSeed(seed)
     const now = Date.now()
     const runName = formatRunTitle(run)

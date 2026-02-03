@@ -1,6 +1,7 @@
 import type {
   Scenario,
   SimulationRun,
+  SimulationRunSummary,
   Person,
   SocialSecurityEarnings,
   SocialSecurityStrategy,
@@ -144,6 +145,7 @@ export interface SsaRetirementAdjustmentRepo {
 
 export interface RunRepo {
   listForScenario: (scenarioId: string) => Promise<SimulationRun[]>
+  listSummariesForScenario: (scenarioId: string) => Promise<SimulationRunSummary[]>
   add: (run: SimulationRun) => Promise<void>
   upsert: (run: SimulationRun) => Promise<void>
   get: (id: string) => Promise<SimulationRun | undefined>
