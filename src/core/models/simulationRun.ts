@@ -230,6 +230,7 @@ export type SimulationRunSummary = {
   errorMessage?: SimulationRun['errorMessage']
   resultSummary: SimulationResult['summary']
   endingBalanceToday: number
+  stochasticSuccessPct: number | null
 }
 export type CashflowItem = z.infer<typeof cashflowItemSchema>
 export type ActionRecord = z.infer<typeof actionRecordSchema>

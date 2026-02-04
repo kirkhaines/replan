@@ -106,6 +106,15 @@ class DexieRunRepo implements RunRepo {
     return endingBalance / Math.pow(1 + cpiRate, yearDelta)
   }
 
+  private computeStochasticSuccessPct(run: SimulationRun) {
+    const stochasticRuns = run.result.stochasticRuns ?? []
+    if (stochasticRuns.length === 0) {
+      return null
+    }
+    const successCount = stochasticRuns.filter((entry) => entry.endingBalance >= 0).length
+    return (successCount / stochasticRuns.length) * 100
+  }
+
   async listForScenario(scenarioId: string) {
     const runs = await db.runs
       .where('scenarioId')
@@ -126,6 +135,7 @@ class DexieRunRepo implements RunRepo {
       errorMessage: run.errorMessage,
       resultSummary: run.result.summary,
       endingBalanceToday: this.computeEndingBalanceToday(run),
+      stochasticSuccessPct: this.computeStochasticSuccessPct(run),
     }))
   }
 

@@ -35,6 +35,8 @@ const formatSignedCurrency = (value: number) => {
   return formatCurrency(value)
 }
 
+const formatPercent = (value: number) => `${value.toFixed(1)}%`
+
 const formatAxisValue = (value: number) => {
   const abs = Math.abs(value)
   if (abs >= 1_000_000_000) {
@@ -1125,14 +1127,12 @@ const RunResultsPage = () => {
       return {
         endingBalance: 0,
         minBalance: 0,
-        maxBalance: 0,
       }
     }
     if (filteredTimeline.length === 0) {
       return {
         endingBalance: 0,
         minBalance: 0,
-        maxBalance: 0,
       }
     }
     const balances = filteredTimeline.map((point) =>
@@ -1141,9 +1141,17 @@ const RunResultsPage = () => {
     return {
       endingBalance: balances.length > 0 ? balances[balances.length - 1] : 0,
       minBalance: balances.length > 0 ? Math.min(...balances) : 0,
-      maxBalance: balances.length > 0 ? Math.max(...balances) : 0,
     }
   }, [adjustForInflation, filteredTimeline, run, showPresentDay])
+
+  const stochasticSuccessPct = useMemo(() => {
+    const stochasticRuns = run?.result.stochasticRuns ?? []
+    if (stochasticRuns.length === 0) {
+      return null
+    }
+    const successCount = stochasticRuns.filter((entry) => entry.endingBalance >= 0).length
+    return (successCount / stochasticRuns.length) * 100
+  }, [run?.result.stochasticRuns])
 
   const timelineDecades = useMemo(() => {
     const decades = new Set<number>()
@@ -1261,8 +1269,12 @@ const RunResultsPage = () => {
                   <strong>{formatCurrency(summary.minBalance)}</strong>
                 </div>
                 <div>
-                  <span className="muted">Max balance</span>
-                  <strong>{formatCurrency(summary.maxBalance)}</strong>
+                  <span className="muted">Success %</span>
+                  <strong>
+                    {stochasticSuccessPct === null
+                      ? '—'
+                      : formatPercent(stochasticSuccessPct)}
+                  </strong>
                 </div>
               </div>
               <div className="row" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
