@@ -572,6 +572,7 @@ const applyCashflows = (
   state: SimulationState,
   cashflows: CashflowItem[],
   totals: MonthTotals,
+  currentTaxYear: number,
 ) => {
   cashflows.forEach((flow) => {
     if (flow.cash >= 0) {
@@ -580,7 +581,9 @@ const applyCashflows = (
       const amount = -flow.cash
       if (flow.category === 'tax') {
         totals.taxes += amount
-        state.yearLedger.taxPaid += amount
+        if (flow.taxYear === undefined || flow.taxYear === currentTaxYear) {
+          state.yearLedger.taxPaid += amount
+        }
       } else {
         totals.spending += amount
       }
@@ -1097,7 +1100,7 @@ export const runSimulation = (
         cashflows: module.getCashflows?.(state, context) ?? [],
       }))
       const cashflows = cashflowsByModule.flatMap((entry) => entry.cashflows)
-      applyCashflows(state, cashflows, monthTotals)
+      applyCashflows(state, cashflows, monthTotals, context.date.getFullYear())
       const extraCashflowsByModule = record ? new Map<string, CashflowItem[]>() : null
       const extraCashflows = modules.flatMap((module) => {
         const extras = module.onAfterCashflows?.(cashflows, state, context) ?? []
@@ -1107,7 +1110,7 @@ export const runSimulation = (
         return extras
       })
       if (extraCashflows.length > 0) {
-        applyCashflows(state, extraCashflows, monthTotals)
+        applyCashflows(state, extraCashflows, monthTotals, context.date.getFullYear())
       }
 
       const intentsByModule = modules.map((module) => ({

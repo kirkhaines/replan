@@ -67,6 +67,7 @@ export const createRmdModule = (
           label: 'RMD withholding',
           category: 'tax',
           cash: -withholding,
+          taxYear: context.date.getFullYear(),
         },
       ]
     },

@@ -72,6 +72,7 @@ export type CashflowItem = {
   capitalGains?: number
   deductions?: number
   taxExemptIncome?: number
+  taxYear?: number
 }
 
 export type CashflowSeriesBucket = 'cash' | 'taxable' | 'traditional' | 'roth' | 'hsa'

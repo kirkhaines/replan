@@ -59,16 +59,15 @@ export const createTaxModule = (
   }
 
   const buildTaxDue = (state: SimulationState, context: SimulationContext) => {
-    const policyYear = taxStrategy.policyYear || context.date.getFullYear()
     const taxYear = context.date.getFullYear()
-    const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, taxStrategy.filingStatus)
+    const policy = selectTaxPolicy(snapshot.taxPolicies, taxYear, taxStrategy.filingStatus)
     if (!policy) {
       return null
     }
-    const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
+    const inflatedPolicy = inflateTaxPolicy(policy, taxYear)
     const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
       snapshot.socialSecurityProvisionalIncomeBrackets,
-      policyYear,
+      taxYear,
       taxStrategy.filingStatus,
     )
     const taxResult = computeTax({
@@ -85,7 +84,7 @@ export const createTaxModule = (
     })
     const stateTaxPolicy =
       taxStrategy.stateCode !== 'none'
-        ? selectStateTaxPolicy(taxStrategy.stateCode, policyYear, taxStrategy.filingStatus)
+        ? selectStateTaxPolicy(taxStrategy.stateCode, taxYear, taxStrategy.filingStatus)
         : null
     const taxableIncome = taxResult.taxableOrdinaryIncome + taxResult.taxableCapitalGains
     const stateTax = stateTaxPolicy
@@ -95,7 +94,7 @@ export const createTaxModule = (
           useStandardDeduction: taxStrategy.useStandardDeduction,
         })
       : 0
-    const payrollPolicy = selectPayrollTaxPolicy(policyYear)
+    const payrollPolicy = selectPayrollTaxPolicy(taxYear)
     const payrollTaxes = payrollPolicy
       ? computePayrollTaxes({
           earnedIncome: state.yearLedger.earnedIncome,
@@ -182,8 +181,8 @@ export const createTaxModule = (
       return entries
     },
     getCashflows: (state, context) => {
-      const policyYear = taxStrategy.policyYear || context.date.getFullYear()
-      explain.addInput('Policy year', policyYear)
+      const taxYear = context.date.getFullYear()
+      explain.addInput('Tax year', taxYear)
       explain.addInput('Filing status', taxStrategy.filingStatus)
       explain.addInput('State tax rate', taxStrategy.stateTaxRate)
       explain.addInput('State code', taxStrategy.stateCode)
@@ -222,6 +221,7 @@ export const createTaxModule = (
           label,
           category: 'tax',
           cash: -totalDue,
+          taxYear: paymentYear,
         },
       ]
     },
@@ -236,16 +236,16 @@ export const createTaxModule = (
         explain.addCheckpoint('Withholding due', 0)
         return []
       }
-      const policyYear = taxStrategy.policyYear || context.date.getFullYear()
-      const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, taxStrategy.filingStatus)
+      const taxYear = context.date.getFullYear()
+      const policy = selectTaxPolicy(snapshot.taxPolicies, taxYear, taxStrategy.filingStatus)
       if (!policy) {
         explain.addCheckpoint('Withholding due', 0)
         return []
       }
-      const inflatedPolicy = inflateTaxPolicy(policy, policyYear)
+      const inflatedPolicy = inflateTaxPolicy(policy, taxYear)
       const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
         snapshot.socialSecurityProvisionalIncomeBrackets,
-        policyYear,
+        taxYear,
         taxStrategy.filingStatus,
       )
       const monthOfYear = context.date.getMonth() + 1
@@ -274,7 +274,7 @@ export const createTaxModule = (
           ? (() => {
               const statePolicy = selectStateTaxPolicy(
                 taxStrategy.stateCode,
-                policyYear,
+                taxYear,
                 taxStrategy.filingStatus,
               )
               if (!statePolicy) {
@@ -287,7 +287,7 @@ export const createTaxModule = (
               })
             })()
           : 0
-      const payrollEstimatePolicy = selectPayrollTaxPolicy(policyYear)
+      const payrollEstimatePolicy = selectPayrollTaxPolicy(taxYear)
       const payrollEstimate = payrollEstimatePolicy
         ? computePayrollTaxes({
             earnedIncome: Math.max(0, annualized.ordinaryIncome),
@@ -317,6 +317,7 @@ export const createTaxModule = (
           label: 'Tax withholding',
           category: 'tax',
           cash: -withholdingDue,
+          taxYear: context.date.getFullYear(),
         },
       ]
     },

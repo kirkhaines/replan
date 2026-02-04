@@ -26,6 +26,7 @@ const cashflowItemSchema = z.object({
   capitalGains: z.number().optional(),
   deductions: z.number().optional(),
   taxExemptIncome: z.number().optional(),
+  taxYear: z.number().int().optional(),
 })
 
 const actionKindSchema = z.enum(['withdraw', 'deposit', 'convert', 'rebalance', 'rmd'])
