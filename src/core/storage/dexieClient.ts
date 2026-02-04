@@ -115,17 +115,8 @@ class DexieRunRepo implements RunRepo {
     return (successCount / stochasticRuns.length) * 100
   }
 
-  async listForScenario(scenarioId: string) {
-    const runs = await db.runs
-      .where('scenarioId')
-      .equals(scenarioId)
-      .sortBy('finishedAt')
-    return runs.reverse()
-  }
-
-  async listSummariesForScenario(scenarioId: string) {
-    const runs = await this.listForScenario(scenarioId)
-    return runs.map<SimulationRunSummary>((run) => ({
+  private buildRunSummary(run: SimulationRun): SimulationRunSummary {
+    return {
       id: run.id,
       scenarioId: run.scenarioId,
       title: run.title,
@@ -136,15 +127,33 @@ class DexieRunRepo implements RunRepo {
       resultSummary: run.result.summary,
       endingBalanceToday: this.computeEndingBalanceToday(run),
       stochasticSuccessPct: this.computeStochasticSuccessPct(run),
-    }))
+    }
+  }
+
+  async listForScenario(scenarioId: string) {
+    const runs = await db.runs
+      .where('scenarioId')
+      .equals(scenarioId)
+      .sortBy('finishedAt')
+    return runs.reverse()
+  }
+
+  async listSummariesForScenario(scenarioId: string) {
+    const summaries = await db.runSummaries
+      .where('scenarioId')
+      .equals(scenarioId)
+      .sortBy('finishedAt')
+    return summaries.reverse()
   }
 
   async add(run: SimulationRun) {
     await db.runs.add(run)
+    await db.runSummaries.put(this.buildRunSummary(run))
   }
 
   async upsert(run: SimulationRun) {
     await db.runs.put(run)
+    await db.runSummaries.put(this.buildRunSummary(run))
   }
 
   async get(id: string) {
@@ -153,6 +162,7 @@ class DexieRunRepo implements RunRepo {
 
   async remove(id: string) {
     await db.runs.delete(id)
+    await db.runSummaries.delete(id)
   }
 }
 

@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie'
 import type {
   Scenario,
   SimulationRun,
+  SimulationRunSummary,
   Person,
   SocialSecurityEarnings,
   SocialSecurityStrategy,
@@ -24,6 +25,7 @@ import type {
 class ReplanDb extends Dexie {
   scenarios!: Table<Scenario, string>
   runs!: Table<SimulationRun, string>
+  runSummaries!: Table<SimulationRunSummary, string>
   people!: Table<Person, string>
   socialSecurityEarnings!: Table<SocialSecurityEarnings, string>
   socialSecurityStrategies!: Table<SocialSecurityStrategy, string>
@@ -176,6 +178,67 @@ class ReplanDb extends Dexie {
       ssaBendPoints: 'id, year',
       ssaRetirementAdjustments: 'id, birthYearStart, birthYearEnd',
     })
+    this.version(9)
+      .stores({
+        scenarios: 'id, updatedAt',
+        runs: 'id, scenarioId, finishedAt',
+        runSummaries: 'id, scenarioId, finishedAt',
+        people: 'id, updatedAt',
+        socialSecurityEarnings: 'id, personId, year',
+        socialSecurityStrategies: 'id, personId',
+        nonInvestmentAccounts: 'id, updatedAt',
+        investmentAccounts: 'id, updatedAt',
+        investmentAccountHoldings: 'id, investmentAccountId, updatedAt',
+        futureWorkStrategies: 'id, personId',
+        futureWorkPeriods: 'id, futureWorkStrategyId, startDate',
+        spendingStrategies: 'id, updatedAt',
+        spendingLineItems: 'id, spendingStrategyId, startDate',
+        personStrategies: 'id, personId, scenarioId',
+        inflationDefaults: 'id, type',
+        holdingTypeDefaults: 'id, type',
+        contributionLimitDefaults: 'id, type, year',
+        ssaWageIndex: 'id, year',
+        ssaBendPoints: 'id, year',
+        ssaRetirementAdjustments: 'id, birthYearStart, birthYearEnd',
+      })
+      .upgrade(async (tx) => {
+        const runs = await tx.table<SimulationRun, string>('runs').toArray()
+        const summaries = runs.map<SimulationRunSummary>((run) => {
+          const endingBalance = run.result.summary.endingBalance
+          const dateIso = run.result.timeline.at(-1)?.date
+          const cpiRate =
+            run.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+          let endingBalanceToday = endingBalance
+          if (dateIso && cpiRate !== 0) {
+            const year = new Date(dateIso).getFullYear()
+            const baseYear = new Date().getFullYear()
+            if (!Number.isNaN(year)) {
+              const yearDelta = year - baseYear
+              endingBalanceToday = endingBalance / Math.pow(1 + cpiRate, yearDelta)
+            }
+          }
+          const stochasticRuns = run.result.stochasticRuns ?? []
+          const stochasticSuccessPct =
+            stochasticRuns.length === 0
+              ? null
+              : (stochasticRuns.filter((entry) => entry.endingBalance >= 0).length /
+                  stochasticRuns.length) *
+                100
+          return {
+            id: run.id,
+            scenarioId: run.scenarioId,
+            title: run.title,
+            startedAt: run.startedAt,
+            finishedAt: run.finishedAt,
+            status: run.status,
+            errorMessage: run.errorMessage,
+            resultSummary: run.result.summary,
+            endingBalanceToday,
+            stochasticSuccessPct,
+          }
+        })
+        await tx.table<SimulationRunSummary, string>('runSummaries').bulkPut(summaries)
+      })
   }
 }
 
