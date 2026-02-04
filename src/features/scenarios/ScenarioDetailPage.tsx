@@ -27,7 +27,6 @@ import {
   type PersonStrategy,
 } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
-import type { SimulationRequest } from '../../core/sim/input'
 import { publishStochasticProgress } from '../../core/simClient/stochasticProgress'
 import type { StorageClient } from '../../core/storage/types'
 import { createDefaultScenarioBundle } from './scenarioDefaults'
@@ -728,6 +727,15 @@ const ScenarioDetailPage = () => {
     name: 'scenario.strategies.withdrawal.guardrailHealthPoints',
   })
   const {
+    fields: guardrailMinBalanceHealthPointFields,
+    append: appendGuardrailMinBalanceHealthPoint,
+    remove: removeGuardrailMinBalanceHealthPoint,
+    replace: replaceGuardrailMinBalanceHealthPoints,
+  } = useFieldArray({
+    control,
+    name: 'scenario.strategies.withdrawal.guardrailMinBalanceHealthPoints',
+  })
+  const {
     fields: pensionRows,
     append: appendPension,
     remove: removePension,
@@ -1114,6 +1122,9 @@ const ScenarioDetailPage = () => {
     replaceGlidepathTargets(normalizedScenario.strategies.glidepath.targets)
     replaceEvents(normalizedScenario.strategies.events)
     replaceGuardrailHealthPoints(normalizedScenario.strategies.withdrawal.guardrailHealthPoints)
+    replaceGuardrailMinBalanceHealthPoints(
+      normalizedScenario.strategies.withdrawal.guardrailMinBalanceHealthPoints,
+    )
     replacePensions(normalizedScenario.strategies.pensions)
     replaceBeneficiaries(normalizedScenario.strategies.death.beneficiaries)
     setFutureWorkPeriods(futureWorkPeriods.map(normalizeFutureWorkPeriod))
@@ -1126,6 +1137,7 @@ const ScenarioDetailPage = () => {
     replaceEvents,
     replaceGlidepathTargets,
     replaceGuardrailHealthPoints,
+    replaceGuardrailMinBalanceHealthPoints,
     replacePensions,
     reset,
     storage,
@@ -1660,23 +1672,21 @@ const ScenarioDetailPage = () => {
       today.setDate(1)
       return today.toISOString().slice(0, 10)
     })()
-    const input: SimulationRequest = {
-      snapshot,
-      startDate,
-    }
     const rawStochasticRuns = saved.scenario.strategies.returnModel.stochasticRuns
     const stochasticTarget = Number.isFinite(rawStochasticRuns)
       ? Math.max(0, Math.floor(rawStochasticRuns))
       : 0
-    const baseRun = await simClient.runScenario(input)
     let minBalanceRun: SimulationRun['result']['minBalanceRun'] | undefined
-    if (baseRun.status === 'success') {
-      try {
-        minBalanceRun = (await runMinimumBalanceTrial(snapshot, startDate)) ?? undefined
-      } catch (error) {
-        console.error('[Scenario] Minimum balance trial failed.', error)
-      }
+    try {
+      minBalanceRun = (await runMinimumBalanceTrial(snapshot, startDate)) ?? undefined
+    } catch (error) {
+      console.error('[Scenario] Minimum balance trial failed.', error)
     }
+    const runSnapshot = minBalanceRun ? { ...snapshot, minBalanceRun } : snapshot
+    const baseRun = await simClient.runScenario({
+      snapshot: runSnapshot,
+      startDate,
+    })
     const run: SimulationRun = {
       ...baseRun,
       result: {
@@ -1690,7 +1700,7 @@ const ScenarioDetailPage = () => {
     await loadRuns(saved.scenario.id)
     navigate(`/runs/${run.id}`)
     if (stochasticTarget > 0) {
-      void runStochasticTrials(run.id, snapshot, startDate, stochasticTarget)
+      void runStochasticTrials(run.id, runSnapshot, startDate, stochasticTarget)
     }
   }
 
@@ -1928,6 +1938,9 @@ const ScenarioDetailPage = () => {
               guardrailHealthPointFields={guardrailHealthPointFields}
               appendGuardrailHealthPoint={appendGuardrailHealthPoint}
               removeGuardrailHealthPoint={removeGuardrailHealthPoint}
+              guardrailMinBalanceHealthPointFields={guardrailMinBalanceHealthPointFields}
+              appendGuardrailMinBalanceHealthPoint={appendGuardrailMinBalanceHealthPoint}
+              removeGuardrailMinBalanceHealthPoint={removeGuardrailMinBalanceHealthPoint}
               appendEvent={appendEvent}
               removeEvent={removeEvent}
               eventRows={eventRows}

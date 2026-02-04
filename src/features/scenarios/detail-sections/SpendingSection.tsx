@@ -34,6 +34,16 @@ type SpendingSectionProps = {
     'scenario.strategies.withdrawal.guardrailHealthPoints'
   >
   removeGuardrailHealthPoint: UseFieldArrayRemove
+  guardrailMinBalanceHealthPointFields: FieldArrayWithId<
+    ScenarioEditorValues,
+    'scenario.strategies.withdrawal.guardrailMinBalanceHealthPoints',
+    'id'
+  >[]
+  appendGuardrailMinBalanceHealthPoint: UseFieldArrayAppend<
+    ScenarioEditorValues,
+    'scenario.strategies.withdrawal.guardrailMinBalanceHealthPoints'
+  >
+  removeGuardrailMinBalanceHealthPoint: UseFieldArrayRemove
   appendEvent: UseFieldArrayAppend<ScenarioEditorValues, 'scenario.strategies.events'>
   removeEvent: UseFieldArrayRemove
   eventRows: FieldArrayWithId<ScenarioEditorValues, 'scenario.strategies.events', 'id'>[]
@@ -54,6 +64,9 @@ const SpendingSection = ({
   guardrailHealthPointFields,
   appendGuardrailHealthPoint,
   removeGuardrailHealthPoint,
+  guardrailMinBalanceHealthPointFields,
+  appendGuardrailMinBalanceHealthPoint,
+  removeGuardrailMinBalanceHealthPoint,
   appendEvent,
   removeEvent,
   eventRows,
@@ -146,6 +159,7 @@ const SpendingSection = ({
               <option value="legacy">Legacy guardrail</option>
               <option value="cap_wants">Cap wants by withdrawal rate</option>
               <option value="portfolio_health">Portfolio health model</option>
+              <option value="min_balance_health">Min balance health model</option>
               <option value="guyton">Guyton</option>
             </select>
           </label>
@@ -240,6 +254,80 @@ const SpendingSection = ({
                           className="link-button"
                           type="button"
                           onClick={() => removeGuardrailHealthPoint(index)}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ) : null}
+
+        {guardrailStrategy === 'min_balance_health' ? (
+          <div className="stack">
+            <div className="row">
+              <h4>Min balance health points</h4>
+              <button
+                className="button secondary"
+                type="button"
+                onClick={() =>
+                  appendGuardrailMinBalanceHealthPoint({
+                    health: 1,
+                    factor: 1,
+                  })
+                }
+              >
+                Add point
+              </button>
+            </div>
+            {guardrailMinBalanceHealthPointFields.length === 0 ? (
+              <p className="muted">No health points configured.</p>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Health</th>
+                    <th>Guardrail factor</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {guardrailMinBalanceHealthPointFields.map((field, index) => (
+                    <tr key={field.id}>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.health}
+                          {...register(
+                            `scenario.strategies.withdrawal.guardrailMinBalanceHealthPoints.${index}.health`,
+                            {
+                              valueAsNumber: true,
+                            },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={field.factor}
+                          {...register(
+                            `scenario.strategies.withdrawal.guardrailMinBalanceHealthPoints.${index}.factor`,
+                            {
+                              valueAsNumber: true,
+                            },
+                          )}
+                        />
+                      </td>
+                      <td>
+                        <button
+                          className="link-button"
+                          type="button"
+                          onClick={() => removeGuardrailMinBalanceHealthPoint(index)}
                         >
                           Remove
                         </button>

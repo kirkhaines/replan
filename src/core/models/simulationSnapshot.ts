@@ -25,6 +25,7 @@ import {
   socialSecurityProvisionalIncomeBracketSchema,
   taxPolicySchema,
 } from './policies'
+import { minimumBalanceRunSchema } from './minimumBalanceRun'
 
 export const simulationSnapshotSchema = z.object({
   scenario: scenarioSchema,
@@ -49,6 +50,7 @@ export const simulationSnapshotSchema = z.object({
   ),
   irmaaTables: z.array(irmaaTableSchema),
   rmdTable: z.array(rmdTableSchema),
+  minBalanceRun: minimumBalanceRunSchema.optional(),
 })
 
 export type SimulationSnapshot = z.infer<typeof simulationSnapshotSchema>

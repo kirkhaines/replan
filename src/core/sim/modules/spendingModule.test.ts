@@ -16,10 +16,12 @@ import { buildScenario } from '../../../test/scenarioFactory'
 const makeSnapshot = ({
   monthlyNeed,
   monthlyWant,
+  minBalanceRun,
   scenarioOverrides,
 }: {
   monthlyNeed: number
   monthlyWant: number
+  minBalanceRun?: SimulationSnapshot['minBalanceRun']
   scenarioOverrides?: {
     strategies?: Partial<SimulationSnapshot['scenario']['strategies']>
   }
@@ -130,6 +132,7 @@ const makeSnapshot = ({
     socialSecurityProvisionalIncomeBrackets: socialSecurityProvisionalIncomeBracketsSeed,
     irmaaTables: irmaaTableSeed,
     rmdTable: rmdTableSeed,
+    minBalanceRun,
   }
 }
 
@@ -291,5 +294,41 @@ describe('spendingModule guardrails', () => {
     expect(sumCategory(cashflows, 'spending_need')).toBeCloseTo(1000, 6)
     expect(sumCategory(cashflows, 'spending_want')).toBeCloseTo(1800, 6)
     expect(state.guardrailGuytonMonthsRemaining).toBe(1)
+  })
+
+  it('uses minimum balance health points for guardrails', () => {
+    const snapshot = makeSnapshot({
+      monthlyNeed: 0,
+      monthlyWant: 1000,
+      minBalanceRun: {
+        multiplier: 1,
+        endingBalance: 0,
+        timeline: [
+          {
+            yearIndex: 0,
+            age: 46,
+            balance: 100000,
+            date: '2026-01-01',
+          },
+        ],
+      },
+      scenarioOverrides: {
+        strategies: {
+          withdrawal: {
+            guardrailStrategy: 'min_balance_health',
+            guardrailMinBalanceHealthPoints: [
+              { health: 1, factor: 0 },
+              { health: 1.2, factor: 1 },
+            ],
+          },
+        },
+      },
+    })
+    const context = makeContext(snapshot)
+    const state = makeState(110000)
+    const module = createSpendingModule(snapshot)
+    const cashflows = module.getCashflows?.(state, context) ?? []
+
+    expect(sumCategory(cashflows, 'spending_want')).toBeCloseTo(500, 6)
   })
 })

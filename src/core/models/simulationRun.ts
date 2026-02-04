@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isoDateStringSchema } from './common'
+import { minimumBalanceRunSchema } from './minimumBalanceRun'
 import { holdingTypeSchema, taxTypeSchema } from './enums'
 import { simulationSnapshotSchema } from './simulationSnapshot'
 
@@ -175,19 +176,6 @@ export const monthlyTimelinePointSchema = z.object({
   ordinaryIncome: z.number(),
   capitalGains: z.number(),
   deductions: z.number(),
-})
-
-const minimumBalanceRunPointSchema = z.object({
-  yearIndex: z.number().int().min(0),
-  age: z.number(),
-  balance: z.number(),
-  date: isoDateStringSchema.optional(),
-})
-
-const minimumBalanceRunSchema = z.object({
-  multiplier: z.number().min(0),
-  endingBalance: z.number(),
-  timeline: z.array(minimumBalanceRunPointSchema),
 })
 
 export const stochasticRunSummarySchema = z.object({

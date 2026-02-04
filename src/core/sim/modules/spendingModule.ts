@@ -32,6 +32,13 @@ export const createSpendingModule = (
     roth: 1,
     hsa: 1,
   }
+  const minBalanceTimeline = snapshot.minBalanceRun?.timeline ?? []
+  const sortedMinBalanceTimeline = [...minBalanceTimeline].sort(
+    (a, b) => a.yearIndex - b.yearIndex,
+  )
+  const sortedMinBalanceTimelineByDate = [...minBalanceTimeline]
+    .filter((point) => Boolean(point.date))
+    .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
   let guardrailTargetMonthIso: string | null = null
 
   const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
@@ -74,6 +81,15 @@ export const createSpendingModule = (
     return cashTotal + holdingTotal
   }
 
+  const getTotalBalance = (state: {
+    cashAccounts: Array<{ balance: number }>
+    holdings: Array<{ balance: number }>
+  }) => {
+    const cashTotal = state.cashAccounts.reduce((sum, account) => sum + account.balance, 0)
+    const holdingTotal = state.holdings.reduce((sum, holding) => sum + holding.balance, 0)
+    return cashTotal + holdingTotal
+  }
+
   const interpolateHealthFactor = (
     health: number,
     points: Array<{ health: number; factor: number }>,
@@ -99,6 +115,61 @@ export const createSpendingModule = (
       }
     }
     return 1
+  }
+
+  const getMinBalanceForYearIndex = (yearIndex: number) => {
+    if (sortedMinBalanceTimeline.length === 0) {
+      return null
+    }
+    let candidate = sortedMinBalanceTimeline[0]
+    for (let index = 1; index < sortedMinBalanceTimeline.length; index += 1) {
+      const point = sortedMinBalanceTimeline[index]
+      if (point.yearIndex > yearIndex) {
+        break
+      }
+      candidate = point
+    }
+    return candidate.balance
+  }
+
+  const getMinBalanceForDate = (dateIso: string, fallbackYearIndex: number) => {
+    if (sortedMinBalanceTimelineByDate.length === 0) {
+      return getMinBalanceForYearIndex(fallbackYearIndex)
+    }
+    const targetMs = new Date(`${dateIso}T00:00:00Z`).getTime()
+    if (Number.isNaN(targetMs)) {
+      return getMinBalanceForYearIndex(fallbackYearIndex)
+    }
+    const first = sortedMinBalanceTimelineByDate[0]
+    const last = sortedMinBalanceTimelineByDate[sortedMinBalanceTimelineByDate.length - 1]
+    const firstMs = new Date(`${first.date}T00:00:00Z`).getTime()
+    const lastMs = new Date(`${last.date}T00:00:00Z`).getTime()
+    if (!Number.isFinite(firstMs) || !Number.isFinite(lastMs)) {
+      return getMinBalanceForYearIndex(fallbackYearIndex)
+    }
+    if (targetMs <= firstMs) {
+      return first.balance
+    }
+    if (targetMs >= lastMs) {
+      return last.balance
+    }
+    for (let index = 1; index < sortedMinBalanceTimelineByDate.length; index += 1) {
+      const upper = sortedMinBalanceTimelineByDate[index]
+      const lower = sortedMinBalanceTimelineByDate[index - 1]
+      const upperMs = new Date(`${upper.date}T00:00:00Z`).getTime()
+      if (!Number.isFinite(upperMs)) {
+        continue
+      }
+      if (targetMs <= upperMs) {
+        const lowerMs = new Date(`${lower.date}T00:00:00Z`).getTime()
+        if (!Number.isFinite(lowerMs) || upperMs === lowerMs) {
+          return upper.balance
+        }
+        const ratio = (targetMs - lowerMs) / (upperMs - lowerMs)
+        return lower.balance + (upper.balance - lower.balance) * ratio
+      }
+    }
+    return last.balance
   }
 
   return {
@@ -152,6 +223,7 @@ export const createSpendingModule = (
       const totalNeed = lineItemAmounts.reduce((sum, entry) => sum + entry.needAmount, 0)
       const totalWant = lineItemAmounts.reduce((sum, entry) => sum + entry.wantAmount, 0)
       const currentDiscountedBalance = getDiscountedTotalBalance(state)
+      const currentTotalBalance = getTotalBalance(state)
 
       if (!guardrailTargetMonthIso) {
         guardrailTargetMonthIso = getGuardrailTargetMonthIso(context.settings.startDate)
@@ -175,33 +247,42 @@ export const createSpendingModule = (
       let guardrailActive = false
       let guardrailHealth: number | null = null
       if (guardrailsEnabled) {
-        if (guardrailStrategy === 'legacy') {
-          const guardrailPct = guardrailConfig.guardrailPct
-          const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
-          guardrailActive =
-            guardrailPct > 0 && currentDiscountedBalance < targetBalance * (1 - guardrailPct)
-          guardrailFactor = guardrailActive ? 1 - guardrailPct : 1
-        } else if (guardrailStrategy === 'cap_wants') {
-          if (totalWant > 0 && guardrailConfig.guardrailWithdrawalRateLimit > 0) {
-            const monthlyLimit =
-              (currentDiscountedBalance * guardrailConfig.guardrailWithdrawalRateLimit) / 12
-            const availableForWants = monthlyLimit - totalNeed
-            guardrailFactor = clamp01(availableForWants / totalWant)
-          }
-        } else if (guardrailStrategy === 'portfolio_health') {
-          const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
-          const targetDate = state.guardrailTargetDateIso ?? context.dateIso
-          const inflatedTarget = inflateAmount(targetBalance, targetDate, context.dateIso, cpiRate)
-          guardrailHealth = inflatedTarget > 0 ? currentDiscountedBalance / inflatedTarget : 1
+      if (guardrailStrategy === 'legacy') {
+        const guardrailPct = guardrailConfig.guardrailPct
+        const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
+        guardrailActive =
+          guardrailPct > 0 && currentDiscountedBalance < targetBalance * (1 - guardrailPct)
+        guardrailFactor = guardrailActive ? 1 - guardrailPct : 1
+      } else if (guardrailStrategy === 'cap_wants') {
+        if (totalWant > 0 && guardrailConfig.guardrailWithdrawalRateLimit > 0) {
+          const monthlyLimit =
+            (currentDiscountedBalance * guardrailConfig.guardrailWithdrawalRateLimit) / 12
+          const availableForWants = monthlyLimit - totalNeed
+          guardrailFactor = clamp01(availableForWants / totalWant)
+        }
+      } else if (guardrailStrategy === 'portfolio_health') {
+        const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
+        const targetDate = state.guardrailTargetDateIso ?? context.dateIso
+        const inflatedTarget = inflateAmount(targetBalance, targetDate, context.dateIso, cpiRate)
+        guardrailHealth = inflatedTarget > 0 ? currentDiscountedBalance / inflatedTarget : 1
+        guardrailFactor = interpolateHealthFactor(
+          guardrailHealth,
+          guardrailConfig.guardrailHealthPoints,
+        )
+      } else if (guardrailStrategy === 'min_balance_health') {
+        const minBalanceTarget = getMinBalanceForDate(context.dateIso, context.yearIndex)
+        if (minBalanceTarget && minBalanceTarget > 0) {
+          guardrailHealth = currentTotalBalance / minBalanceTarget
           guardrailFactor = interpolateHealthFactor(
             guardrailHealth,
-            guardrailConfig.guardrailHealthPoints,
+            guardrailConfig.guardrailMinBalanceHealthPoints,
           )
-        } else if (guardrailStrategy === 'guyton') {
-          const baselineBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
-          const baselineSpending = state.guardrailBaselineNeed + state.guardrailBaselineWant
-          const baselineRate =
-            baselineBalance > 0 ? (baselineSpending / baselineBalance) * 12 : 0
+        }
+      } else if (guardrailStrategy === 'guyton') {
+        const baselineBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
+        const baselineSpending = state.guardrailBaselineNeed + state.guardrailBaselineWant
+        const baselineRate =
+          baselineBalance > 0 ? (baselineSpending / baselineBalance) * 12 : 0
           const currentRate =
             currentDiscountedBalance > 0
               ? ((totalNeed + totalWant) / currentDiscountedBalance) * 12

@@ -61,10 +61,23 @@ export const cashBufferStrategySchema = z.object({
 export const withdrawalStrategySchema = z.object({
   order: z.array(withdrawalOrderTypeSchema).min(1),
   useCashFirst: z.boolean(),
-  guardrailStrategy: z.enum(['none', 'legacy', 'cap_wants', 'portfolio_health', 'guyton']),
+  guardrailStrategy: z.enum([
+    'none',
+    'legacy',
+    'cap_wants',
+    'portfolio_health',
+    'min_balance_health',
+    'guyton',
+  ]),
   guardrailPct: z.number().min(0).max(1),
   guardrailWithdrawalRateLimit: z.number().min(0),
   guardrailHealthPoints: z.array(
+    z.object({
+      health: z.number().min(0),
+      factor: z.number().min(0).max(1),
+    }),
+  ),
+  guardrailMinBalanceHealthPoints: z.array(
     z.object({
       health: z.number().min(0),
       factor: z.number().min(0).max(1),
@@ -254,6 +267,10 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
       { health: 0.95, factor: 0.75 },
       { health: 0.85, factor: 0.5 },
       { health: 0.8, factor: 0 },
+    ],
+    guardrailMinBalanceHealthPoints: [
+      { health: 1, factor: 0 },
+      { health: 1.2, factor: 1 },
     ],
     guardrailGuytonTriggerRateIncrease: 0.2,
     guardrailGuytonAppliedPct: 0.1,
