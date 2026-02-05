@@ -197,6 +197,7 @@ export const simulationResultSchema = z.object({
   stochasticRuns: z.array(stochasticRunSummarySchema).optional(),
   stochasticRunsCancelled: z.boolean().optional(),
   minBalanceRun: minimumBalanceRunSchema.optional(),
+  minBalanceRunComplete: z.boolean().optional(),
   summary: z.object({
     endingBalance: z.number(),
     minBalance: z.number(),

@@ -27,7 +27,9 @@
           "medical": 0.03,
           "housing": 0.025,
           "education": 0.03
-        }
+        },
+        "inflationStdev": 0.01,
+        "inflationPersistence": 0.5
       },
       "glidepath": {
         "mode": "age",

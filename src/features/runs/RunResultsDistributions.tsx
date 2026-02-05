@@ -32,10 +32,7 @@ type RunResultsDistributionsProps = {
   stochasticRuns: SimulationResult['stochasticRuns']
   formatAxisValue: (value: number) => string
   formatCurrency: (value: number) => string
-  stochasticTarget: number
-  stochasticCompleted: number
   stochasticCancelled: boolean
-  onCancelStochastic?: () => void
 }
 
 const metricOptions: Array<{ value: DistributionMetric; label: string }> = [
@@ -188,32 +185,11 @@ const RunResultsDistributions = ({
   stochasticRuns,
   formatAxisValue,
   formatCurrency,
-  stochasticTarget,
-  stochasticCompleted,
   stochasticCancelled,
-  onCancelStochastic,
 }: RunResultsDistributionsProps) => {
   const [metric, setMetric] = useState<DistributionMetric>('endingBalance')
   const [colorMetric, setColorMetric] = useState<ColorMetric>('guardrailFactorAvg')
   const [showChart, setShowChart] = useState(true)
-  const availableRuns = stochasticRuns?.length ?? 0
-  const awaitingResults =
-    !stochasticCancelled &&
-    stochasticTarget > 0 &&
-    stochasticCompleted >= stochasticTarget &&
-    availableRuns < stochasticTarget
-  const isPending =
-    Number.isFinite(stochasticTarget) &&
-    stochasticTarget > 0 &&
-    !stochasticCancelled &&
-    (stochasticCompleted < stochasticTarget || awaitingResults)
-  const progressPct =
-    stochasticTarget > 0
-      ? Math.min(100, Math.max(0, (stochasticCompleted / stochasticTarget) * 100))
-      : 0
-  const pendingLabel = awaitingResults
-    ? 'Finalizing stochastic results...'
-    : `Running stochastic trials: ${stochasticCompleted} of ${stochasticTarget}`
 
   const isLowerBetter = colorMetric === 'guardrailFactorBelowPct'
   const bands = colorMetric === 'none' ? 1 : bandCount
@@ -295,33 +271,7 @@ const RunResultsDistributions = ({
         </div>
       </div>
       {showChart ? (
-        isPending ? (
-          <div className="stack">
-            <p className="muted">{pendingLabel}</p>
-            <div
-              style={{
-                background: 'var(--border)',
-                borderRadius: '999px',
-                height: '10px',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  width: `${progressPct.toFixed(1)}%`,
-                  height: '100%',
-                  background: 'var(--accent)',
-                  transition: 'width 200ms ease',
-                }}
-              />
-            </div>
-            {onCancelStochastic ? (
-              <button className="button secondary" type="button" onClick={onCancelStochastic}>
-                Cancel trials
-              </button>
-            ) : null}
-          </div>
-        ) : histogram.bins.length > 0 ? (
+        histogram.bins.length > 0 ? (
           <div className="chart">
             <ResponsiveContainer width="100%" height="100%" minHeight={320} minWidth={300}>
               <BarChart data={histogram.bins}>

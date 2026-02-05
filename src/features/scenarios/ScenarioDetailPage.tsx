@@ -1676,32 +1676,81 @@ const ScenarioDetailPage = () => {
     const stochasticTarget = Number.isFinite(rawStochasticRuns)
       ? Math.max(0, Math.floor(rawStochasticRuns))
       : 0
-    let minBalanceRun: SimulationRun['result']['minBalanceRun'] | undefined
-    try {
-      minBalanceRun = (await runMinimumBalanceTrial(snapshot, startDate)) ?? undefined
-    } catch (error) {
-      console.error('[Scenario] Minimum balance trial failed.', error)
-    }
-    const runSnapshot = minBalanceRun ? { ...snapshot, minBalanceRun } : snapshot
-    const baseRun = await simClient.runScenario({
-      snapshot: runSnapshot,
-      startDate,
-    })
-    const run: SimulationRun = {
-      ...baseRun,
+    const runId = createUuid()
+    const placeholderStartedAt = Date.now()
+    const placeholderRun: SimulationRun = {
+      id: runId,
+      scenarioId: saved.scenario.id,
+      startedAt: placeholderStartedAt,
+      finishedAt: placeholderStartedAt,
+      status: 'success',
       result: {
-        ...baseRun.result,
-        minBalanceRun,
+        timeline: [],
+        monthlyTimeline: [],
+        explanations: [],
         stochasticRuns: [],
         stochasticRunsCancelled: false,
+        minBalanceRunComplete: false,
+        summary: {
+          endingBalance: 0,
+          minBalance: 0,
+          maxBalance: 0,
+          guardrailFactorAvg: 0,
+          guardrailFactorMin: 0,
+          guardrailFactorBelowPct: 0,
+        },
       },
+      snapshot,
     }
-    await storage.runRepo.add(run)
+    await storage.runRepo.add(placeholderRun)
     await loadRuns(saved.scenario.id)
-    navigate(`/runs/${run.id}`)
-    if (stochasticTarget > 0) {
-      void runStochasticTrials(run.id, runSnapshot, startDate, stochasticTarget)
-    }
+    navigate(`/runs/${runId}`)
+
+    void (async () => {
+      let minBalanceRun: SimulationRun['result']['minBalanceRun'] | undefined
+      try {
+        minBalanceRun = (await runMinimumBalanceTrial(snapshot, startDate)) ?? undefined
+      } catch (error) {
+        console.error('[Scenario] Minimum balance trial failed.', error)
+      }
+      const runSnapshot = minBalanceRun ? { ...snapshot, minBalanceRun } : snapshot
+      const pendingRun = await storage.runRepo.get(runId)
+      if (pendingRun) {
+        await storage.runRepo.upsert({
+          ...pendingRun,
+          snapshot: runSnapshot,
+          result: {
+            ...pendingRun.result,
+            minBalanceRun,
+            minBalanceRunComplete: true,
+          },
+        })
+      }
+      const baseRun = await simClient.runScenario({
+        snapshot: runSnapshot,
+        startDate,
+      })
+      const latestRun = await storage.runRepo.get(runId)
+      const run: SimulationRun = {
+        ...baseRun,
+        id: runId,
+        scenarioId: saved.scenario.id,
+        title: latestRun?.title ?? baseRun.title,
+        startedAt: latestRun?.startedAt ?? baseRun.startedAt,
+        result: {
+          ...baseRun.result,
+          minBalanceRun,
+          minBalanceRunComplete: true,
+          stochasticRuns: [],
+          stochasticRunsCancelled: false,
+        },
+        snapshot: runSnapshot,
+      }
+      await storage.runRepo.upsert(run)
+      if (stochasticTarget > 0) {
+        void runStochasticTrials(runId, runSnapshot, startDate, stochasticTarget)
+      }
+    })()
   }
 
   const formatRunTitle = (run: SimulationRunSummary) =>

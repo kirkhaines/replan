@@ -1007,10 +1007,20 @@ const RunResultsPage = () => {
   const stochasticCompleted = Math.max(storedCompleted, liveCompleted)
   const stochasticTargetResolved = liveTarget ?? stochasticTarget
   const stochasticCancelled = storedCancelled || liveCancelled
+  const stochasticAvailable = run?.result.stochasticRuns?.length ?? 0
   const stochasticPending =
     stochasticTargetResolved > 0 &&
     stochasticCompleted < stochasticTargetResolved &&
     !stochasticCancelled
+  const stochasticFinalizing =
+    !stochasticCancelled &&
+    stochasticTargetResolved > 0 &&
+    stochasticCompleted >= stochasticTargetResolved &&
+    stochasticAvailable < stochasticTargetResolved
+  const stochasticInProgress = stochasticPending || stochasticFinalizing
+  const mainRunReady = (run?.result.timeline?.length ?? 0) > 0
+  const minBalanceComplete =
+    run?.result.minBalanceRunComplete ?? Boolean(run?.result.minBalanceRun)
   const needsStochasticSync =
     (liveProgress?.completed ?? 0) > storedCompleted ||
     (liveProgress?.cancelled ?? false) !== storedCancelled
@@ -1067,8 +1077,10 @@ const RunResultsPage = () => {
     setRun(updated)
   }, [run, storage])
 
+  const needsRunSync = Boolean(run) && !mainRunReady
+
   useEffect(() => {
-    if (!id || (!stochasticPending && !needsStochasticSync)) {
+    if (!id || (!stochasticPending && !needsStochasticSync && !needsRunSync)) {
       return
     }
     let cancelled = false
@@ -1094,7 +1106,7 @@ const RunResultsPage = () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [id, needsStochasticSync, stochasticPending, storage])
+  }, [id, needsRunSync, needsStochasticSync, stochasticPending, storage])
 
   useEffect(() => {
     if (titleInputRef.current) {
@@ -1156,6 +1168,38 @@ const RunResultsPage = () => {
     }
   }, [adjustForInflation, filteredTimeline, run, showPresentDay])
 
+  const progressLabel = useMemo(() => {
+    if (isLoading || !run) {
+      return 'Loading run...'
+    }
+    if (!mainRunReady) {
+      return minBalanceComplete
+        ? 'Running average simulation...'
+        : 'Finding minimum successful balance factor...'
+    }
+    if (stochasticPending) {
+      return `Running stochastic trials: ${stochasticCompleted} of ${stochasticTargetResolved}`
+    }
+    if (stochasticFinalizing) {
+      return 'Finalizing stochastic results...'
+    }
+    return null
+  }, [
+    isLoading,
+    mainRunReady,
+    minBalanceComplete,
+    run,
+    stochasticCompleted,
+    stochasticFinalizing,
+    stochasticPending,
+    stochasticTargetResolved,
+  ])
+
+  const progressPct =
+    stochasticPending && stochasticTargetResolved > 0
+      ? Math.min(100, Math.max(0, (stochasticCompleted / stochasticTargetResolved) * 100))
+      : null
+
   const stochasticSuccessPct = useMemo(() => {
     const stochasticRuns = run?.result.stochasticRuns ?? []
     if (stochasticRuns.length === 0) {
@@ -1200,11 +1244,7 @@ const RunResultsPage = () => {
     [],
   )
 
-  if (isLoading) {
-    return <p className="muted">Loading run...</p>
-  }
-
-  if (!run) {
+  if (!run && !isLoading) {
     return (
       <section className="stack">
         <h1>Run not found</h1>
@@ -1238,19 +1278,21 @@ const RunResultsPage = () => {
     <section className="stack">
       <PageHeader
         title="Run results"
-        subtitle={new Date(run.finishedAt).toLocaleString()}
+        subtitle={run ? new Date(run.finishedAt).toLocaleString() : 'Loading...'}
         actions={
-          <Link
-            className="link"
-            to={`/scenarios/${run.scenarioId}`}
-            state={{ from: location.pathname }}
-          >
-            Back to scenario
-          </Link>
+          run ? (
+            <Link
+              className="link"
+              to={`/scenarios/${run.scenarioId}`}
+              state={{ from: location.pathname }}
+            >
+              Back to scenario
+            </Link>
+          ) : null
         }
       />
 
-      {run.status === 'error' ? (
+      {run?.status === 'error' ? (
         <div className="card">
           <p className="error">{run.errorMessage ?? 'Simulation failed.'}</p>
         </div>
@@ -1265,7 +1307,7 @@ const RunResultsPage = () => {
                 <span>Run title</span>
                 <input
                   ref={titleInputRef}
-                  defaultValue={run.title ?? ''}
+                  defaultValue={run?.title ?? ''}
                   onBlur={handleTitleBlur}
                   onKeyDown={handleTitleKeyDown}
                   placeholder="Untitled run"
@@ -1289,6 +1331,37 @@ const RunResultsPage = () => {
                   </strong>
                 </div>
               </div>
+              {progressLabel ? (
+                <div className="stack">
+                  <p className="muted">{progressLabel}</p>
+                  <div
+                    style={{
+                      background: 'var(--border)',
+                      borderRadius: '999px',
+                      height: '10px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${(progressPct ?? 100).toFixed(1)}%`,
+                        height: '100%',
+                        background: 'var(--accent)',
+                        transition: 'width 200ms ease',
+                      }}
+                    />
+                  </div>
+                  {stochasticInProgress && handleCancelStochastic ? (
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={handleCancelStochastic}
+                    >
+                      Cancel trials
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="row" style={{ flexWrap: 'wrap', gap: '1.5rem' }}>
                 <div className="field">
                   <span>Display</span>
@@ -1318,56 +1391,62 @@ const RunResultsPage = () => {
             </div>
           </div>
 
-          <RunResultsDistributions
-            stochasticRuns={run.result.stochasticRuns}
-            formatAxisValue={formatAxisValue}
-            formatCurrency={formatCurrency}
-            stochasticTarget={stochasticTargetResolved}
-            stochasticCompleted={stochasticCompleted}
-            stochasticCancelled={stochasticCancelled}
-            onCancelStochastic={stochasticPending ? handleCancelStochastic : undefined}
-          />
+          {mainRunReady ? (
+            <>
+              {!stochasticInProgress &&
+              (stochasticTargetResolved === 0 ||
+                stochasticCancelled ||
+                stochasticAvailable >= stochasticTargetResolved) ? (
+                <RunResultsDistributions
+                  stochasticRuns={run?.result.stochasticRuns}
+                  formatAxisValue={formatAxisValue}
+                  formatCurrency={formatCurrency}
+                  stochasticCancelled={stochasticCancelled}
+                />
+              ) : null}
 
-          <RunResultsGraphs
-            balanceDetail={balanceDetail}
-            balanceDetailOptions={balanceDetailOptions}
-            onBalanceDetailChange={setBalanceDetail}
-            balanceOverTime={balanceOverTime}
-            ordinaryIncomeChart={ordinaryIncomeChart}
-            cashflowChart={cashflowChart}
-            formatAxisValue={formatAxisValue}
-            formatCurrency={formatCurrency}
-            formatSignedCurrency={formatSignedCurrency}
-          />
-
-          <div className="timeline-collapsible stack">
-            <div className="row">
-              <h2>Timeline</h2>
-              <button
-                className="link-button"
-                type="button"
-                onClick={() => setShowTimeline((current) => !current)}
-              >
-                {showTimeline ? 'Hide' : 'Show'}
-              </button>
-            </div>
-            {showTimeline ? (
-              <RunResultsTimeline
-                filteredTimeline={filteredTimeline}
-                monthlyByYear={monthlyByYear}
-                explanationsByMonth={explanationsByMonth}
-                addMonths={addMonths}
-                formatCurrencyForDate={formatCurrencyForDate}
-                formatSignedCurrencyForDate={formatSignedCurrencyForDate}
+              <RunResultsGraphs
+                balanceDetail={balanceDetail}
+                balanceDetailOptions={balanceDetailOptions}
+                onBalanceDetailChange={setBalanceDetail}
+                balanceOverTime={balanceOverTime}
+                ordinaryIncomeChart={ordinaryIncomeChart}
+                cashflowChart={cashflowChart}
+                formatAxisValue={formatAxisValue}
+                formatCurrency={formatCurrency}
                 formatSignedCurrency={formatSignedCurrency}
-                getHoldingLabel={getHoldingLabel}
-                getAccountLabel={getAccountLabel}
-                accountLookup={accountLookup}
-                initialBalances={initialBalances}
-                adjustForInflation={adjustForInflation}
               />
-            ) : null}
-          </div>
+
+              <div className="timeline-collapsible stack">
+                <div className="row">
+                  <h2>Timeline</h2>
+                  <button
+                    className="link-button"
+                    type="button"
+                    onClick={() => setShowTimeline((current) => !current)}
+                  >
+                    {showTimeline ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {showTimeline ? (
+                  <RunResultsTimeline
+                    filteredTimeline={filteredTimeline}
+                    monthlyByYear={monthlyByYear}
+                    explanationsByMonth={explanationsByMonth}
+                    addMonths={addMonths}
+                    formatCurrencyForDate={formatCurrencyForDate}
+                    formatSignedCurrencyForDate={formatSignedCurrencyForDate}
+                    formatSignedCurrency={formatSignedCurrency}
+                    getHoldingLabel={getHoldingLabel}
+                    getAccountLabel={getAccountLabel}
+                    accountLookup={accountLookup}
+                    initialBalances={initialBalances}
+                    adjustForInflation={adjustForInflation}
+                  />
+                ) : null}
+              </div>
+            </>
+          ) : null}
         </div>
 
         <aside className="scenario-toc" aria-label="Jump to section">
@@ -1381,43 +1460,52 @@ const RunResultsPage = () => {
               >
                 Summary
               </button>
-              <button
-                className="link-button"
-                type="button"
-                onClick={handleJumpTo('section-distributions')}
-              >
-                Balance distributions
-              </button>
-              <button
-                className="link-button"
-                type="button"
-                onClick={handleJumpTo('section-balance')}
-              >
-                Balance over time
-              </button>
-              <button
-                className="link-button"
-                type="button"
-                onClick={handleJumpTo('section-ordinary-income')}
-              >
-                Taxable ordinary income
-              </button>
-              <button
-                className="link-button"
-                type="button"
-                onClick={handleJumpTo('section-cashflow')}
-              >
-                Cash flow by module
-              </button>
-              <button
-                className="link-button"
-                type="button"
-                onClick={handleJumpTo('section-timeline')}
-              >
-                Timeline
-              </button>
+              {mainRunReady ? (
+                <>
+                  {!stochasticInProgress &&
+                  (stochasticTargetResolved === 0 ||
+                    stochasticCancelled ||
+                    stochasticAvailable >= stochasticTargetResolved) ? (
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={handleJumpTo('section-distributions')}
+                    >
+                      Balance distributions
+                    </button>
+                  ) : null}
+                  <button
+                    className="link-button"
+                    type="button"
+                    onClick={handleJumpTo('section-balance')}
+                  >
+                    Balance over time
+                  </button>
+                  <button
+                    className="link-button"
+                    type="button"
+                    onClick={handleJumpTo('section-ordinary-income')}
+                  >
+                    Taxable ordinary income
+                  </button>
+                  <button
+                    className="link-button"
+                    type="button"
+                    onClick={handleJumpTo('section-cashflow')}
+                  >
+                    Cash flow by module
+                  </button>
+                  <button
+                    className="link-button"
+                    type="button"
+                    onClick={handleJumpTo('section-timeline')}
+                  >
+                    Timeline
+                  </button>
+                </>
+              ) : null}
             </div>
-            {timelineDecades.length > 0 ? (
+            {mainRunReady && timelineDecades.length > 0 ? (
               <div className="run-results-toc-secondary">
                 {timelineDecades.map((decade) => (
                   <button
