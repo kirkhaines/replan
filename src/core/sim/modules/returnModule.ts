@@ -99,11 +99,8 @@ export const createReturnModule = (
       explain.addInput('Sequence model', returnModel.sequenceModel)
       explain.addInput('Correlation model', returnModel.correlationModel)
       explain.addInput('Volatility scale', returnModel.volatilityScale)
-      explain.addInput('Cash yield rate', returnModel.cashYieldRate)
       state.cashAccounts.forEach((account) => {
-        const baseRate =
-          returnModel.cashYieldRate > 0 ? returnModel.cashYieldRate : account.interestRate
-        const rate = toMonthlyRate(baseRate)
+        const rate = toMonthlyRate(account.interestRate)
         account.balance *= 1 + rate
       })
       state.holdings.forEach((holding) => {

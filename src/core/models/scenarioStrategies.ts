@@ -25,7 +25,6 @@ export const returnModelStrategySchema = z.object({
   volatilityScale: z.number().min(0),
   inflationStdev: z.number().min(0).default(0),
   correlationModel: z.enum(['none', 'asset_class']),
-  cashYieldRate: z.number().min(0),
   seed: z.number().int().optional(),
   stochasticRuns: z.number().int().min(0).default(0),
   inflationAssumptions: inflationAssumptionsSchema,
@@ -231,7 +230,6 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     volatilityScale: 1,
     inflationStdev: 0,
     correlationModel: 'none',
-    cashYieldRate: 0,
     stochasticRuns: 0,
     inflationAssumptions: inflationTypeSchema.options.reduce(
       (acc, type) => ({ ...acc, [type]: 0 }),

@@ -97,16 +97,6 @@ const BasicConfigSection = ({
               })}
             />
           </label>
-          <label className="field">
-            <span>Cash yield rate</span>
-            <input
-              type="number"
-              step="0.001"
-              {...register('scenario.strategies.returnModel.cashYieldRate', {
-                valueAsNumber: true,
-              })}
-            />
-          </label>
           {inflationTypeSchema.options.map((type) => {
             const currentValue =
               inflationAssumptions?.[type] ?? inflationByType.get(type)?.rate ?? 0
