@@ -207,16 +207,16 @@ class ReplanDb extends Dexie {
         const summaries = runs.map<SimulationRunSummary>((run) => {
           const endingBalance = run.result.summary.endingBalance
           const dateIso = run.result.timeline.at(-1)?.date
-          const cpiRate =
-            run.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
+          const inflationAssumptions =
+            run.snapshot?.scenario.strategies.returnModel.inflationAssumptions
           let endingBalanceToday = endingBalance
-          if (dateIso && cpiRate !== 0) {
+          if (dateIso && inflationAssumptions) {
             endingBalanceToday = applyInflation({
               amount: endingBalance,
               inflationType: 'cpi',
               fromDateIso: dateIso,
               toDateIso: new Date().toISOString().slice(0, 10),
-              rateOverride: cpiRate,
+              assumptions: inflationAssumptions,
             })
           }
           const stochasticRuns = run.result.stochasticRuns ?? []

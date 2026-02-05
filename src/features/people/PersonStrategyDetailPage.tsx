@@ -451,13 +451,12 @@ const PersonStrategyDetailPage = () => {
     if (!socialSecurityEstimate?.details || !scenario) {
       return null
     }
-    const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
     return applyInflation({
       amount: socialSecurityEstimate.monthlyBenefit,
       inflationType: 'cpi',
       fromDateIso: `${socialSecurityEstimate.details.claimYear}-01-01`,
       toDateIso: new Date().toISOString().slice(0, 10),
-      rateOverride: cpiRate,
+      scenario,
     })
   }, [scenario, socialSecurityEstimate])
 

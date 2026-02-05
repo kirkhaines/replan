@@ -93,7 +93,6 @@ type ApplyInflationInput = InflationContext & {
   inflationType: InflationType
   fromDateIso?: string | null
   toDateIso?: string | null
-  rateOverride?: number
 }
 
 export const applyInflation = ({
@@ -101,7 +100,6 @@ export const applyInflation = ({
   inflationType,
   fromDateIso,
   toDateIso,
-  rateOverride,
   ...context
 }: ApplyInflationInput) => {
   if (!Number.isFinite(amount) || amount === 0) {
@@ -151,8 +149,7 @@ export const applyInflation = ({
     return amount
   }
   const assumptions = resolveAssumptions(context)
-  const baseRate =
-    rateOverride ?? (assumptions ? (assumptions[inflationType] ?? 0) : 0)
+  const baseRate = assumptions ? (assumptions[inflationType] ?? 0) : 0
   if (!context.ratesByYear) {
     if (baseRate === 0) {
       return amount

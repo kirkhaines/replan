@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import type { Person } from '../../core/models'
+import type { Person, Scenario } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { buildSsaEstimate } from '../../core/sim/ssa'
@@ -18,7 +18,9 @@ const SsaBenefitDetailsPage = () => {
   const storage = useAppStore((state) => state.storage)
   const [estimate, setEstimate] = useState<ReturnType<typeof buildSsaEstimate> | null>(null)
   const [person, setPerson] = useState<Person | null>(null)
-  const [cpiRate, setCpiRate] = useState(0)
+  const [inflationAssumptions, setInflationAssumptions] = useState<
+    Scenario['strategies']['returnModel']['inflationAssumptions'] | null
+  >(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -74,7 +76,7 @@ const SsaBenefitDetailsPage = () => {
       })
 
       setPerson(personRecord)
-      setCpiRate(scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0)
+      setInflationAssumptions(scenario.strategies.returnModel.inflationAssumptions)
       setEstimate(estimateResult)
       setIsLoading(false)
     }
@@ -92,9 +94,9 @@ const SsaBenefitDetailsPage = () => {
       inflationType: 'cpi',
       fromDateIso: `${summary.claimYear}-01-01`,
       toDateIso: new Date().toISOString().slice(0, 10),
-      rateOverride: cpiRate,
+      assumptions: inflationAssumptions ?? undefined,
     })
-  }, [cpiRate, summary])
+  }, [inflationAssumptions, summary])
 
   if (isLoading) {
     return <p className="muted">Loading benefit details...</p>

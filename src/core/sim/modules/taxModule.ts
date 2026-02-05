@@ -29,7 +29,7 @@ export const createTaxModule = (
       inflationType: 'cpi',
       fromDateIso: `${policy.year}-01-01`,
       toDateIso: `${year}-01-01`,
-      rateOverride: cpiRate,
+      snapshot,
       indexByType: context?.inflationIndexByType,
       indexStartDateIso: context?.inflationIndexStartDateIso,
     })

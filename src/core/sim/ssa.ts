@@ -152,7 +152,11 @@ export type SsaEstimateDetails = {
   pia: number
   adjustment: SsaEstimateAdjustment
 }
-const getAwiValue = (year: number, records: SsaWageIndex[], cpiRate: number) => {
+const getAwiValue = (
+  year: number,
+  records: SsaWageIndex[],
+  inflationAssumptions: Scenario['strategies']['returnModel']['inflationAssumptions'],
+) => {
   if (records.length === 0) {
     return 0
   }
@@ -169,7 +173,7 @@ const getAwiValue = (year: number, records: SsaWageIndex[], cpiRate: number) => 
       inflationType: 'cpi',
       fromDateIso: `${max.year}-01-01`,
       toDateIso: `${year}-01-01`,
-      rateOverride: cpiRate,
+      assumptions: inflationAssumptions,
     })
   }
   if (year < min.year) {
@@ -179,7 +183,11 @@ const getAwiValue = (year: number, records: SsaWageIndex[], cpiRate: number) => 
   return previous?.index ?? min.index
 }
 
-const getBendPoints = (year: number, records: SsaBendPoint[], cpiRate: number) => {
+const getBendPoints = (
+  year: number,
+  records: SsaBendPoint[],
+  inflationAssumptions: Scenario['strategies']['returnModel']['inflationAssumptions'],
+) => {
   if (records.length === 0) {
     return null
   }
@@ -196,7 +204,7 @@ const getBendPoints = (year: number, records: SsaBendPoint[], cpiRate: number) =
       inflationType: 'cpi',
       fromDateIso: `${max.year}-01-01`,
       toDateIso: `${year}-01-01`,
-      rateOverride: cpiRate,
+      assumptions: inflationAssumptions,
     })
     return { ...max, year, first: max.first * factor, second: max.second * factor }
   }
@@ -286,7 +294,6 @@ export const buildSsaEstimate = ({
 
   const preTaxItems = spendingLineItems.filter((item) => item.isPreTax)
   const inflationAssumptions = scenario.strategies.returnModel.inflationAssumptions
-  const cpiRate = inflationAssumptions.cpi ?? 0
   const currentYear = new Date().getFullYear()
 
   const grossByYear = new Map<number, number>()
@@ -312,7 +319,7 @@ export const buildSsaEstimate = ({
         inflationType: 'cpi',
         fromDateIso: `${currentYear}-01-01`,
         toDateIso: `${year}-01-01`,
-        rateOverride: cpiRate,
+        assumptions: inflationAssumptions,
       })
       const proratedGross =
         (period.salary + period.bonus) * inflationFactor * (monthsInYear / 12)
@@ -343,7 +350,7 @@ export const buildSsaEstimate = ({
     sourceByYear.set(year, 'future')
   })
 
-  const awiClaim = getAwiValue(claimYear - 2, wageIndex, cpiRate)
+  const awiClaim = getAwiValue(claimYear - 2, wageIndex, inflationAssumptions)
   if (!awiClaim) {
     return null
   }
@@ -351,7 +358,7 @@ export const buildSsaEstimate = ({
   const indexedByYear = Array.from(earningsByYear.entries())
     .filter(([year]) => year <= claimYear)
     .map(([year, amount]) => {
-      const awiYear = getAwiValue(year, wageIndex, cpiRate)
+      const awiYear = getAwiValue(year, wageIndex, inflationAssumptions)
       if (!awiYear) {
         return { year, indexed: 0 }
       }
@@ -362,7 +369,7 @@ export const buildSsaEstimate = ({
   const totalIndexedWages = top35Indexed.reduce((total, item) => total + item.indexed, 0)
   const aime = totalIndexedWages / (35 * 12)
 
-  const bend = getBendPoints(claimYear, bendPoints, cpiRate)
+  const bend = getBendPoints(claimYear, bendPoints, inflationAssumptions)
   if (!bend) {
     return null
   }
@@ -399,7 +406,7 @@ export const buildSsaEstimate = ({
     .filter(([year]) => year <= claimYear)
     .sort(([yearA], [yearB]) => yearA - yearB)
     .map(([year, amount]) => {
-      const awiYear = getAwiValue(year, wageIndex, cpiRate)
+      const awiYear = getAwiValue(year, wageIndex, inflationAssumptions)
       const indexedWages = awiYear ? amount * (awiClaim / awiYear) : 0
       const source = sourceByYear.get(year) ?? 'reported'
       const sourceLabel =

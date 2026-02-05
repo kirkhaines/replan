@@ -1,5 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
-import type { InflationType } from '../../utils/inflation'
+import type { InflationAssumptions, InflationType } from '../../utils/inflation'
 import { applyInflation } from '../../utils/inflation'
 import type { ActionRecord, CashflowSeriesEntry, SimHolding } from '../types'
 
@@ -61,7 +61,7 @@ export const inflateAmount = (
   amount: number,
   startIso: string | null,
   currentIso: string,
-  rate: number,
+  assumptions: InflationAssumptions,
   options?: { indexByType?: Record<InflationType, number[]>; indexStartDateIso?: string },
 ) =>
   applyInflation({
@@ -69,7 +69,7 @@ export const inflateAmount = (
     inflationType: 'cpi',
     fromDateIso: startIso,
     toDateIso: currentIso,
-    rateOverride: rate,
+    assumptions,
     indexByType: options?.indexByType,
     indexStartDateIso: options?.indexStartDateIso,
   })
