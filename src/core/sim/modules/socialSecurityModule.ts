@@ -95,6 +95,8 @@ export const createSocialSecurityModule = (
           fromDateIso: benefit.claimDate,
           toDateIso: context.dateIso,
           scenario,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
         if (monthlyBenefit <= 0) {
           return

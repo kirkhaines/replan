@@ -1,4 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
+import type { InflationType } from '../../utils/inflation'
 import { applyInflation } from '../../utils/inflation'
 import type { ActionRecord, CashflowSeriesEntry, SimHolding } from '../types'
 
@@ -61,6 +62,7 @@ export const inflateAmount = (
   startIso: string | null,
   currentIso: string,
   rate: number,
+  options?: { indexByType?: Record<InflationType, number[]>; indexStartDateIso?: string },
 ) =>
   applyInflation({
     amount,
@@ -68,6 +70,8 @@ export const inflateAmount = (
     fromDateIso: startIso,
     toDateIso: currentIso,
     rateOverride: rate,
+    indexByType: options?.indexByType,
+    indexStartDateIso: options?.indexStartDateIso,
   })
 
 export const sumMonthlySpending = (
@@ -75,6 +79,10 @@ export const sumMonthlySpending = (
   scenario: SimulationSnapshot['scenario'],
   dateIso: string,
   defaultStartIso?: string,
+  options?: {
+    indexByType?: Record<InflationType, number[]>
+    indexStartDateIso?: string
+  },
 ) =>
   items.reduce((total, item) => {
     if (!isWithinRange(dateIso, item.startDate, item.endDate)) {
@@ -89,6 +97,8 @@ export const sumMonthlySpending = (
         fromDateIso: startIso,
         toDateIso: dateIso,
         scenario,
+        indexByType: options?.indexByType,
+        indexStartDateIso: options?.indexStartDateIso,
       }) +
       applyInflation({
         amount: item.wantAmount,
@@ -96,6 +106,8 @@ export const sumMonthlySpending = (
         fromDateIso: startIso,
         toDateIso: dateIso,
         scenario,
+        indexByType: options?.indexByType,
+        indexStartDateIso: options?.indexStartDateIso,
       })
     return total + monthly
   }, 0)

@@ -58,6 +58,8 @@ export const createWorkModule = (
       fromDateIso: baseIso,
       toDateIso: context.dateIso,
       scenario,
+      indexByType: context.inflationIndexByType,
+      indexStartDateIso: context.inflationIndexStartDateIso,
     })
   }
 
@@ -73,6 +75,8 @@ export const createWorkModule = (
       fromDateIso: startIso,
       toDateIso: context.dateIso,
       scenario,
+      indexByType: context.inflationIndexByType,
+      indexStartDateIso: context.inflationIndexStartDateIso,
     })
   }
 

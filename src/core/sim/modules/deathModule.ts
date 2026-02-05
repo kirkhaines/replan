@@ -123,6 +123,8 @@ export const createDeathModule = (
       fromDateIso: context.settings.startDate,
       toDateIso: context.dateIso,
       snapshot,
+      indexByType: context.inflationIndexByType,
+      indexStartDateIso: context.inflationIndexStartDateIso,
     })
   }
 

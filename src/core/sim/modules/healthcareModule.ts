@@ -100,6 +100,8 @@ export const createHealthcareModule = (
               fromDateIso: settings.startDate,
               toDateIso: context.dateIso,
               scenario,
+              indexByType: context.inflationIndexByType,
+              indexStartDateIso: context.inflationIndexStartDateIso,
             }) / 12
           extraMonthly += longTermCareMonthly
         }
@@ -116,6 +118,8 @@ export const createHealthcareModule = (
                 fromDateIso: settings.startDate,
                 toDateIso: context.dateIso,
                 scenario,
+                indexByType: context.inflationIndexByType,
+                indexStartDateIso: context.inflationIndexStartDateIso,
               }) / 12
             extraMonthly += decliningMonthly
           }
@@ -127,6 +131,8 @@ export const createHealthcareModule = (
               fromDateIso: settings.startDate,
               toDateIso: context.dateIso,
               scenario,
+              indexByType: context.inflationIndexByType,
+              indexStartDateIso: context.inflationIndexStartDateIso,
             }) / 12
           extraMonthly += decliningMonthly
         }
@@ -150,6 +156,8 @@ export const createHealthcareModule = (
         fromDateIso: settings.startDate,
         toDateIso: context.dateIso,
         scenario,
+        indexByType: context.inflationIndexByType,
+        indexStartDateIso: context.inflationIndexStartDateIso,
       })
       let irmaaSurcharge = 0
       let magiLookback: number | null = null

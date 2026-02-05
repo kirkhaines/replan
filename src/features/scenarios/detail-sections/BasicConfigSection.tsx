@@ -61,16 +61,6 @@ const BasicConfigSection = ({
             </select>
           </label>
           <label className="field">
-            <span>Volatility scale</span>
-            <input
-              type="number"
-              step="0.01"
-              {...register('scenario.strategies.returnModel.volatilityScale', {
-                valueAsNumber: true,
-              })}
-            />
-          </label>
-          <label className="field">
             <span>Correlation model</span>
             <select {...register('scenario.strategies.returnModel.correlationModel')}>
               <option value="none">None</option>
@@ -78,12 +68,13 @@ const BasicConfigSection = ({
             </select>
           </label>
           <label className="field">
-            <span>Cash yield rate</span>
+            <span>Stochastic runs</span>
             <input
               type="number"
-              step="0.001"
-              {...register('scenario.strategies.returnModel.cashYieldRate', {
-                valueAsNumber: true,
+              min={0}
+              step={1}
+              {...register('scenario.strategies.returnModel.stochasticRuns', {
+                setValueAs: (value) => (value === '' ? 0 : Number(value)),
               })}
             />
           </label>
@@ -97,13 +88,22 @@ const BasicConfigSection = ({
             />
           </label>
           <label className="field">
-            <span>Stochastic runs</span>
+            <span>Volatility scale</span>
             <input
               type="number"
-              min={0}
-              step={1}
-              {...register('scenario.strategies.returnModel.stochasticRuns', {
-                setValueAs: (value) => (value === '' ? 0 : Number(value)),
+              step="0.01"
+              {...register('scenario.strategies.returnModel.volatilityScale', {
+                valueAsNumber: true,
+              })}
+            />
+          </label>
+          <label className="field">
+            <span>Cash yield rate</span>
+            <input
+              type="number"
+              step="0.001"
+              {...register('scenario.strategies.returnModel.cashYieldRate', {
+                valueAsNumber: true,
               })}
             />
           </label>
@@ -122,6 +122,16 @@ const BasicConfigSection = ({
               </label>
             )
           })}
+          <label className="field">
+            <span>Inflation stdev</span>
+            <input
+              type="number"
+              step="0.001"
+              {...register('scenario.strategies.returnModel.inflationStdev', {
+                valueAsNumber: true,
+              })}
+            />
+          </label>
         </div>
       </div>
 

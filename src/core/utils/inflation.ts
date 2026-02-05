@@ -9,6 +9,7 @@ export type InflationRateByYear =
   | Record<number, Partial<Record<InflationType, number>>>
   | Map<number, number>
   | Map<number, Partial<Record<InflationType, number>>>
+export type InflationIndexByType = Record<InflationType, number[]>
 
 type InflationContext = {
   assumptions?: InflationAssumptions
@@ -16,6 +17,8 @@ type InflationContext = {
   snapshot?: SimulationSnapshot
   run?: SimulationRun | null
   ratesByYear?: InflationRateByYear
+  indexByType?: InflationIndexByType
+  indexStartDateIso?: string
 }
 
 export const parseIsoDate = (value?: string | null) => {
@@ -118,6 +121,27 @@ export const applyInflation = ({
   const sameDate = fromDate.getTime() === toDate.getTime()
   if (sameDate) {
     return amount
+  }
+  const indexByType = context.indexByType
+  const indexStartDateIso = context.indexStartDateIso
+  if (indexByType && indexStartDateIso) {
+    const index = indexByType[inflationType]
+    const indexStartDate = parseIsoDate(indexStartDateIso)
+    if (index && indexStartDate) {
+      if (fromDate >= indexStartDate && toDate >= indexStartDate) {
+        const fromIndex = monthsBetween(indexStartDateIso, fromDateIso)
+        const toIndex = monthsBetween(indexStartDateIso, toDateIso)
+        if (
+          fromIndex >= 0 &&
+          toIndex >= 0 &&
+          fromIndex < index.length &&
+          toIndex < index.length
+        ) {
+          const factor = index[toIndex] / index[fromIndex]
+          return amount * factor
+        }
+      }
+    }
   }
   const forward = toDate.getTime() >= fromDate.getTime()
   const startIso = forward ? fromDateIso : toDateIso

@@ -191,6 +191,8 @@ export const createCashBufferModule = (
       fromDateIso: baseIso,
       toDateIso: context.dateIso,
       scenario,
+      indexByType: context.inflationIndexByType,
+      indexStartDateIso: context.inflationIndexStartDateIso,
     })
   }
 
@@ -364,6 +366,10 @@ export const createCashBufferModule = (
         scenario,
         context.dateIso,
         context.settings.startDate,
+        {
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
+        },
       )
       const bridgeMonths = Math.max(0, early.bridgeCashYears) * 12
       const targetMonths = Math.max(strategy.targetMonths, bridgeMonths)

@@ -205,6 +205,8 @@ export const createSpendingModule = (
             fromDateIso: startIso,
             toDateIso: context.dateIso,
             snapshot,
+            indexByType: context.inflationIndexByType,
+            indexStartDateIso: context.inflationIndexStartDateIso,
           })
           const wantAmount = applyInflation({
             amount: item.wantAmount,
@@ -212,6 +214,8 @@ export const createSpendingModule = (
             fromDateIso: startIso,
             toDateIso: context.dateIso,
             snapshot,
+            indexByType: context.inflationIndexByType,
+            indexStartDateIso: context.inflationIndexStartDateIso,
           })
           return {
             item,
@@ -269,6 +273,8 @@ export const createSpendingModule = (
           fromDateIso: targetDate,
           toDateIso: context.dateIso,
           snapshot,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
         guardrailHealth = inflatedTarget > 0 ? currentDiscountedBalance / inflatedTarget : 1
         guardrailFactor = interpolateHealthFactor(

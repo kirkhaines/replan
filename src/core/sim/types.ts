@@ -5,6 +5,7 @@ import type {
   SimulationSnapshot,
 } from '../models'
 import type { ModuleExplainTracker } from './explain'
+import type { InflationType } from '../utils/inflation'
 
 export type SimCashAccount = {
   id: string
@@ -179,6 +180,8 @@ export type SimulationContext = {
   planMode: 'preview' | 'apply'
   summaryOnly: boolean
   yearPlan?: SimulationYearPlan
+  inflationIndexByType?: Record<InflationType, number[]>
+  inflationIndexStartDateIso?: string
 }
 
 export type SimulationYearPlan = {

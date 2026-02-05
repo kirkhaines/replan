@@ -39,6 +39,8 @@ export const createEventModule = (
           fromDateIso: context.settings.startDate,
           toDateIso: context.dateIso,
           snapshot,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
         const cashflow: CashflowItem = {
           id: `${event.id}-${context.monthIndex}`,

@@ -40,6 +40,8 @@ export const createPensionModule = (
           fromDateIso: pension.startDate,
           toDateIso: context.dateIso,
           scenario,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
         if (amount <= 0) {
           return

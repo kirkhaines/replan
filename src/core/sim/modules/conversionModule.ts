@@ -55,6 +55,8 @@ export const createConversionModule = (
           fromDateIso: context.settings.startDate,
           toDateIso: context.dateIso,
           snapshot,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
       const inflateFromPolicyYear = (amount: number, year: number) =>
         applyInflation({
@@ -63,6 +65,8 @@ export const createConversionModule = (
           fromDateIso: `${year}-01-01`,
           toDateIso: context.dateIso,
           snapshot,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
       const policyYear = context.date.getFullYear()
       const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, tax.filingStatus)
@@ -278,6 +282,8 @@ export const createConversionModule = (
           fromDateIso: context.settings.startDate,
           toDateIso: context.dateIso,
           snapshot,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
       const inflateFromPolicyYear = (amount: number, year: number) =>
         applyInflation({
@@ -286,6 +292,8 @@ export const createConversionModule = (
           fromDateIso: `${year}-01-01`,
           toDateIso: context.dateIso,
           snapshot,
+          indexByType: context.inflationIndexByType,
+          indexStartDateIso: context.inflationIndexStartDateIso,
         })
 
       const ladderStartAge =

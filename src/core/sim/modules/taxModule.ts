@@ -20,7 +20,7 @@ export const createTaxModule = (
   const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const explain = createExplainTracker(!settings?.summaryOnly)
 
-  const inflateTaxPolicy = (policy: TaxPolicy, year: number) => {
+  const inflateTaxPolicy = (policy: TaxPolicy, year: number, context?: SimulationContext) => {
     if (year <= policy.year || cpiRate <= 0) {
       return policy
     }
@@ -30,6 +30,8 @@ export const createTaxModule = (
       fromDateIso: `${policy.year}-01-01`,
       toDateIso: `${year}-01-01`,
       rateOverride: cpiRate,
+      indexByType: context?.inflationIndexByType,
+      indexStartDateIso: context?.inflationIndexStartDateIso,
     })
     return {
       ...policy,
@@ -71,7 +73,7 @@ export const createTaxModule = (
     if (!policy) {
       return null
     }
-    const inflatedPolicy = inflateTaxPolicy(policy, taxYear)
+    const inflatedPolicy = inflateTaxPolicy(policy, taxYear, context)
     const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
       snapshot.socialSecurityProvisionalIncomeBrackets,
       taxYear,
@@ -249,7 +251,7 @@ export const createTaxModule = (
         explain.addCheckpoint('Withholding due', 0)
         return []
       }
-      const inflatedPolicy = inflateTaxPolicy(policy, taxYear)
+      const inflatedPolicy = inflateTaxPolicy(policy, taxYear, context)
       const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
         snapshot.socialSecurityProvisionalIncomeBrackets,
         taxYear,
