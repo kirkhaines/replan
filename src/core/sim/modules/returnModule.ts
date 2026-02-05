@@ -109,7 +109,12 @@ export const createReturnModule = (
           holding.balance *= 1 + expected
           return
         }
-        const volatility = (holding.returnStdDev * returnModel.volatilityScale) / Math.sqrt(12)
+        const annualVolatility = holding.returnStdDev * returnModel.volatilityScale
+        // If the same shock is reused for each month in a calendar year, scale by 12 to
+        // preserve the annual variance; otherwise scale by sqrt(12) for iid monthly shocks.
+        const volatility =
+          annualVolatility /
+          (returnModel.sequenceModel === 'regime' ? 12 : Math.sqrt(12))
         const shock = getShock(holding, context) * volatility
         const realized = Math.max(-0.95, expected + shock)
         holding.balance *= 1 + realized
