@@ -54,17 +54,17 @@ const BasicConfigSection = ({
             </select>
           </label>
           <label className="field">
-            <span>Sequence model</span>
+            <span>Shock period</span>
             <select {...register('scenario.strategies.returnModel.sequenceModel')}>
-              <option value="independent">Independent</option>
-              <option value="regime">Regime</option>
+              <option value="independent">Monthly</option>
+              <option value="regime">Annual (Calendar year)</option>
             </select>
           </label>
           <label className="field">
-            <span>Correlation model</span>
+            <span>Shock correlation</span>
             <select {...register('scenario.strategies.returnModel.correlationModel')}>
-              <option value="none">None</option>
-              <option value="asset_class">Asset class</option>
+              <option value="none">Independent per holding</option>
+              <option value="asset_class">Independent per asset class</option>
             </select>
           </label>
           <label className="field">

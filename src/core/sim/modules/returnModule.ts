@@ -96,8 +96,8 @@ export const createReturnModule = (
     },
     onEndOfMonth: (state, context) => {
       explain.addInput('Mode', returnModel.mode)
-      explain.addInput('Sequence model', returnModel.sequenceModel)
-      explain.addInput('Correlation model', returnModel.correlationModel)
+      explain.addInput('Shock period', returnModel.sequenceModel)
+      explain.addInput('Shock correlation', returnModel.correlationModel)
       explain.addInput('Volatility scale', returnModel.volatilityScale)
       state.cashAccounts.forEach((account) => {
         const rate = toMonthlyRate(account.interestRate)
