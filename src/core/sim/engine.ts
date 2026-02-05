@@ -7,10 +7,8 @@ import type {
   Person,
   SimulationResult,
 } from '../models'
-import { inflationTypeSchema } from '../models'
 import type { SimulationInput } from './input'
 import { createSimulationModules } from './modules'
-import { createSeededRandom, hashStringToSeed, randomNormal } from './random'
 import type {
   ActionIntent,
   ActionRecord,
@@ -22,7 +20,7 @@ import type {
   SimulationState,
   YearRecord,
 } from './types'
-import { toMonthlyRate, type InflationType } from '../utils/inflation'
+import { buildInflationIndexByType } from '../utils/inflation'
 
 type MonthTotals = {
   income: number
@@ -50,44 +48,6 @@ const addMonths = (date: Date, months: number) => {
   const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
   const clampedDay = Math.min(day, daysInTargetMonth)
   return new Date(Date.UTC(targetYear, targetMonth, clampedDay))
-}
-
-const buildInflationIndexByType = (snapshot: SimulationInput['snapshot'], settings: SimulationSettings) => {
-  const returnModel = snapshot.scenario.strategies.returnModel
-  const assumptions = returnModel.inflationAssumptions
-  const months = Math.max(0, settings.months)
-  const stdev = returnModel.inflationStdev ?? 0
-  const useStochastic = returnModel.mode === 'stochastic' && stdev > 0
-  const baseSeed =
-    returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${settings.startDate}`)
-  const indexByType = {} as Record<InflationType, number[]>
-
-  inflationTypeSchema.options.forEach((type) => {
-    const index = new Array(months + 1)
-    index[0] = 1
-    let factor = 1
-    if (useStochastic) {
-      const random = createSeededRandom(
-        hashStringToSeed(`${baseSeed}:${type}:inflation`),
-      )
-      for (let month = 0; month < months; month += 1) {
-        const baseRate = assumptions[type] ?? 0
-        const annualRate = Math.max(-0.95, baseRate + randomNormal(random) * stdev)
-        factor *= 1 + toMonthlyRate(annualRate)
-        index[month + 1] = factor
-      }
-    } else {
-      const baseRate = assumptions[type] ?? 0
-      const monthlyRate = toMonthlyRate(baseRate)
-      for (let month = 0; month < months; month += 1) {
-        factor *= 1 + monthlyRate
-        index[month + 1] = factor
-      }
-    }
-    indexByType[type] = index
-  })
-
-  return indexByType
 }
 
 const getCalendarYear = (dateIso: string) => Number(dateIso.slice(0, 4))

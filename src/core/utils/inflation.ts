@@ -1,5 +1,7 @@
 import type { Scenario, SimulationRun, SimulationSnapshot } from '../models'
 import { inflationTypeSchema } from '../models/enums'
+import type { SimulationInput } from '../sim/input'
+import { createSeededRandom, hashStringToSeed, randomNormal } from '../sim/random'
 
 export type InflationType = (typeof inflationTypeSchema.options)[number]
 export type InflationAssumptions =
@@ -58,6 +60,119 @@ const addMonthsUtc = (date: Date, months: number) => {
   const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
   const clampedDay = Math.min(day, daysInTargetMonth)
   return new Date(Date.UTC(targetYear, targetMonth, clampedDay))
+}
+
+export const buildInflationIndexByType = (
+  snapshot: SimulationInput['snapshot'],
+  settings: SimulationInput['settings'],
+) => {
+  const returnModel = snapshot.scenario.strategies.returnModel
+  const assumptions = returnModel.inflationAssumptions
+  const months = Math.max(0, settings.months)
+  const stdev = returnModel.inflationStdev ?? 0
+  const useStochastic = returnModel.mode === 'stochastic' && stdev > 0
+  const useAnnualShocks = returnModel.sequenceModel === 'regime'
+  const annualPersistence = Math.min(1, Math.max(0, returnModel.inflationPersistence ?? 0))
+  // Convert annual persistence to a monthly coefficient so a 12-month lag matches the annual factor.
+  const persistence = useAnnualShocks
+    ? annualPersistence
+    : Math.pow(annualPersistence, 1 / 12)
+  const innovationScale = Math.sqrt(Math.max(0, 1 - persistence * persistence))
+  const baseSeed =
+    returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${settings.startDate}`)
+  const indexByType = {} as Record<InflationType, number[]>
+  const shocksByMonth: number[] = []
+
+  if (useStochastic) {
+    const random = createSeededRandom(hashStringToSeed(`${baseSeed}:inflation`))
+    if (useAnnualShocks) {
+      const startDate = parseIsoDate(settings.startDate)
+      if (startDate) {
+        const yearIndexByMonth: number[] = new Array(months)
+        const yearIndexByValue = new Map<number, number>()
+        const years: number[] = []
+        for (let month = 0; month < months; month += 1) {
+          const date = addMonthsUtc(startDate, month)
+          const year = date.getUTCFullYear()
+          let yearIndex = yearIndexByValue.get(year)
+          if (yearIndex === undefined) {
+            yearIndex = years.length
+            years.push(year)
+            yearIndexByValue.set(year, yearIndex)
+          }
+          yearIndexByMonth[month] = yearIndex
+        }
+        if (years.length > 0) {
+          const shocksByYear = new Array(years.length)
+          let previousShock = randomNormal(random)
+          shocksByYear[0] = previousShock
+          for (let yearIndex = 1; yearIndex < years.length; yearIndex += 1) {
+            const innovation = randomNormal(random)
+            const shock = persistence * previousShock + innovationScale * innovation
+            shocksByYear[yearIndex] = shock
+            previousShock = shock
+          }
+          for (let month = 0; month < months; month += 1) {
+            shocksByMonth[month] = shocksByYear[yearIndexByMonth[month]] ?? 0
+          }
+        }
+      } else {
+        const periodCount = Math.max(1, Math.ceil(months / 12))
+        const shocksByYear = new Array(periodCount)
+        let previousShock = randomNormal(random)
+        shocksByYear[0] = previousShock
+        for (let yearIndex = 1; yearIndex < periodCount; yearIndex += 1) {
+          const innovation = randomNormal(random)
+          const shock = persistence * previousShock + innovationScale * innovation
+          shocksByYear[yearIndex] = shock
+          previousShock = shock
+        }
+        for (let month = 0; month < months; month += 1) {
+          shocksByMonth[month] = shocksByYear[Math.floor(month / 12)] ?? 0
+        }
+      }
+    } else {
+      const periodCount = months
+      if (periodCount > 0) {
+        const shocksByPeriod = new Array(periodCount)
+        let previousShock = randomNormal(random)
+        shocksByPeriod[0] = previousShock
+        for (let period = 1; period < periodCount; period += 1) {
+          const innovation = randomNormal(random)
+          const shock = persistence * previousShock + innovationScale * innovation
+          shocksByPeriod[period] = shock
+          previousShock = shock
+        }
+        for (let month = 0; month < months; month += 1) {
+          shocksByMonth[month] = shocksByPeriod[month] ?? 0
+        }
+      }
+    }
+  }
+
+  inflationTypeSchema.options.forEach((type) => {
+    const index = new Array(months + 1)
+    index[0] = 1
+    let factor = 1
+    const baseRate = assumptions[type] ?? 0
+    if (useStochastic) {
+      for (let month = 0; month < months; month += 1) {
+        const shock = shocksByMonth[month] ?? 0
+        const annualRate = Math.max(-0.95, baseRate + shock * stdev)
+        factor *= 1 + toMonthlyRate(annualRate)
+        index[month + 1] = factor
+      }
+    } else {
+      const monthlyRate = toMonthlyRate(baseRate)
+      for (let month = 0; month < months; month += 1) {
+        factor *= 1 + monthlyRate
+        index[month + 1] = factor
+      }
+    }
+    indexByType[type] = index
+  })
+
+  return indexByType
 }
 
 const resolveAssumptions = (context: InflationContext) =>

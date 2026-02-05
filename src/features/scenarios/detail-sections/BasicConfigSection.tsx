@@ -122,6 +122,18 @@ const BasicConfigSection = ({
               })}
             />
           </label>
+          <label className="field">
+            <span>Annual inflation persistence</span>
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              max={1}
+              {...register('scenario.strategies.returnModel.inflationPersistence', {
+                valueAsNumber: true,
+              })}
+            />
+          </label>
         </div>
       </div>
 
