@@ -9,7 +9,8 @@ import type {
 } from '../types'
 import { computeInheritanceTax, selectInheritanceTaxPolicy } from '../stateTaxes'
 import type { InheritanceTaxAssetTag } from '../stateTaxes/types'
-import { getHoldingGain, inflateAmount } from './utils'
+import { applyInflation } from '../../utils/inflation'
+import { getHoldingGain } from './utils'
 
 const funeralCostDefaults = {
   funeral: 10000,
@@ -109,7 +110,6 @@ export const createDeathModule = (
 ): SimulationModule => {
   const strategy = snapshot.scenario.strategies.death
   const taxStrategy = snapshot.scenario.strategies.tax
-  const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const explain = createExplainTracker(!settings?.summaryOnly)
 
   const resolveFuneralCost = (context: SimulationContext) => {
@@ -117,7 +117,13 @@ export const createDeathModule = (
       strategy.funeralCostOverride > 0
         ? strategy.funeralCostOverride
         : funeralCostDefaults[strategy.funeralDisposition]
-    return inflateAmount(base, context.settings.startDate, context.dateIso, cpiRate)
+    return applyInflation({
+      amount: base,
+      inflationType: 'cpi',
+      fromDateIso: context.settings.startDate,
+      toDateIso: context.dateIso,
+      snapshot,
+    })
   }
 
   return {

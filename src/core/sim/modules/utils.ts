@@ -1,4 +1,5 @@
 import type { SimulationSnapshot } from '../../models'
+import { applyInflation } from '../../utils/inflation'
 import type { ActionRecord, CashflowSeriesEntry, SimHolding } from '../types'
 
 export const toMonthlyRate = (annualRate: number) => Math.pow(1 + annualRate, 1 / 12) - 1
@@ -60,14 +61,14 @@ export const inflateAmount = (
   startIso: string | null,
   currentIso: string,
   rate: number,
-) => {
-  if (!startIso) {
-    return amount
-  }
-  const months = monthsBetween(startIso, currentIso)
-  const factor = Math.pow(1 + rate, months / 12)
-  return amount * factor
-}
+) =>
+  applyInflation({
+    amount,
+    inflationType: 'cpi',
+    fromDateIso: startIso,
+    toDateIso: currentIso,
+    rateOverride: rate,
+  })
 
 export const sumMonthlySpending = (
   items: SimulationSnapshot['spendingLineItems'],
@@ -79,13 +80,23 @@ export const sumMonthlySpending = (
     if (!isWithinRange(dateIso, item.startDate, item.endDate)) {
       return total
     }
-    const inflationRate =
-      scenario.strategies.returnModel.inflationAssumptions[item.inflationType] ?? 0
     const startIso =
       item.startDate && item.startDate !== '' ? item.startDate : defaultStartIso ?? null
     const monthly =
-      inflateAmount(item.needAmount, startIso, dateIso, inflationRate) +
-      inflateAmount(item.wantAmount, startIso, dateIso, inflationRate)
+      applyInflation({
+        amount: item.needAmount,
+        inflationType: item.inflationType,
+        fromDateIso: startIso,
+        toDateIso: dateIso,
+        scenario,
+      }) +
+      applyInflation({
+        amount: item.wantAmount,
+        inflationType: item.inflationType,
+        fromDateIso: startIso,
+        toDateIso: dateIso,
+        scenario,
+      })
     return total + monthly
   }, 0)
 

@@ -15,14 +15,13 @@ import type {
   SimulationSettings,
 } from '../types'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
-import { inflateAmount } from './utils'
+import { applyInflation } from '../../utils/inflation'
 
 export const createConversionModule = (
   snapshot: SimulationSnapshot,
   settings?: SimulationSettings,
 ): SimulationModule => {
   const { rothConversion, rothLadder, tax } = snapshot.scenario.strategies
-  const cpiRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const explain = createExplainTracker(!settings?.summaryOnly)
 
   const isAgeInRange = (age: number, startAge: number, endAge: number) => {
@@ -50,9 +49,21 @@ export const createConversionModule = (
       }
 
       const inflateFromStart = (amount: number) =>
-        inflateAmount(amount, context.settings.startDate, context.dateIso, cpiRate)
+        applyInflation({
+          amount,
+          inflationType: 'cpi',
+          fromDateIso: context.settings.startDate,
+          toDateIso: context.dateIso,
+          snapshot,
+        })
       const inflateFromPolicyYear = (amount: number, year: number) =>
-        inflateAmount(amount, `${year}-01-01`, context.dateIso, cpiRate)
+        applyInflation({
+          amount,
+          inflationType: 'cpi',
+          fromDateIso: `${year}-01-01`,
+          toDateIso: context.dateIso,
+          snapshot,
+        })
       const policyYear = context.date.getFullYear()
       const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, tax.filingStatus)
       if (!policy) {
@@ -261,9 +272,21 @@ export const createConversionModule = (
       let ladderAmount = 0
       let conversionCandidate = 0
       const inflateFromStart = (amount: number) =>
-        inflateAmount(amount, context.settings.startDate, context.dateIso, cpiRate)
+        applyInflation({
+          amount,
+          inflationType: 'cpi',
+          fromDateIso: context.settings.startDate,
+          toDateIso: context.dateIso,
+          snapshot,
+        })
       const inflateFromPolicyYear = (amount: number, year: number) =>
-        inflateAmount(amount, `${year}-01-01`, context.dateIso, cpiRate)
+        applyInflation({
+          amount,
+          inflationType: 'cpi',
+          fromDateIso: `${year}-01-01`,
+          toDateIso: context.dateIso,
+          snapshot,
+        })
 
       const ladderStartAge =
         rothLadder.startAge > 0

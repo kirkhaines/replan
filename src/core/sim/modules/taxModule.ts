@@ -3,6 +3,7 @@ import { createExplainTracker } from '../explain'
 import { computeTax, selectSocialSecurityProvisionalIncomeBracket, selectTaxPolicy } from '../tax'
 import { computePayrollTaxes, selectPayrollTaxPolicy } from '../payrollTaxes'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
+import { applyInflation } from '../../utils/inflation'
 import type {
   CashflowSeriesEntry,
   SimulationContext,
@@ -23,7 +24,13 @@ export const createTaxModule = (
     if (year <= policy.year || cpiRate <= 0) {
       return policy
     }
-    const factor = Math.pow(1 + cpiRate, year - policy.year)
+    const factor = applyInflation({
+      amount: 1,
+      inflationType: 'cpi',
+      fromDateIso: `${policy.year}-01-01`,
+      toDateIso: `${year}-01-01`,
+      rateOverride: cpiRate,
+    })
     return {
       ...policy,
       standardDeduction: policy.standardDeduction * factor,

@@ -8,7 +8,8 @@ import type {
   SimulationModule,
   SimulationSettings,
 } from '../types'
-import { inflateAmount, isWithinRange } from './utils'
+import { applyInflation } from '../../utils/inflation'
+import { isWithinRange } from './utils'
 
 export const createWorkModule = (
   snapshot: SimulationSnapshot,
@@ -30,7 +31,6 @@ export const createWorkModule = (
     snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
   )
   const contributionLimits = snapshot.contributionLimits ?? []
-  const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const explain = createExplainTracker(!settings?.summaryOnly)
 
   const getActivePeriods = (context: SimulationContext): FutureWorkPeriod[] =>
@@ -52,7 +52,13 @@ export const createWorkModule = (
     }
     const base = sorted.find((limit) => limit.year <= year) ?? sorted[0]
     const baseIso = `${base.year}-01-01`
-    return inflateAmount(base.amount, baseIso, context.dateIso, cpiRate)
+    return applyInflation({
+      amount: base.amount,
+      inflationType: 'cpi',
+      fromDateIso: baseIso,
+      toDateIso: context.dateIso,
+      scenario,
+    })
   }
 
   const getInflatedAnnual = (
@@ -61,7 +67,13 @@ export const createWorkModule = (
     context: SimulationContext,
   ) => {
     const startIso = period.startDate ?? context.settings.startDate
-    return inflateAmount(amount, startIso, context.dateIso, cpiRate)
+    return applyInflation({
+      amount,
+      inflationType: 'cpi',
+      fromDateIso: startIso,
+      toDateIso: context.dateIso,
+      scenario,
+    })
   }
 
   const getEmployee401kAnnual = (period: FutureWorkPeriod, context: SimulationContext) => {

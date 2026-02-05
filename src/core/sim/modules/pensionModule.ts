@@ -1,7 +1,8 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type { CashflowItem, SimulationModule, SimulationSettings } from '../types'
-import { inflateAmount, isWithinRange } from './utils'
+import { applyInflation } from '../../utils/inflation'
+import { isWithinRange } from './utils'
 
 export const createPensionModule = (
   snapshot: SimulationSnapshot,
@@ -33,14 +34,13 @@ export const createPensionModule = (
         if (!isWithinRange(context.dateIso, pension.startDate, pension.endDate)) {
           return
         }
-        const inflationRate =
-          scenario.strategies.returnModel.inflationAssumptions[pension.inflationType] ?? 0
-        const amount = inflateAmount(
-          pension.monthlyAmount,
-          pension.startDate,
-          context.dateIso,
-          inflationRate,
-        )
+        const amount = applyInflation({
+          amount: pension.monthlyAmount,
+          inflationType: pension.inflationType,
+          fromDateIso: pension.startDate,
+          toDateIso: context.dateIso,
+          scenario,
+        })
         if (amount <= 0) {
           return
         }

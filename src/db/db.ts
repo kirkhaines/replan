@@ -21,6 +21,7 @@ import type {
   SsaBendPoint,
   SsaRetirementAdjustment,
 } from '../core/models'
+import { applyInflation } from '../core/utils/inflation'
 
 class ReplanDb extends Dexie {
   scenarios!: Table<Scenario, string>
@@ -210,12 +211,13 @@ class ReplanDb extends Dexie {
             run.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
           let endingBalanceToday = endingBalance
           if (dateIso && cpiRate !== 0) {
-            const year = new Date(dateIso).getFullYear()
-            const baseYear = new Date().getFullYear()
-            if (!Number.isNaN(year)) {
-              const yearDelta = year - baseYear
-              endingBalanceToday = endingBalance / Math.pow(1 + cpiRate, yearDelta)
-            }
+            endingBalanceToday = applyInflation({
+              amount: endingBalance,
+              inflationType: 'cpi',
+              fromDateIso: dateIso,
+              toDateIso: new Date().toISOString().slice(0, 10),
+              rateOverride: cpiRate,
+            })
           }
           const stochasticRuns = run.result.stochasticRuns ?? []
           const stochasticSuccessPct =

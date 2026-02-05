@@ -7,6 +7,7 @@ import PageHeader from '../../components/PageHeader'
 import RunResultsGraphs from './RunResultsGraphs'
 import RunResultsTimeline from './RunResultsTimeline'
 import RunResultsDistributions from './RunResultsDistributions'
+import { applyInflation } from '../../core/utils/inflation'
 import {
   computeTaxableSocialSecurity,
   selectSocialSecurityProvisionalIncomeBracket,
@@ -475,22 +476,22 @@ const RunResultsPage = () => {
     return balances
   }, [run])
 
-  const baseYear = useMemo(() => new Date().getFullYear(), [])
-  const cpiRate = run?.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-  const adjustForInflation = useCallback((value: number, dateIso?: string | null) => {
-    if (!showPresentDay || !dateIso || cpiRate === 0) {
-      return value
-    }
-    const year = new Date(dateIso).getFullYear()
-    if (Number.isNaN(year)) {
-      return value
-    }
-    const yearDelta = year - baseYear
-    if (yearDelta === 0) {
-      return value
-    }
-    return value / Math.pow(1 + cpiRate, yearDelta)
-  }, [baseYear, cpiRate, showPresentDay])
+  const presentDayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const adjustForInflation = useCallback(
+    (value: number, dateIso?: string | null) => {
+      if (!showPresentDay || !dateIso) {
+        return value
+      }
+      return applyInflation({
+        amount: value,
+        inflationType: 'cpi',
+        fromDateIso: dateIso,
+        toDateIso: presentDayIso,
+        run,
+      })
+    },
+    [presentDayIso, run, showPresentDay],
+  )
 
   const formatCurrencyForDate = (value: number, dateIso?: string | null) =>
     formatCurrency(adjustForInflation(value, dateIso))
@@ -688,7 +689,6 @@ const RunResultsPage = () => {
     const snapshot = run.snapshot
     const finishedAt = run.finishedAt
     const timeline = filteredTimeline
-    const inflationRate = snapshot.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
     const socialSecurityBrackets = snapshot.socialSecurityProvisionalIncomeBrackets ?? []
     const holdingTaxType = new Map(
       snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
@@ -798,17 +798,29 @@ const RunResultsPage = () => {
       const bracketValues: Record<string, number> = {}
       let standardDeduction = 0
       if (policy) {
-        const yearDelta = pointYear - policy.year
-        const inflationMultiplier =
-          inflationRate !== 0 ? Math.pow(1 + inflationRate, yearDelta) : 1
+        const policyBaseYear = policy.year ?? pointYear
+        const policyBaseIso = `${policyBaseYear}-01-01`
+        const pointYearIso = `${pointYear}-01-01`
         if (snapshot.scenario.strategies.tax.useStandardDeduction) {
-          standardDeduction = policy.standardDeduction * inflationMultiplier
+          standardDeduction = applyInflation({
+            amount: policy.standardDeduction,
+            inflationType: 'cpi',
+            fromDateIso: policyBaseIso,
+            toDateIso: pointYearIso,
+            snapshot,
+          })
         }
         policy.ordinaryBrackets.forEach((bracket, index) => {
           if (bracket.upTo === null) {
             return
           }
-          const absoluteValue = bracket.upTo * inflationMultiplier
+          const absoluteValue = applyInflation({
+            amount: bracket.upTo,
+            inflationType: 'cpi',
+            fromDateIso: policyBaseIso,
+            toDateIso: pointYearIso,
+            snapshot,
+          })
           bracketValues[`bracket_${index}`] = adjustForInflation(absoluteValue, point.date)
         })
       }

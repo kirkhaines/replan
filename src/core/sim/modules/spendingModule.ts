@@ -1,7 +1,8 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import type { CashflowItem, SimulationModule, SimulationSettings } from '../types'
-import { inflateAmount, isSameMonth, isWithinRange } from './utils'
+import { applyInflation } from '../../utils/inflation'
+import { isSameMonth, isWithinRange } from './utils'
 
 export const createSpendingModule = (
   snapshot: SimulationSnapshot,
@@ -22,7 +23,6 @@ export const createSpendingModule = (
     futureWorkStrategyIds.has(period.futureWorkStrategyId),
   )
   const explain = createExplainTracker(!settings?.summaryOnly)
-  const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const taxDiscountByType: Record<
     'taxable' | 'traditional' | 'roth' | 'hsa',
     number
@@ -197,22 +197,22 @@ export const createSpendingModule = (
         .filter((item) => !item.isWork)
         .filter((item) => isWithinRange(context.dateIso, item.startDate, item.endDate))
         .map((item) => {
-          const inflationRate =
-            scenario.strategies.returnModel.inflationAssumptions[item.inflationType] ?? 0
           const startIso =
             item.startDate && item.startDate !== '' ? item.startDate : context.settings.startDate
-          const needAmount = inflateAmount(
-            item.needAmount,
-            startIso,
-            context.dateIso,
-            inflationRate,
-          )
-          const wantAmount = inflateAmount(
-            item.wantAmount,
-            startIso,
-            context.dateIso,
-            inflationRate,
-          )
+          const needAmount = applyInflation({
+            amount: item.needAmount,
+            inflationType: item.inflationType,
+            fromDateIso: startIso,
+            toDateIso: context.dateIso,
+            snapshot,
+          })
+          const wantAmount = applyInflation({
+            amount: item.wantAmount,
+            inflationType: item.inflationType,
+            fromDateIso: startIso,
+            toDateIso: context.dateIso,
+            snapshot,
+          })
           return {
             item,
             needAmount,
@@ -263,7 +263,13 @@ export const createSpendingModule = (
       } else if (guardrailStrategy === 'portfolio_health') {
         const targetBalance = state.guardrailTargetBalance ?? currentDiscountedBalance
         const targetDate = state.guardrailTargetDateIso ?? context.dateIso
-        const inflatedTarget = inflateAmount(targetBalance, targetDate, context.dateIso, cpiRate)
+        const inflatedTarget = applyInflation({
+          amount: targetBalance,
+          inflationType: 'cpi',
+          fromDateIso: targetDate,
+          toDateIso: context.dateIso,
+          snapshot,
+        })
         guardrailHealth = inflatedTarget > 0 ? currentDiscountedBalance / inflatedTarget : 1
         guardrailFactor = interpolateHealthFactor(
           guardrailHealth,

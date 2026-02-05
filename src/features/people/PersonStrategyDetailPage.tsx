@@ -16,6 +16,7 @@ import type {
 import { useAppStore } from '../../state/appStore'
 import { createUuid } from '../../core/utils/uuid'
 import PageHeader from '../../components/PageHeader'
+import { applyInflation } from '../../core/utils/inflation'
 import { buildSsaEstimate } from '../../core/sim/ssa'
 
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
@@ -450,13 +451,14 @@ const PersonStrategyDetailPage = () => {
     if (!socialSecurityEstimate?.details || !scenario) {
       return null
     }
-    const currentYear = new Date().getFullYear()
-    const yearsDelta = socialSecurityEstimate.details.claimYear - currentYear
     const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-    if (cpiRate === 0 || yearsDelta === 0) {
-      return socialSecurityEstimate.monthlyBenefit
-    }
-    return socialSecurityEstimate.monthlyBenefit / Math.pow(1 + cpiRate, yearsDelta)
+    return applyInflation({
+      amount: socialSecurityEstimate.monthlyBenefit,
+      inflationType: 'cpi',
+      fromDateIso: `${socialSecurityEstimate.details.claimYear}-01-01`,
+      toDateIso: new Date().toISOString().slice(0, 10),
+      rateOverride: cpiRate,
+    })
   }, [scenario, socialSecurityEstimate])
 
   if (isLoading) {

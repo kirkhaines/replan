@@ -4,6 +4,7 @@ import type { Person } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import PageHeader from '../../components/PageHeader'
 import { buildSsaEstimate } from '../../core/sim/ssa'
+import { applyInflation } from '../../core/utils/inflation'
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
@@ -86,12 +87,13 @@ const SsaBenefitDetailsPage = () => {
     if (!summary) {
       return null
     }
-    const currentYear = new Date().getFullYear()
-    const yearsDelta = summary.claimYear - currentYear
-    if (cpiRate === 0 || yearsDelta === 0) {
-      return summary.adjustment.adjustedBenefit
-    }
-    return summary.adjustment.adjustedBenefit / Math.pow(1 + cpiRate, yearsDelta)
+    return applyInflation({
+      amount: summary.adjustment.adjustedBenefit,
+      inflationType: 'cpi',
+      fromDateIso: `${summary.claimYear}-01-01`,
+      toDateIso: new Date().toISOString().slice(0, 10),
+      rateOverride: cpiRate,
+    })
   }, [cpiRate, summary])
 
   if (isLoading) {

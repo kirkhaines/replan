@@ -8,11 +8,6 @@
 - Status: open | in-progress | blocked | done
 
 ## Entries
-- Title: N/A
-  Impact: low
-  Repro: N/A
-  Notes: Seed list to track known issues as they are discovered.
-  Status: open
 - Title: Back nav from person page returns to scenario list instead of scenario
   Impact: medium
   Repro: Scenario -> Person -> Work Period -> Back (to person) -> Back
@@ -27,7 +22,7 @@
   Impact: low
   Repro: N/A
   Notes: Find places computing CPI inflation that should use a shared standard function.
-  Status: open
+  Status: closed
 - Title: Non-SSA utility functions living in ssa.ts
   Impact: low
   Repro: N/A
@@ -37,4 +32,4 @@
   Impact: low
   Repro: N/A
   Notes: policyYear may be being used to inflate tax brackets instead of sim context date?
-  Status: open
+  Status: closed

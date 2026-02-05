@@ -9,6 +9,7 @@ import type {
   Person,
   SocialSecurityStrategy,
 } from '../models'
+import { applyInflation } from '../utils/inflation'
 
 export const getYearFromIsoDate = (value?: string) => {
   if (!value || value.length < 4) {
@@ -163,7 +164,13 @@ const getAwiValue = (year: number, records: SsaWageIndex[], cpiRate: number) => 
     return exact.index
   }
   if (year > max.year) {
-    return max.index * Math.pow(1 + cpiRate, year - max.year)
+    return applyInflation({
+      amount: max.index,
+      inflationType: 'cpi',
+      fromDateIso: `${max.year}-01-01`,
+      toDateIso: `${year}-01-01`,
+      rateOverride: cpiRate,
+    })
   }
   if (year < min.year) {
     return min.index
@@ -184,7 +191,13 @@ const getBendPoints = (year: number, records: SsaBendPoint[], cpiRate: number) =
     return exact
   }
   if (year > max.year) {
-    const factor = Math.pow(1 + cpiRate, year - max.year)
+    const factor = applyInflation({
+      amount: 1,
+      inflationType: 'cpi',
+      fromDateIso: `${max.year}-01-01`,
+      toDateIso: `${year}-01-01`,
+      rateOverride: cpiRate,
+    })
     return { ...max, year, first: max.first * factor, second: max.second * factor }
   }
   if (year < min.year) {
@@ -200,10 +213,16 @@ const toAnnualAmount = (
   inflationAssumptions: Scenario['strategies']['returnModel']['inflationAssumptions'],
 ) => {
   const startYear = getYearFromIsoDate(item.startDate) ?? year
-  const yearsElapsed = Math.max(0, year - startYear)
-  const rate = inflationAssumptions[item.inflationType] ?? 0
   const monthly = item.needAmount + item.wantAmount
-  return monthly * 12 * Math.pow(1 + rate, yearsElapsed)
+  return (
+    applyInflation({
+      amount: monthly * 12,
+      inflationType: item.inflationType,
+      fromDateIso: `${startYear}-01-01`,
+      toDateIso: `${year}-01-01`,
+      assumptions: inflationAssumptions,
+    })
+  )
 }
 
 export const buildSsaEstimate = ({
@@ -288,7 +307,13 @@ export const buildSsaEstimate = ({
       if (monthsInYear === 0) {
         continue
       }
-      const inflationFactor = Math.pow(1 + cpiRate, year - currentYear)
+      const inflationFactor = applyInflation({
+        amount: 1,
+        inflationType: 'cpi',
+        fromDateIso: `${currentYear}-01-01`,
+        toDateIso: `${year}-01-01`,
+        rateOverride: cpiRate,
+      })
       const proratedGross =
         (period.salary + period.bonus) * inflationFactor * (monthsInYear / 12)
       const currentGross = grossByYear.get(year) ?? 0

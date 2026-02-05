@@ -2,7 +2,8 @@ import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import { buildSsaEstimate } from '../ssa'
 import type { CashflowItem, SimulationModule, SimulationSettings } from '../types'
-import { isWithinRange, monthsBetween } from './utils'
+import { applyInflation } from '../../utils/inflation'
+import { isWithinRange } from './utils'
 
 export const createSocialSecurityModule = (
   snapshot: SimulationSnapshot,
@@ -65,8 +66,6 @@ export const createSocialSecurityModule = (
     })
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
 
-  const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-
   return {
     id: 'social-security',
     explain,
@@ -90,9 +89,13 @@ export const createSocialSecurityModule = (
         if (!isWithinRange(context.dateIso, benefit.claimDate, null)) {
           return
         }
-        const months = monthsBetween(benefit.claimDate, context.dateIso)
-        const factor = Math.pow(1 + cpiRate, months / 12)
-        const monthlyBenefit = benefit.monthlyBenefit * factor
+        const monthlyBenefit = applyInflation({
+          amount: benefit.monthlyBenefit,
+          inflationType: 'cpi',
+          fromDateIso: benefit.claimDate,
+          toDateIso: context.dateIso,
+          scenario,
+        })
         if (monthlyBenefit <= 0) {
           return
         }
@@ -105,7 +108,7 @@ export const createSocialSecurityModule = (
       })
       const totalBenefits = cashflows.reduce((sum, flow) => sum + flow.cash, 0)
       explain.addInput('Strategy count', snapshot.socialSecurityStrategies.length)
-      explain.addInput('CPI rate', cpiRate)
+      explain.addInput('Inflation type', 'cpi')
       explain.addCheckpoint('Benefit count', cashflows.length)
       explain.addCheckpoint('Benefit total', totalBenefits)
       return cashflows

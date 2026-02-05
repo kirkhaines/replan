@@ -8,7 +8,8 @@ import type {
   SimulationSettings,
   SimulationState,
 } from '../types'
-import { getHoldingGain, inflateAmount, sumMonthlySpending } from './utils'
+import { applyInflation } from '../../utils/inflation'
+import { getHoldingGain, sumMonthlySpending } from './utils'
 
 const sumSeasonedContributions = (
   entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
@@ -163,7 +164,6 @@ export const createCashBufferModule = (
   const early = scenario.strategies.earlyRetirement
   const taxableLot = scenario.strategies.taxableLot
   const contributionLimits = snapshot.contributionLimits ?? []
-  const cpiRate = scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId && !item.isPreTax,
   )
@@ -185,7 +185,13 @@ export const createCashBufferModule = (
     }
     const base = sorted.find((limit) => limit.year <= year) ?? sorted[0]
     const baseIso = `${base.year}-01-01`
-    return inflateAmount(base.amount, baseIso, context.dateIso, cpiRate)
+    return applyInflation({
+      amount: base.amount,
+      inflationType: 'cpi',
+      fromDateIso: baseIso,
+      toDateIso: context.dateIso,
+      scenario,
+    })
   }
 
   const buildWithdrawIntents = (

@@ -21,6 +21,7 @@ import type {
   SsaBendPoint,
   SsaRetirementAdjustment,
 } from '../models'
+import { applyInflation } from '../utils/inflation'
 import type {
   RunRepo,
   ScenarioRepo,
@@ -93,17 +94,16 @@ class DexieRunRepo implements RunRepo {
   private computeEndingBalanceToday(run: SimulationRun) {
     const endingBalance = run.result.summary.endingBalance
     const dateIso = run.result.timeline.at(-1)?.date
-    const cpiRate = run.snapshot?.scenario.strategies.returnModel.inflationAssumptions.cpi ?? 0
-    if (!dateIso || cpiRate === 0) {
+    if (!dateIso) {
       return endingBalance
     }
-    const year = new Date(dateIso).getFullYear()
-    const baseYear = new Date().getFullYear()
-    if (Number.isNaN(year)) {
-      return endingBalance
-    }
-    const yearDelta = year - baseYear
-    return endingBalance / Math.pow(1 + cpiRate, yearDelta)
+    return applyInflation({
+      amount: endingBalance,
+      inflationType: 'cpi',
+      fromDateIso: dateIso,
+      toDateIso: new Date().toISOString().slice(0, 10),
+      run,
+    })
   }
 
   private computeStochasticSuccessPct(run: SimulationRun) {

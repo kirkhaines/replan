@@ -2,7 +2,7 @@ import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import { computeIrmaaSurcharge, selectIrmaaTable } from '../tax'
 import type { SimulationModule, SimulationSettings } from '../types'
-import { inflateAmount } from './utils'
+import { applyInflation } from '../../utils/inflation'
 
 export const createHealthcareModule = (
   snapshot: SimulationSnapshot,
@@ -76,8 +76,6 @@ export const createHealthcareModule = (
       const baseMonthly = isMedicare
         ? strategy.medicarePartBMonthly + strategy.medicarePartDMonthly + strategy.medigapMonthly
         : strategy.preMedicareMonthly
-      const inflationRate =
-        scenario.strategies.returnModel.inflationAssumptions[strategy.inflationType] ?? 0
       const longTermCareDuration = strategy.longTermCareDurationYears ?? 0
       const longTermCareStartAge =
         lifeExpectancy > 0 && longTermCareDuration > 0
@@ -96,12 +94,13 @@ export const createHealthcareModule = (
           (longTermCareEndAge === null || context.age <= longTermCareEndAge)
         if (inLongTermCare && strategy.longTermCareAnnualExpense > 0) {
           longTermCareMonthly =
-            inflateAmount(
-              strategy.longTermCareAnnualExpense,
-              settings.startDate,
-              context.dateIso,
-              inflationRate,
-            ) / 12
+            applyInflation({
+              amount: strategy.longTermCareAnnualExpense,
+              inflationType: strategy.inflationType,
+              fromDateIso: settings.startDate,
+              toDateIso: context.dateIso,
+              scenario,
+            }) / 12
           extraMonthly += longTermCareMonthly
         }
       }
@@ -111,22 +110,24 @@ export const createHealthcareModule = (
         if (decliningDuration > 0 && context.age < treatmentEndAge) {
           if (strategy.decliningHealthAnnualExpense > 0) {
             decliningMonthly =
-              inflateAmount(
-                strategy.decliningHealthAnnualExpense,
-                settings.startDate,
-                context.dateIso,
-                inflationRate,
-              ) / 12
+              applyInflation({
+                amount: strategy.decliningHealthAnnualExpense,
+                inflationType: strategy.inflationType,
+                fromDateIso: settings.startDate,
+                toDateIso: context.dateIso,
+                scenario,
+              }) / 12
             extraMonthly += decliningMonthly
           }
         } else if (strategy.decliningHealthPostTreatmentAnnualExpense > 0) {
           decliningMonthly =
-            inflateAmount(
-              strategy.decliningHealthPostTreatmentAnnualExpense,
-              settings.startDate,
-              context.dateIso,
-              inflationRate,
-            ) / 12
+            applyInflation({
+              amount: strategy.decliningHealthPostTreatmentAnnualExpense,
+              inflationType: strategy.inflationType,
+              fromDateIso: settings.startDate,
+              toDateIso: context.dateIso,
+              scenario,
+            }) / 12
           extraMonthly += decliningMonthly
         }
       }
@@ -143,12 +144,13 @@ export const createHealthcareModule = (
         explain.addCheckpoint('Total', 0)
         return []
       }
-      const inflatedBase = inflateAmount(
-        baseMonthly,
-        settings.startDate,
-        context.dateIso,
-        inflationRate,
-      )
+      const inflatedBase = applyInflation({
+        amount: baseMonthly,
+        inflationType: strategy.inflationType,
+        fromDateIso: settings.startDate,
+        toDateIso: context.dateIso,
+        scenario,
+      })
       let irmaaSurcharge = 0
       let magiLookback: number | null = null
       let magi = 0
