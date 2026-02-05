@@ -197,9 +197,11 @@ const RunResultsDistributions = ({
   const [colorMetric, setColorMetric] = useState<ColorMetric>('guardrailFactorAvg')
   const [showChart, setShowChart] = useState(true)
   const availableRuns = stochasticRuns?.length ?? 0
-  const expectedRuns = Math.min(stochasticTarget, stochasticCompleted)
   const awaitingResults =
-    !stochasticCancelled && stochasticTarget > 0 && availableRuns < expectedRuns
+    !stochasticCancelled &&
+    stochasticTarget > 0 &&
+    stochasticCompleted >= stochasticTarget &&
+    availableRuns < stochasticTarget
   const isPending =
     Number.isFinite(stochasticTarget) &&
     stochasticTarget > 0 &&
