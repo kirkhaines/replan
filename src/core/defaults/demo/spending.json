@@ -21,7 +21,6 @@
         "sequenceModel": "independent",
         "volatilityScale": 1,
         "correlationModel": "none",
-        "cashYieldRate": 0.02,
         "inflationAssumptions": {
           "none": 0,
           "cpi": 0.02,
