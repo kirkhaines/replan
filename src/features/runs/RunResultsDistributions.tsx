@@ -26,6 +26,7 @@ type DistributionBin = {
   count: number
   probability: number
   bandValues: number[]
+  bandCounts: number[]
 }
 
 type RunResultsDistributionsProps = {
@@ -121,7 +122,8 @@ const buildHistogram = (
         colorMetric === 'none' ? 0 : run[colorMetric] ?? 0
       bandCounts[toBandIndex(colorValue)] += 1
     })
-    const bandValues = bandCounts.map((count) => count / values.length)
+    const bandValues =
+      values.length === 0 ? bandCounts.map(() => 0) : bandCounts.map((count) => count / values.length)
     const bandEntries = Object.fromEntries(
       bandValues.map((value, index) => [`band${index}`, value]),
     )
@@ -134,6 +136,7 @@ const buildHistogram = (
           x: min,
           count: values.length,
           probability: 1,
+          bandCounts,
           bandValues,
           ...bandEntries,
         },
@@ -162,7 +165,10 @@ const buildHistogram = (
 
   return {
     bins: buckets.map((bucket) => {
-      const bandValues = bucket.bandCounts.map((count) => count / values.length)
+      const bandValues =
+        values.length === 0
+          ? bucket.bandCounts.map(() => 0)
+          : bucket.bandCounts.map((count) => count / values.length)
       const bandEntries = Object.fromEntries(
         bandValues.map((value, index) => [`band${index}`, value]),
       )
@@ -173,6 +179,7 @@ const buildHistogram = (
         x: (bucket.start + bucket.end) / 2,
         count: bucket.count,
         probability: bucket.count / values.length,
+        bandCounts: bucket.bandCounts,
         bandValues,
         ...bandEntries,
       }
@@ -335,7 +342,10 @@ const RunResultsDistributions = ({
                         : bandOrder
                             .map((bandIndex) => ({
                               bandIndex,
-                              value: entry.bandValues[bandIndex] ?? 0,
+                              value:
+                                entry.count > 0
+                                  ? (entry.bandCounts?.[bandIndex] ?? 0) / entry.count
+                                  : 0,
                               color: getBandColor(bandIndex),
                             }))
                             .filter((band) => band.value > 0)
