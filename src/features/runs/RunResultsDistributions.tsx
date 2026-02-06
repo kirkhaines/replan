@@ -46,7 +46,7 @@ const colorOptions: Array<{ value: ColorMetric; label: string }> = [
   { value: 'guardrailFactorBelowPct', label: 'Guardrail active' },
 ]
 
-const logLinearThreshold = 1000
+const logLinearThreshold = 10000
 
 const symlog = (value: number) => {
   if (value === 0) {
@@ -232,6 +232,31 @@ const RunResultsDistributions = ({
     return buildHistogram(runs, metric, colorMetric, binCount)
   }, [colorMetric, metric, stochasticRuns])
 
+  const xTicks = useMemo(() => {
+    if (!histogram.domain) {
+      return undefined
+    }
+    const [min, max] = histogram.domain
+    const maxAbs = Math.max(Math.abs(min), Math.abs(max))
+    if (maxAbs === 0) {
+      return [0]
+    }
+    const halfTicks = 6
+    const step = maxAbs / halfTicks
+    const ticks = new Set<number>()
+    ticks.add(0)
+    for (let i = 1; i <= halfTicks; i += 1) {
+      const value = step * i
+      if (value <= max) {
+        ticks.add(value)
+      }
+      if (-value >= min) {
+        ticks.add(-value)
+      }
+    }
+    return Array.from(ticks).sort((a, b) => a - b)
+  }, [histogram.domain])
+
   return (
     <div className="card" id="section-distributions">
       <div className="row">
@@ -281,7 +306,7 @@ const RunResultsDistributions = ({
                   dataKey="x"
                   tickFormatter={(value) => formatAxisValue(symexp(Number(value)))}
                   domain={histogram.domain ?? ['dataMin', 'dataMax']}
-                  tickCount={12}
+                  ticks={xTicks}
                 />
                 <YAxis
                   tickFormatter={(value) => `${Math.round(Number(value) * 100)}%`}
