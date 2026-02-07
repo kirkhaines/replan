@@ -5,6 +5,8 @@ import {
   AreaChart,
   Area,
   Line,
+  LineChart,
+  Legend,
   ReferenceLine,
   XAxis,
   YAxis,
@@ -53,6 +55,17 @@ type CashflowChart = {
   series: CashflowSeries[]
 }
 
+type ShockRateSeries = {
+  key: string
+  label: string
+  color: string
+}
+
+type ShockRateChart = {
+  data: ChartDatum[]
+  series: ShockRateSeries[]
+}
+
 type RunResultsGraphsProps = {
   balanceDetail: BalanceDetail
   balanceDetailOptions: ReadonlyArray<{ value: BalanceDetail; label: string }>
@@ -60,6 +73,7 @@ type RunResultsGraphsProps = {
   balanceOverTime: BalanceOverTime
   ordinaryIncomeChart: OrdinaryIncomeChart
   cashflowChart: CashflowChart
+  shockRateChart: ShockRateChart
   formatAxisValue: (value: number) => string
   formatCurrency: (value: number) => string
   formatSignedCurrency: (value: number) => string
@@ -72,6 +86,7 @@ const RunResultsGraphs = ({
   balanceOverTime,
   ordinaryIncomeChart,
   cashflowChart,
+  shockRateChart,
   formatAxisValue,
   formatCurrency,
   formatSignedCurrency,
@@ -81,6 +96,7 @@ const RunResultsGraphs = ({
   const [showBalanceChart, setShowBalanceChart] = useState(true)
   const [showOrdinaryChart, setShowOrdinaryChart] = useState(true)
   const [showCashflowChart, setShowCashflowChart] = useState(true)
+  const [showShockChart, setShowShockChart] = useState(true)
   const [useBalanceLogScale, setUseBalanceLogScale] = useState(false)
   const lineKeys = useMemo(
     () => new Set(balanceOverTime.lineSeries?.map((entry) => entry.key) ?? []),
@@ -151,6 +167,7 @@ const RunResultsGraphs = ({
     }
     return cashflowChart.series.filter((series) => series.bucket === bucketFilter)
   }, [bucketFilter, cashflowChart.series])
+  const hasShockRates = shockRateChart.series.length > 0 && shockRateChart.data.length > 0
 
   return (
     <>
@@ -320,6 +337,83 @@ const RunResultsGraphs = ({
               ))}
             </div>
           </>
+        ) : null}
+      </div>
+
+      <div className="card" id="section-shocks">
+        <div className="row">
+          <h2>Inflation and return rates</h2>
+          <div className="row" style={{ gap: '0.75rem' }}>
+            <button
+              className="link-button"
+              type="button"
+              onClick={() => setShowShockChart((current) => !current)}
+            >
+              {showShockChart ? '▾' : '▸'} {showShockChart ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        </div>
+        {showShockChart ? (
+          hasShockRates ? (
+            <div className="chart">
+              <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={300}>
+                <LineChart data={shockRateChart.data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="year" />
+                  <YAxis
+                    tickFormatter={(value) => `${(Number(value) * 100).toFixed(1)}%`}
+                    width={70}
+                  />
+                  <Legend verticalAlign="top" height={32} />
+                  <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="4 4" />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) {
+                        return null
+                      }
+                      const row = payload[0]?.payload as { year?: number } | undefined
+                      return (
+                        <div
+                          style={{
+                            background: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '10px',
+                            boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                            padding: '10px 12px',
+                          }}
+                        >
+                          <div className="tooltip-label">
+                            {row?.year ?? 'Year'}
+                          </div>
+                          {payload.map((entry) => (
+                            <div key={String(entry.dataKey)} style={{ fontSize: '12px' }}>
+                              <span style={{ color: entry.color }}>
+                                {entry.name ?? entry.dataKey}
+                              </span>
+                              {`: ${(Number(entry.value) * 100).toFixed(2)}%`}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }}
+                  />
+                  {shockRateChart.series.map((series) => (
+                    <Line
+                      key={series.key}
+                      type="monotone"
+                      dataKey={series.key}
+                      stroke={series.color}
+                      strokeWidth={2}
+                      dot={false}
+                      name={series.label}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="muted">No stochastic rate data available yet.</p>
+          )
         ) : null}
       </div>
 

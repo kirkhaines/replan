@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import type { SimulationRun } from '../../core/models'
+import type { SimulationRun, SimulationSnapshot } from '../../core/models'
 import { useAppStore } from '../../state/appStore'
 import { subscribeStochasticProgress } from '../../core/simClient/stochasticProgress'
 import PageHeader from '../../components/PageHeader'
 import RunResultsGraphs from './RunResultsGraphs'
 import RunResultsTimeline from './RunResultsTimeline'
-import RunResultsDistributions from './RunResultsDistributions'
-import { applyInflation } from '../../core/utils/inflation'
+import RunResultsDistributions, {
+  type RepresentativeSelection,
+} from './RunResultsDistributions'
+import { inflationTypeSchema } from '../../core/models/enums'
+import type { SimulationRequest } from '../../core/sim/input'
+import { applyInflation, buildInflationIndexByType } from '../../core/utils/inflation'
 import {
   computeTaxableSocialSecurity,
   selectSocialSecurityProvisionalIncomeBracket,
@@ -37,6 +41,33 @@ const formatSignedCurrency = (value: number) => {
 }
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`
+
+const buildRepresentativeRequest = (
+  snapshot: SimulationSnapshot,
+  startDate: string,
+  seed: number,
+) => {
+  const returnModel = snapshot.scenario.strategies.returnModel
+  const request = {
+    snapshot: {
+      ...snapshot,
+      scenario: {
+        ...snapshot.scenario,
+        strategies: {
+          ...snapshot.scenario.strategies,
+          returnModel: {
+            ...returnModel,
+            mode: 'stochastic',
+            seed,
+            stochasticRuns: 0,
+          },
+        },
+      },
+    },
+    startDate,
+  } satisfies SimulationRequest
+  return request
+}
 
 const formatAxisValue = (value: number) => {
   const abs = Math.abs(value)
@@ -75,6 +106,15 @@ const chartKeyColors: Record<string, string> = {
   'future-work:401k': '#f59e0b',
   'future-work:hsa': '#ec4899',
   'future-work:deductions': '#ef4444',
+  'shock:market': '#0ea5e9',
+  'shock:market:equity': '#2563eb',
+  'shock:market:bonds': '#f59e0b',
+  'shock:market:realEstate': '#22c55e',
+  'shock:market:other': '#8b5cf6',
+  'shock:inflation:cpi': '#f97316',
+  'shock:inflation:medical': '#ef4444',
+  'shock:inflation:housing': '#22c55e',
+  'shock:inflation:education': '#8b5cf6',
 }
 
 const hashKey = (value: string) => {
@@ -207,6 +247,7 @@ const RunResultsPage = () => {
   const { id } = useParams<{ id: string }>()
   const location = useLocation()
   const storage = useAppStore((state) => state.storage)
+  const simClient = useAppStore((state) => state.simClient)
   const [run, setRun] = useState<SimulationRun | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const titleInputRef = useRef<HTMLInputElement | null>(null)
@@ -214,6 +255,21 @@ const RunResultsPage = () => {
   const [rangeKey, setRangeKey] = useState('all')
   const [balanceDetail, setBalanceDetail] = useState<BalanceDetail>('none')
   const [showTimeline, setShowTimeline] = useState(false)
+  const [representativeState, setRepresentativeState] = useState<{
+    runId: string | null
+    selection: RepresentativeSelection | null
+    run: SimulationRun | null
+    runSeed: number | null
+    loading: boolean
+    error: string | null
+  }>({
+    runId: null,
+    selection: null,
+    run: null,
+    runSeed: null,
+    loading: false,
+    error: null,
+  })
   const [liveStochasticProgress, setLiveStochasticProgress] = useState<{
     runId: string
     completed: number
@@ -222,8 +278,24 @@ const RunResultsPage = () => {
     updatedAt: number
   } | null>(null)
 
-  const monthlyTimeline = useMemo(() => run?.result.monthlyTimeline ?? [], [run])
-  const explanations = useMemo(() => run?.result.explanations ?? [], [run])
+  const representativeSelection =
+    representativeState.runId === id ? representativeState.selection : null
+  const representativeRun =
+    representativeState.runId === id ? representativeState.run : null
+  const representativeRunSeed =
+    representativeState.runId === id ? representativeState.runSeed : null
+  const representativeLoading =
+    representativeState.runId === id ? representativeState.loading : false
+  const representativeError =
+    representativeState.runId === id ? representativeState.error : null
+
+  const displayRun = representativeRun ?? run
+
+  const monthlyTimeline = useMemo(
+    () => displayRun?.result.monthlyTimeline ?? [],
+    [displayRun],
+  )
+  const explanations = useMemo(() => displayRun?.result.explanations ?? [], [displayRun])
   const explanationsByMonth = useMemo(() => {
     return explanations.reduce<Map<number, (typeof explanations)[number]>>((acc, entry) => {
       acc.set(entry.monthIndex, entry)
@@ -365,6 +437,25 @@ const RunResultsPage = () => {
     })
   }, [monthlyTimeline, rangeYearBounds])
   const filteredTimeline = useMemo(() => {
+    if (!displayRun?.result.timeline) {
+      return []
+    }
+    if (!rangeYearBounds) {
+      return displayRun.result.timeline
+    }
+    return displayRun.result.timeline.filter((point) => {
+      if (!point.date) {
+        return true
+      }
+      const year = new Date(point.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return true
+      }
+      return year >= rangeYearBounds.startYear && year <= rangeYearBounds.endYear
+    })
+  }, [displayRun, rangeYearBounds])
+
+  const mainFilteredTimeline = useMemo(() => {
     if (!run?.result.timeline) {
       return []
     }
@@ -384,13 +475,14 @@ const RunResultsPage = () => {
   }, [rangeYearBounds, run])
   const runStartYear = useMemo(() => {
     const startDate =
-      run?.result.timeline?.[0]?.date ?? run?.result.monthlyTimeline?.[0]?.date
+      displayRun?.result.timeline?.[0]?.date ??
+      displayRun?.result.monthlyTimeline?.[0]?.date
     if (!startDate) {
       return null
     }
     const year = new Date(startDate).getFullYear()
     return Number.isNaN(year) ? null : year
-  }, [run])
+  }, [displayRun])
   const getCalendarYearIndex = useCallback(
     (dateIso?: string) => {
       if (!dateIso || runStartYear === null) {
@@ -417,14 +509,14 @@ const RunResultsPage = () => {
     const cashById = new Map<string, string>()
     const investmentById = new Map<string, string>()
     const holdingById = new Map<string, { name: string; investmentAccountId?: string }>()
-    if (run?.snapshot) {
-      run.snapshot.nonInvestmentAccounts.forEach((account) => {
+    if (displayRun?.snapshot) {
+      displayRun.snapshot.nonInvestmentAccounts.forEach((account) => {
         cashById.set(account.id, account.name)
       })
-      run.snapshot.investmentAccounts.forEach((account) => {
+      displayRun.snapshot.investmentAccounts.forEach((account) => {
         investmentById.set(account.id, account.name)
       })
-      run.snapshot.investmentAccountHoldings.forEach((holding) => {
+      displayRun.snapshot.investmentAccountHoldings.forEach((holding) => {
         holdingById.set(holding.id, {
           name: holding.name,
           investmentAccountId: holding.investmentAccountId,
@@ -432,13 +524,13 @@ const RunResultsPage = () => {
       })
     }
     return { cashById, investmentById, holdingById }
-  }, [run])
+  }, [displayRun])
   const holdingNamesFromRun = useMemo(() => {
     const map = new Map<string, { name: string; investmentAccountId?: string }>()
-    if (!run?.result.explanations) {
+    if (!displayRun?.result.explanations) {
       return map
     }
-    run.result.explanations.forEach((month) => {
+    displayRun.result.explanations.forEach((month) => {
       month.accounts.forEach((account) => {
         if (account.kind !== 'holding' || !account.name) {
           return
@@ -452,29 +544,29 @@ const RunResultsPage = () => {
       })
     })
     return map
-  }, [run])
+  }, [displayRun])
   const holdingMetaById = useMemo(() => {
     const map = new Map<string, { taxType: string; holdingType: string }>()
-    if (run?.snapshot) {
-      run.snapshot.investmentAccountHoldings.forEach((holding) => {
+    if (displayRun?.snapshot) {
+      displayRun.snapshot.investmentAccountHoldings.forEach((holding) => {
         map.set(holding.id, { taxType: holding.taxType, holdingType: holding.holdingType })
       })
     }
     return map
-  }, [run])
+  }, [displayRun])
   const initialBalances = useMemo(() => {
     const balances = new Map<string, number>()
-    if (!run?.snapshot) {
+    if (!displayRun?.snapshot) {
       return balances
     }
-    run.snapshot.nonInvestmentAccounts.forEach((account) => {
+    displayRun.snapshot.nonInvestmentAccounts.forEach((account) => {
       balances.set(`cash:${account.id}`, account.balance)
     })
-    run.snapshot.investmentAccountHoldings.forEach((holding) => {
+    displayRun.snapshot.investmentAccountHoldings.forEach((holding) => {
       balances.set(`holding:${holding.id}`, holding.balance)
     })
     return balances
-  }, [run])
+  }, [displayRun])
 
   const presentDayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const adjustForInflation = useCallback(
@@ -487,10 +579,10 @@ const RunResultsPage = () => {
         inflationType: 'cpi',
         fromDateIso: dateIso,
         toDateIso: presentDayIso,
-        run,
+        run: displayRun,
       })
     },
-    [presentDayIso, run, showPresentDay],
+    [displayRun, presentDayIso, showPresentDay],
   )
 
   const formatCurrencyForDate = (value: number, dateIso?: string | null) =>
@@ -499,7 +591,7 @@ const RunResultsPage = () => {
     formatSignedCurrency(adjustForInflation(value, dateIso))
 
   const balanceOverTime = useMemo(() => {
-    if (!run?.snapshot) {
+    if (!displayRun?.snapshot) {
       return { data: [], series: [] }
     }
     const series: Array<{ key: string; label: string; color: string }> = []
@@ -539,7 +631,7 @@ const RunResultsPage = () => {
         })
       })
     }
-    const minBalanceRun = run.result.minBalanceRun
+    const minBalanceRun = displayRun.result.minBalanceRun
     const minBalanceByYear = new Map<number, number>()
     if (minBalanceRun?.timeline?.length) {
       registerLineSeries(
@@ -679,15 +771,15 @@ const RunResultsPage = () => {
     getCalendarYearIndex,
     holdingMetaById,
     monthlyByYear,
-    run,
+    displayRun,
   ])
 
   const ordinaryIncomeChart = useMemo(() => {
-    if (!run?.snapshot) {
+    if (!displayRun?.snapshot) {
       return { data: [], bracketLines: [], maxValue: 0 }
     }
-    const snapshot = run.snapshot
-    const finishedAt = run.finishedAt
+    const snapshot = displayRun.snapshot
+    const finishedAt = displayRun.finishedAt
     const timeline = filteredTimeline
     const socialSecurityBrackets = snapshot.socialSecurityProvisionalIncomeBrackets ?? []
     const holdingTaxType = new Map(
@@ -867,10 +959,16 @@ const RunResultsPage = () => {
     }, 0)
 
     return { data, bracketLines, maxValue }
-  }, [adjustForInflation, explanations, filteredTimeline, getCalendarYearIndex, run])
+  }, [
+    adjustForInflation,
+    displayRun,
+    explanations,
+    filteredTimeline,
+    getCalendarYearIndex,
+  ])
 
   const cashflowChart = useMemo(() => {
-    if (!run?.snapshot) {
+    if (!displayRun?.snapshot) {
       return {
         data: [],
         series: [] as Array<{ key: string; label: string; color: string; bucket: string }>,
@@ -971,12 +1069,155 @@ const RunResultsPage = () => {
     return { data: normalizedData, series }
   }, [
     adjustForInflation,
+    displayRun,
     explanationsByMonth,
     filteredMonthlyTimeline,
     filteredTimeline,
     getCalendarYearIndex,
-    run,
   ])
+
+  const shockRateChart = useMemo(() => {
+    if (!displayRun?.snapshot || filteredMonthlyTimeline.length === 0) {
+      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+    }
+    const startDate = displayRun.result.monthlyTimeline?.[0]?.date
+    if (!startDate) {
+      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+    }
+    const months = displayRun.result.monthlyTimeline?.length ?? 0
+    if (months <= 0) {
+      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+    }
+    const endDate =
+      displayRun.result.monthlyTimeline?.[months - 1]?.date ?? startDate
+    const settings = {
+      startDate,
+      endDate,
+      months,
+      stepMonths: 1,
+    }
+    const inflationIndexByType = buildInflationIndexByType(displayRun.snapshot, settings)
+    const inflationTypes = inflationTypeSchema.options.filter((type) => type !== 'none')
+
+    const yearBuckets = new Map<
+      number,
+      {
+        count: number
+        products: Record<string, number>
+      }
+    >()
+
+    const resolveInflationRate = (type: string, monthIndex: number) => {
+      const index = inflationIndexByType[type as keyof typeof inflationIndexByType]
+      if (!index || monthIndex + 1 >= index.length) {
+        return 0
+      }
+      const start = index[monthIndex] ?? 1
+      const end = index[monthIndex + 1] ?? start
+      if (start === 0) {
+        return 0
+      }
+      return end / start - 1
+    }
+
+    filteredMonthlyTimeline.forEach((month) => {
+      const year = new Date(month.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return
+      }
+      const bucket =
+        yearBuckets.get(year) ?? {
+          count: 0,
+          products: {},
+        }
+      const explanation = explanationsByMonth.get(month.monthIndex)
+      const returnModule = explanation?.modules.find(
+        (module) => module.moduleId === 'returns-core',
+      )
+      const marketReturns = returnModule?.marketReturns ?? []
+      const marketByAsset: Record<string, { start: number; amount: number }> = {}
+      marketReturns.forEach((entry) => {
+        if (entry.kind !== 'holding') {
+          return
+        }
+        const assetClass = toAssetClass(entry.holdingType)
+        if (assetClass === 'cash') {
+          return
+        }
+        const key = `market:${assetClass}`
+        const totals = marketByAsset[key] ?? { start: 0, amount: 0 }
+        totals.start += entry.balanceStart
+        totals.amount += entry.amount
+        marketByAsset[key] = totals
+      })
+      Object.entries(marketByAsset).forEach(([key, totals]) => {
+        const rate = totals.start > 0 ? totals.amount / totals.start : 0
+        bucket.products[key] = (bucket.products[key] ?? 1) * (1 + rate)
+      })
+      inflationTypes.forEach((type) => {
+        const key = `inflation:${type}`
+        const rate = resolveInflationRate(type, month.monthIndex)
+        bucket.products[key] = (bucket.products[key] ?? 1) * (1 + rate)
+      })
+      bucket.count += 1
+      yearBuckets.set(year, bucket)
+    })
+
+    const data = Array.from(yearBuckets.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([year, bucket]) => {
+        const row: Record<string, number> = { year }
+        Object.entries(bucket.products).forEach(([key, product]) => {
+          row[key] = product - 1
+        })
+        return row
+      })
+
+    const series = [
+      { key: 'market:equity', label: 'Market - Equity', color: colorForChartKey('shock:market:equity') },
+      { key: 'market:bonds', label: 'Market - Bonds', color: colorForChartKey('shock:market:bonds') },
+      { key: 'market:realEstate', label: 'Market - Real estate', color: colorForChartKey('shock:market:realEstate') },
+      { key: 'market:other', label: 'Market - Other', color: colorForChartKey('shock:market:other') },
+      ...inflationTypes.map((type) => {
+        const label =
+          type === 'cpi'
+            ? 'Inflation - CPI'
+            : type === 'medical'
+              ? 'Inflation - Medical'
+              : type === 'housing'
+                ? 'Inflation - Housing'
+                : type === 'education'
+                  ? 'Inflation - Education'
+                  : `Inflation - ${type}`
+        const colorKey =
+          type === 'cpi'
+            ? 'shock:inflation:cpi'
+            : type === 'medical'
+              ? 'shock:inflation:medical'
+              : type === 'housing'
+                ? 'shock:inflation:housing'
+                : type === 'education'
+                  ? 'shock:inflation:education'
+                  : 'shock:inflation:education'
+        return { key: `inflation:${type}`, label, color: colorForChartKey(colorKey) }
+      }),
+    ]
+
+    const availableKeys = new Set<string>()
+    data.forEach((row) => {
+      Object.entries(row).forEach(([key, value]) => {
+        if (key === 'year') {
+          return
+        }
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          availableKeys.add(key)
+        }
+      })
+    })
+    const filteredSeries = series.filter((entry) => availableKeys.has(entry.key))
+
+    return { data, series: filteredSeries }
+  }, [displayRun, explanationsByMonth, filteredMonthlyTimeline])
 
   useEffect(() => {
     const load = async () => {
@@ -992,6 +1233,122 @@ const RunResultsPage = () => {
     }
     void load()
   }, [id, storage])
+
+  const representativeStartDate = useMemo(() => {
+    if (!run) {
+      return null
+    }
+    return run.result.monthlyTimeline?.[0]?.date ?? run.result.timeline?.[0]?.date ?? null
+  }, [run])
+
+  const handleRepresentativeSelect = useCallback(
+    (selection: RepresentativeSelection | null) => {
+      setRepresentativeState((current) => {
+        if (!selection) {
+          return {
+            runId: null,
+            selection: null,
+            run: null,
+            runSeed: null,
+            loading: false,
+            error: null,
+          }
+        }
+        const isSameRun = current.runId === id
+        const currentSelection = isSameRun ? current.selection : null
+        const sameSegment =
+          currentSelection?.segmentMetric === selection.segmentMetric &&
+          currentSelection?.segmentRange?.start === selection.segmentRange?.start &&
+          currentSelection?.segmentRange?.end === selection.segmentRange?.end
+        if (
+          currentSelection &&
+          currentSelection.run.seed === selection.run.seed &&
+          currentSelection.metric === selection.metric &&
+          currentSelection.rangeStart === selection.rangeStart &&
+          currentSelection.rangeEnd === selection.rangeEnd &&
+          sameSegment
+        ) {
+          return {
+            runId: null,
+            selection: null,
+            run: null,
+            runSeed: null,
+            loading: false,
+            error: null,
+          }
+        }
+        return {
+          runId: id ?? null,
+          selection,
+          run: null,
+          runSeed: null,
+          loading: true,
+          error: null,
+        }
+      })
+    },
+    [id],
+  )
+
+  useEffect(() => {
+    if (!representativeSelection || !run?.snapshot || !representativeStartDate) {
+      return
+    }
+    const seed = representativeSelection.run.seed
+    if (representativeRun && representativeRunSeed === seed) {
+      return
+    }
+    let cancelled = false
+    const request = buildRepresentativeRequest(run.snapshot, representativeStartDate, seed)
+    simClient
+      .runScenario(request)
+      .then((nextRun) => {
+        if (cancelled) {
+          return
+        }
+        setRepresentativeState((current) => {
+          if (current.runId !== id || current.selection?.run.seed !== seed) {
+            return current
+          }
+          return {
+            ...current,
+            run: nextRun,
+            runSeed: seed,
+            loading: false,
+            error: null,
+          }
+        })
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return
+        }
+        console.error('[RunResults] Representative run failed.', error)
+        setRepresentativeState((current) => {
+          if (current.runId !== id || current.selection?.run.seed !== seed) {
+            return current
+          }
+          return {
+            ...current,
+            run: null,
+            runSeed: null,
+            loading: false,
+            error: 'Representative run failed to load.',
+          }
+        })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    id,
+    representativeSelection,
+    representativeStartDate,
+    representativeRun,
+    representativeRunSeed,
+    run?.snapshot,
+    simClient,
+  ])
 
   const stochasticTarget = useMemo(() => {
     const raw = run?.snapshot?.scenario.strategies.returnModel.stochasticRuns
@@ -1153,20 +1510,54 @@ const RunResultsPage = () => {
         minBalance: 0,
       }
     }
-    if (filteredTimeline.length === 0) {
+    if (mainFilteredTimeline.length === 0) {
       return {
         endingBalance: 0,
         minBalance: 0,
       }
     }
-    const balances = filteredTimeline.map((point) =>
+    const balances = mainFilteredTimeline.map((point) =>
       showPresentDay ? adjustForInflation(point.balance, point.date) : point.balance,
     )
     return {
       endingBalance: balances.length > 0 ? balances[balances.length - 1] : 0,
       minBalance: balances.length > 0 ? Math.min(...balances) : 0,
     }
-  }, [adjustForInflation, filteredTimeline, run, showPresentDay])
+  }, [adjustForInflation, mainFilteredTimeline, run, showPresentDay])
+
+  const representativeBannerLabel = useMemo(() => {
+    if (!representativeSelection) {
+      return ''
+    }
+    const metricLabel =
+      representativeSelection.metric === 'endingBalance' ? 'ending balance' : 'minimum balance'
+    const rangeStart = Math.min(
+      representativeSelection.rangeStart,
+      representativeSelection.rangeEnd,
+    )
+    const rangeEnd = Math.max(
+      representativeSelection.rangeStart,
+      representativeSelection.rangeEnd,
+    )
+    const rangeLabel = `${formatCurrency(rangeStart)} - ${formatCurrency(rangeEnd)}`
+    let segmentLabel = ''
+    if (representativeSelection.segmentRange && representativeSelection.segmentMetric !== 'none') {
+      const segmentLabels: Record<string, string> = {
+        guardrailFactorAvg: 'Guardrail avg',
+        guardrailFactorMin: 'Guardrail min',
+        guardrailFactorBelowPct: 'Guardrail active',
+      }
+      const segmentRange = representativeSelection.segmentRange
+      const startLabel = formatPercent(segmentRange.start * 100)
+      const endLabel = formatPercent(segmentRange.end * 100)
+      const label = segmentLabels[representativeSelection.segmentMetric] ?? 'Segment'
+      segmentLabel =
+        segmentRange.start === segmentRange.end
+          ? `${label} ${startLabel}`
+          : `${label} ${startLabel} - ${endLabel}`
+    }
+    return `${metricLabel} ${rangeLabel}${segmentLabel ? `, ${segmentLabel}` : ''}`
+  }, [representativeSelection])
 
   const progressLabel = useMemo(() => {
     if (isLoading || !run) {
@@ -1402,7 +1793,49 @@ const RunResultsPage = () => {
                   formatAxisValue={formatAxisValue}
                   formatCurrency={formatCurrency}
                   stochasticCancelled={stochasticCancelled}
+                  onSelectRepresentative={handleRepresentativeSelect}
                 />
+              ) : null}
+
+              {representativeSelection ? (
+                <div
+                  className="card"
+                  style={{
+                    position: 'sticky',
+                    top: '5.5rem',
+                    zIndex: 5,
+                    display: 'grid',
+                    gap: '0.75rem',
+                    background: '#fff4e5',
+                    borderColor: '#f2b66d',
+                  }}
+                >
+                  <span className="muted">Displaying a representative run</span>
+                  <div
+                    className="row"
+                    style={{
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div>{representativeBannerLabel}</div>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={() => setRepresentativeSelection(null)}
+                    >
+                      Return to main run
+                    </button>
+                  </div>
+                  {representativeLoading ? (
+                    <p className="muted">Loading representative run...</p>
+                  ) : null}
+                  {representativeError ? (
+                    <p className="error">{representativeError}</p>
+                  ) : null}
+                </div>
               ) : null}
 
               <RunResultsGraphs
@@ -1412,6 +1845,7 @@ const RunResultsPage = () => {
                 balanceOverTime={balanceOverTime}
                 ordinaryIncomeChart={ordinaryIncomeChart}
                 cashflowChart={cashflowChart}
+                shockRateChart={shockRateChart}
                 formatAxisValue={formatAxisValue}
                 formatCurrency={formatCurrency}
                 formatSignedCurrency={formatSignedCurrency}
@@ -1495,6 +1929,15 @@ const RunResultsPage = () => {
                   >
                     Cash flow by module
                   </button>
+                  {shockRateChart.data.length > 0 ? (
+                    <button
+                      className="link-button"
+                      type="button"
+                      onClick={handleJumpTo('section-shocks')}
+                    >
+                      Inflation & return rates
+                    </button>
+                  ) : null}
                   <button
                     className="link-button"
                     type="button"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -25,8 +25,21 @@ type DistributionBin = {
   x: number
   count: number
   probability: number
+  guardrailMin: number | null
+  guardrailMax: number | null
+  representativeRun: NonNullable<SimulationResult['stochasticRuns']>[number] | null
+  members: NonNullable<SimulationResult['stochasticRuns']>
   bandValues: number[]
   bandCounts: number[]
+}
+
+type HistogramBucket = {
+  bucket: number
+  start: number
+  end: number
+  count: number
+  bandCounts: number[]
+  members: NonNullable<SimulationResult['stochasticRuns']>
 }
 
 type RunResultsDistributionsProps = {
@@ -34,6 +47,18 @@ type RunResultsDistributionsProps = {
   formatAxisValue: (value: number) => string
   formatCurrency: (value: number) => string
   stochasticCancelled: boolean
+  onSelectRepresentative?: (selection: RepresentativeSelection | null) => void
+}
+
+export type RepresentativeSelection = {
+  metric: DistributionMetric
+  rangeStart: number
+  rangeEnd: number
+  segmentMetric: ColorMetric
+  segmentRange: { start: number; end: number } | null
+  guardrailMin: number | null
+  guardrailMax: number | null
+  run: NonNullable<SimulationResult['stochasticRuns']>[number]
 }
 
 const metricOptions: Array<{ value: DistributionMetric; label: string }> = [
@@ -122,6 +147,16 @@ const buildHistogram = (
         colorMetric === 'none' ? 0 : run[colorMetric] ?? 0
       bandCounts[toBandIndex(colorValue)] += 1
     })
+    let guardrailMin: number | null = null
+    let guardrailMax: number | null = null
+    runs.forEach((run) => {
+      const guardrail = run.guardrailFactorBelowPct
+      if (!Number.isFinite(guardrail)) {
+        return
+      }
+      guardrailMin = guardrailMin === null ? guardrail : Math.min(guardrailMin, guardrail)
+      guardrailMax = guardrailMax === null ? guardrail : Math.max(guardrailMax, guardrail)
+    })
     const bandValues =
       values.length === 0 ? bandCounts.map(() => 0) : bandCounts.map((count) => count / values.length)
     const bandEntries = Object.fromEntries(
@@ -136,6 +171,10 @@ const buildHistogram = (
           x: min,
           count: values.length,
           probability: 1,
+          guardrailMin,
+          guardrailMax,
+          representativeRun: runs[0] ?? null,
+          members: runs,
           bandCounts,
           bandValues,
           ...bandEntries,
@@ -147,12 +186,13 @@ const buildHistogram = (
 
   const span = max - min
   const binSize = span / bins
-  const buckets = Array.from({ length: bins }, (_, index) => ({
+  const buckets: HistogramBucket[] = Array.from({ length: bins }, (_, index) => ({
     bucket: index,
     start: min + index * binSize,
     end: index === bins - 1 ? max : min + (index + 1) * binSize,
     count: 0,
     bandCounts: Array.from({ length: bands }, () => 0),
+    members: [],
   }))
   transformed.forEach((value, valueIndex) => {
     const rawIndex = Math.floor((value - min) / binSize)
@@ -161,10 +201,35 @@ const buildHistogram = (
     const colorValue =
       colorMetric === 'none' ? 0 : runs[valueIndex]?.[colorMetric] ?? 0
     buckets[bucketIndex].bandCounts[toBandIndex(colorValue)] += 1
+    if (runs[valueIndex]) {
+      buckets[bucketIndex].members.push(runs[valueIndex])
+    }
   })
 
   return {
     bins: buckets.map((bucket) => {
+      const bucketMid = (bucket.start + bucket.end) / 2
+      const targetValue = symexp(bucketMid)
+      let representativeRun: NonNullable<SimulationResult['stochasticRuns']>[number] | null =
+        null
+      let bestDistance = Number.POSITIVE_INFINITY
+      let guardrailMin: number | null = null
+      let guardrailMax: number | null = null
+      bucket.members.forEach((member) => {
+        const value = member[metric]
+        if (Number.isFinite(value)) {
+          const distance = Math.abs(value - targetValue)
+          if (distance < bestDistance) {
+            bestDistance = distance
+            representativeRun = member
+          }
+        }
+        const guardrail = member.guardrailFactorBelowPct
+        if (Number.isFinite(guardrail)) {
+          guardrailMin = guardrailMin === null ? guardrail : Math.min(guardrailMin, guardrail)
+          guardrailMax = guardrailMax === null ? guardrail : Math.max(guardrailMax, guardrail)
+        }
+      })
       const bandValues =
         values.length === 0
           ? bucket.bandCounts.map(() => 0)
@@ -179,6 +244,10 @@ const buildHistogram = (
         x: (bucket.start + bucket.end) / 2,
         count: bucket.count,
         probability: bucket.count / values.length,
+        guardrailMin,
+        guardrailMax,
+        representativeRun,
+        members: bucket.members,
         bandCounts: bucket.bandCounts,
         bandValues,
         ...bandEntries,
@@ -193,10 +262,12 @@ const RunResultsDistributions = ({
   formatAxisValue,
   formatCurrency,
   stochasticCancelled,
+  onSelectRepresentative,
 }: RunResultsDistributionsProps) => {
   const [metric, setMetric] = useState<DistributionMetric>('endingBalance')
   const [colorMetric, setColorMetric] = useState<ColorMetric>('guardrailFactorAvg')
   const [showChart, setShowChart] = useState(true)
+  const canSelectRepresentative = Boolean(onSelectRepresentative)
 
   const isLowerBetter = colorMetric === 'guardrailFactorBelowPct'
   const bands = colorMetric === 'none' ? 1 : bandCount
@@ -239,6 +310,70 @@ const RunResultsDistributions = ({
     return buildHistogram(runs, metric, colorMetric, binCount)
   }, [colorMetric, metric, stochasticRuns])
 
+  useEffect(() => {
+    if (!onSelectRepresentative) {
+      return
+    }
+    onSelectRepresentative(null)
+  }, [colorMetric, metric, onSelectRepresentative])
+
+  const handleSelectRepresentative = useCallback(
+    (bin: DistributionBin | undefined, bandIndex: number | null) => {
+      if (!onSelectRepresentative || !bin?.representativeRun) {
+        return
+      }
+      const targetValue = (bin.start + bin.end) / 2
+      const segmentRange =
+        colorMetric === 'none' || bandIndex === null
+          ? null
+          : {
+              start: bandIndex / bandCount,
+              end: (bandIndex + 1) / bandCount,
+            }
+      const matchesBand = (value: number | null | undefined) => {
+        if (colorMetric === 'none' || bandIndex === null) {
+          return true
+        }
+        const safeValue = Number.isFinite(value) ? (value as number) : 0
+        const clamped = Math.min(1, Math.max(0, safeValue))
+        const index = Math.min(
+          bandCount - 1,
+          Math.floor(clamped * bandCount),
+        )
+        return index === bandIndex
+      }
+      const candidates =
+        colorMetric === 'none'
+          ? bin.members
+          : bin.members.filter((member) => matchesBand(member[colorMetric]))
+      const selectFrom = candidates.length > 0 ? candidates : bin.members
+      let representative = bin.representativeRun
+      let bestDistance = Number.POSITIVE_INFINITY
+      selectFrom.forEach((member) => {
+        const value = member[metric]
+        if (!Number.isFinite(value)) {
+          return
+        }
+        const distance = Math.abs(value - targetValue)
+        if (distance < bestDistance) {
+          bestDistance = distance
+          representative = member
+        }
+      })
+      onSelectRepresentative({
+        metric,
+        rangeStart: bin.start,
+        rangeEnd: bin.end,
+        segmentMetric: colorMetric,
+        segmentRange,
+        guardrailMin: bin.guardrailMin,
+        guardrailMax: bin.guardrailMax,
+        run: representative,
+      })
+    },
+    [colorMetric, metric, onSelectRepresentative],
+  )
+
   const xTicks = useMemo(() => {
     if (!histogram.domain) {
       return undefined
@@ -269,6 +404,9 @@ const RunResultsDistributions = ({
       <div className="row">
         <h2>Balance distributions</h2>
         <div className="row" style={{ gap: '0.75rem' }}>
+          {canSelectRepresentative ? (
+            <span className="muted">Click a bar to preview a representative run.</span>
+          ) : null}
           <label className="field">
             <select
               value={metric}
@@ -408,6 +546,14 @@ const RunResultsDistributions = ({
                       stackId="probability"
                       fill={getBandColor(bandIndex)}
                       radius={4}
+                      cursor={canSelectRepresentative ? 'pointer' : 'default'}
+                      onClick={(data) => {
+                        if (!canSelectRepresentative) {
+                          return
+                        }
+                        const payload = (data as { payload?: DistributionBin })?.payload
+                        handleSelectRepresentative(payload, bandIndex)
+                      }}
                     />
                   )
                 })}
