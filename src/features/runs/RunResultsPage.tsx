@@ -1824,7 +1824,7 @@ const RunResultsPage = () => {
                     <button
                       className="button secondary"
                       type="button"
-                      onClick={() => setRepresentativeSelection(null)}
+                      onClick={() => handleRepresentativeSelect(null)}
                     >
                       Return to main run
                     </button>
