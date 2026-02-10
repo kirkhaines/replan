@@ -260,7 +260,7 @@ export const createCashBufferModule = (
           amount: withdrawAmount,
           sourceHoldingId: holding.id,
           priority,
-          label: isRothBasis ? `${label} (roth basis)` : label,
+          label: isRothBasis ? `${label} (roth contributions)` : label,
         })
         priority += 1
         remaining -= withdrawAmount
@@ -305,7 +305,9 @@ export const createCashBufferModule = (
       let cashDelta = 0
       const investmentByKey: Record<string, number> = {}
       const isRothBasisLabel = (label?: string) =>
-        typeof label === 'string' && label.toLowerCase().includes('roth basis')
+        typeof label === 'string' &&
+        (label.toLowerCase().includes('roth contributions') ||
+          label.toLowerCase().includes('roth basis'))
 
       actions.forEach((action) => {
         const amount = action.resolvedAmount ?? action.amount

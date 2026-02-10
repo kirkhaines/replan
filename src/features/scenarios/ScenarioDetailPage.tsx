@@ -62,7 +62,7 @@ const formatCurrency = (value: number) =>
 const withdrawalOrderLabels: Record<string, string> = {
   taxable: 'Taxable',
   traditional: 'Traditional',
-  roth_basis: 'Roth basis',
+  roth_basis: 'Roth contributions',
   roth: 'Roth',
   hsa: 'HSA',
 }

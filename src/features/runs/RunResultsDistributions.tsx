@@ -97,15 +97,45 @@ type ReferenceLineLabelProps = {
   value: string
 }
 
-const ZeroLineLabel = ({ viewBox, value }: ReferenceLineLabelProps) => {
+const ZeroLineLabel = ({
+  viewBox,
+  value,
+  yOffset = 0,
+}: ReferenceLineLabelProps & { yOffset?: number }) => {
   if (!viewBox) {
     return null
   }
   return (
     <text
       x={viewBox.x - 6}
-      y={viewBox.y + 12}
+      y={viewBox.y + 6}
+      dy={yOffset}
       textAnchor="end"
+      fill="var(--text-muted)"
+      fontSize={12}
+      dominantBaseline="hanging"
+    >
+      {value}
+    </text>
+  )
+}
+
+const QuantileLabel = ({
+  viewBox,
+  value,
+  align = 'left',
+  yOffset = 0,
+}: ReferenceLineLabelProps & { align?: 'left' | 'right'; yOffset?: number }) => {
+  if (!viewBox) {
+    return null
+  }
+  const isRight = align === 'right'
+  return (
+    <text
+      x={viewBox.x + (isRight ? 6 : -6)}
+      y={viewBox.y + 6}
+      dy={yOffset}
+      textAnchor={isRight ? 'start' : 'end'}
       fill="var(--text-muted)"
       fontSize={12}
       dominantBaseline="hanging"
@@ -310,6 +340,36 @@ const RunResultsDistributions = ({
     return buildHistogram(runs, metric, colorMetric, binCount)
   }, [colorMetric, metric, stochasticRuns])
 
+  const percentileLines = useMemo(() => {
+    const values = (stochasticRuns ?? [])
+      .map((run) => run[metric])
+      .filter((value) => Number.isFinite(value))
+      .sort((a, b) => a - b)
+    if (values.length === 0) {
+      return []
+    }
+    const quantile = (q: number) => {
+      const clamped = Math.min(1, Math.max(0, q))
+      const pos = (values.length - 1) * clamped
+      const base = Math.floor(pos)
+      const rest = pos - base
+      const next = values[base + 1]
+      if (next === undefined) {
+        return values[base]
+      }
+      return values[base] + rest * (next - values[base])
+    }
+    const targets = [
+      { label: '50% above', abovePct: 0.5 },
+      { label: '75% above', abovePct: 0.75 },
+      { label: '90% above', abovePct: 0.9 },
+    ]
+    return targets.map((target) => {
+      const value = quantile(1 - target.abovePct)
+      return { ...target, value, x: symlog(value) }
+    })
+  }, [metric, stochasticRuns])
+
   useEffect(() => {
     if (!onSelectRepresentative) {
       return
@@ -462,9 +522,30 @@ const RunResultsDistributions = ({
                     x={0}
                     stroke="var(--text-muted)"
                     strokeDasharray="4 4"
-                    label={<ZeroLineLabel value={endingBelowZeroLabel} />}
+                    strokeWidth={2}
+                    label={
+                      <ZeroLineLabel
+                        value={endingBelowZeroLabel}
+                        yOffset={0}
+                      />
+                    }
                   />
                 ) : null}
+                {percentileLines.map((line, index) => (
+                  <ReferenceLine
+                    key={line.label}
+                    x={line.x}
+                    stroke="var(--text-muted)"
+                    strokeDasharray="3 3"
+                    label={
+                      <QuantileLabel
+                        value={`${line.label}: ${formatCurrency(line.value)}`}
+                        align={line.value > 0 ? 'left' : 'right'}
+                        yOffset={12 + index * 12}
+                      />
+                    }
+                  />
+                ))}
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) {

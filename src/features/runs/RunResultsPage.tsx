@@ -42,6 +42,14 @@ const formatSignedCurrency = (value: number) => {
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`
 
+const csvEscape = (value: string | number) => {
+  const raw = String(value ?? '')
+  if (raw.includes('"') || raw.includes(',') || raw.includes('\n')) {
+    return `"${raw.replace(/"/g, '""')}"`
+  }
+  return raw
+}
+
 const buildRepresentativeRequest = (
   snapshot: SimulationSnapshot,
   startDate: string,
@@ -616,8 +624,8 @@ const RunResultsPage = () => {
       registerSeries('traditionalContrib', 'Traditional contributions')
       registerSeries('traditionalRealized', 'Traditional realized gains')
       registerSeries('traditionalUnrealized', 'Traditional unrealized gains')
-      registerSeries('rothSeasoned', 'Roth seasoned basis')
-      registerSeries('rothUnseasoned', 'Roth unseasoned basis')
+      registerSeries('rothSeasoned', 'Roth seasoned contributions')
+      registerSeries('rothUnseasoned', 'Roth unseasoned contributions')
       registerSeries('rothNonBasis', 'Roth gains')
       registerSeries('hsaContrib', 'HSA contributions')
       registerSeries('hsaRealized', 'HSA realized gains')
@@ -1219,6 +1227,222 @@ const RunResultsPage = () => {
     return { data, series: filteredSeries }
   }, [displayRun, explanationsByMonth, filteredMonthlyTimeline])
 
+  const buildSummaryCsv = useCallback(() => {
+    if (!run?.snapshot || !run.result.timeline || run.result.timeline.length === 0) {
+      return null
+    }
+    const timeline = run.result.timeline
+    const monthlyTimeline = run.result.monthlyTimeline ?? []
+    const explanations = run.result.explanations ?? []
+    const snapshot = run.snapshot
+    const startDate =
+      timeline[0]?.date ?? monthlyTimeline[0]?.date ?? run.result.timeline[0]?.date
+    const startYear = startDate ? new Date(startDate).getFullYear() : null
+
+    const yearFromPoint = (point: { date?: string; yearIndex: number }) => {
+      if (point.date) {
+        const year = new Date(point.date).getFullYear()
+        return Number.isNaN(year) ? null : year
+      }
+      if (startYear === null) {
+        return null
+      }
+      return startYear + point.yearIndex
+    }
+
+    const balanceByYear = new Map<number, number>()
+    timeline.forEach((point) => {
+      const year = yearFromPoint(point)
+      if (year === null) {
+        return
+      }
+      balanceByYear.set(year, point.balance)
+    })
+
+    const cashflowKeys = new Map<string, string>()
+    const cashflowByYear = new Map<number, Record<string, number>>()
+    explanations.forEach((month) => {
+      const year = new Date(month.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return
+      }
+      month.modules.forEach((module) => {
+        module.cashflowSeries?.forEach((entry) => {
+          const key = `cashflow:${entry.key}`
+          if (!cashflowKeys.has(key)) {
+            cashflowKeys.set(key, `${entry.label} (${entry.bucket})`)
+          }
+          const row = cashflowByYear.get(year) ?? {}
+          row[key] = (row[key] ?? 0) + entry.value
+          cashflowByYear.set(year, row)
+        })
+      })
+    })
+
+    const holdingTaxType = new Map(
+      snapshot.investmentAccountHoldings.map((holding) => [holding.id, holding.taxType]),
+    )
+    const socialSecurityBrackets = snapshot.socialSecurityProvisionalIncomeBrackets ?? []
+    const ordinaryTotalsByYear = new Map<
+      number,
+      {
+        salary: number
+        investment: number
+        socialSecurity: number
+        pension: number
+        taxDeferred: number
+      }
+    >()
+    explanations.forEach((month) => {
+      const year = new Date(month.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return
+      }
+      const totals = ordinaryTotalsByYear.get(year) ?? {
+        salary: 0,
+        investment: 0,
+        socialSecurity: 0,
+        pension: 0,
+        taxDeferred: 0,
+      }
+      month.modules.forEach((module) => {
+        module.cashflows.forEach((flow) => {
+          if (flow.category === 'social_security') {
+            totals.socialSecurity += flow.cash
+            return
+          }
+          const amount = flow.ordinaryIncome ?? 0
+          if (!amount) {
+            return
+          }
+          if (flow.category === 'work') {
+            totals.salary += amount
+          } else if (flow.category === 'pension') {
+            totals.pension += amount
+          } else if (flow.category === 'event' || flow.category === 'other') {
+            totals.investment += amount
+          }
+        })
+        module.actions.forEach((action) => {
+          if (action.kind !== 'withdraw' && action.kind !== 'convert') {
+            return
+          }
+          let isOrdinary = action.taxTreatment === 'ordinary' || action.kind === 'convert'
+          if (!isOrdinary && !action.taxTreatment && action.sourceHoldingId) {
+            isOrdinary = holdingTaxType.get(action.sourceHoldingId) === 'traditional'
+          }
+          if (isOrdinary) {
+            totals.taxDeferred += action.resolvedAmount
+          }
+        })
+      })
+      ordinaryTotalsByYear.set(year, totals)
+    })
+
+    const ledgerByYear = new Map<number, { capitalGains: number; taxExemptIncome: number }>()
+    timeline.forEach((point) => {
+      const year = yearFromPoint(point)
+      if (year === null) {
+        return
+      }
+      ledgerByYear.set(year, {
+        capitalGains: point.ledger?.capitalGains ?? 0,
+        taxExemptIncome: point.ledger?.taxExemptIncome ?? 0,
+      })
+    })
+
+    const years = Array.from(
+      new Set([
+        ...balanceByYear.keys(),
+        ...cashflowByYear.keys(),
+        ...ordinaryTotalsByYear.keys(),
+      ]),
+    ).sort((a, b) => a - b)
+
+    const cashflowColumns = Array.from(cashflowKeys.entries()).sort(([a], [b]) =>
+      a.localeCompare(b),
+    )
+
+    const header = [
+      'Year',
+      'Ending balance',
+      ...cashflowColumns.map(([, label], index) => label || cashflowColumns[index][0]),
+      'Ordinary salary income',
+      'Ordinary investment income',
+      'Ordinary social security (taxable)',
+      'Ordinary pension income',
+      'Ordinary tax-deferred income',
+      'Total ordinary income',
+    ]
+
+    const rows = [header]
+    years.forEach((year) => {
+      const cashflowRow = cashflowByYear.get(year) ?? {}
+      const totals = ordinaryTotalsByYear.get(year) ?? {
+        salary: 0,
+        investment: 0,
+        socialSecurity: 0,
+        pension: 0,
+        taxDeferred: 0,
+      }
+      const ledger = ledgerByYear.get(year) ?? { capitalGains: 0, taxExemptIncome: 0 }
+      const nonSocialSecurityOrdinary =
+        totals.salary + totals.investment + totals.pension + totals.taxDeferred
+      const ssBracket = selectSocialSecurityProvisionalIncomeBracket(
+        socialSecurityBrackets,
+        year,
+        snapshot.scenario.strategies.tax.filingStatus,
+      )
+      const { taxableBenefits: taxableSocialSecurity } = computeTaxableSocialSecurity({
+        benefits: totals.socialSecurity,
+        ordinaryIncome: nonSocialSecurityOrdinary,
+        capitalGains: ledger.capitalGains,
+        taxExemptIncome: ledger.taxExemptIncome,
+        bracket: ssBracket,
+      })
+      const totalOrdinary =
+        totals.salary +
+        totals.investment +
+        taxableSocialSecurity +
+        totals.pension +
+        totals.taxDeferred
+      const row = [
+        year,
+        balanceByYear.get(year) ?? '',
+        ...cashflowColumns.map(([key]) => cashflowRow[key] ?? 0),
+        totals.salary,
+        totals.investment,
+        taxableSocialSecurity,
+        totals.pension,
+        totals.taxDeferred,
+        totalOrdinary,
+      ]
+      rows.push(row)
+    })
+
+    return rows.map((row) => row.map(csvEscape).join(',')).join('\n')
+  }, [run])
+
+  const handleExportSummary = useCallback(() => {
+    if (!run) {
+      return
+    }
+    const csv = buildSummaryCsv()
+    if (!csv) {
+      window.alert('Run could not be exported.')
+      return
+    }
+    const scenarioName = run.snapshot?.scenario?.name?.trim() || run.title || 'run'
+    const filenameBase = scenarioName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${filenameBase || 'run'}-summary.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }, [buildSummaryCsv, run])
+
   useEffect(() => {
     const load = async () => {
       if (!id) {
@@ -1765,6 +1989,14 @@ const RunResultsPage = () => {
                     Show values in present-day dollars
                   </label>
                 </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={handleExportSummary}
+                  disabled={!mainRunReady}
+                >
+                  Export summary CSV
+                </button>
                 <label className="field">
                   <span>Date range</span>
                   <select

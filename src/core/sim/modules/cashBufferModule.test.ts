@@ -246,7 +246,7 @@ const mapActionTypes = (
 ) => {
   const taxTypeById = new Map(holdings.map((holding) => [holding.id, holding.taxType]))
   return actions.map((action) => {
-    if (action.label?.toLowerCase().includes('roth basis')) {
+    if (action.label?.toLowerCase().includes('roth contributions')) {
       return 'roth_basis'
     }
     return action.sourceHoldingId ? taxTypeById.get(action.sourceHoldingId) : 'cash'
@@ -333,7 +333,7 @@ describe('cashBufferModule', () => {
     expect(actions?.map((action) => action.amount)).toEqual([100, 120])
   })
 
-  it('caps roth basis withdrawals and then uses roth for remaining need', () => {
+  it('caps roth contributions withdrawals and then uses roth for remaining need', () => {
     const holdings = [
       makeHolding(
         'holding-roth',
