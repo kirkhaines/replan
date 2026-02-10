@@ -184,6 +184,39 @@ pnpm dev
 
 Deploys under `https://kirkhaines.github.io/replan/` using hash-based routing so refreshes work without server rewrites.
 
+## Security Posture (Client-Only)
+
+RePlan is designed to run fully in-browser:
+- Storage uses IndexedDB (`Dexie`) on the current origin.
+- Simulation runs in a local Web Worker.
+- No backend/API is required for normal operation.
+
+Restrictive CSP is planned, but not currently enforced in `index.html`.
+
+Planned production policy (target):
+- `default-src 'self'`
+- `connect-src 'self'`
+- `script-src 'self'`
+- `style-src 'self'`
+- `img-src 'self' data:`
+- `font-src 'self'`
+- `worker-src 'self'`
+- `object-src 'none'`
+- `frame-src 'none'`
+- `base-uri 'none'`
+- `form-action 'none'`
+
+Implementation note:
+- Vite dev HMR injects runtime `<style>` tags, which conflicts with strict `style-src 'self'`.
+- The plan is to enforce strict CSP for production builds and use a dev-compatible policy during `pnpm dev`.
+
+### How to verify (web-tech check)
+
+1. Build and serve production output (`pnpm build`, `pnpm preview`).
+2. Open DevTools and inspect applied CSP.
+3. Run your favorite tool on the open source repo.
+
+
 ### Quality checks
 ```bash
 pnpm lint
