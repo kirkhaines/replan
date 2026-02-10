@@ -13,10 +13,10 @@ import type {
 
 export const inflationDefaultsSeed: Array<Pick<InflationDefault, 'type' | 'rate'>> = [
   { type: 'none', rate: 0 },
-  { type: 'cpi', rate: 0.02 },
-  { type: 'medical', rate: 0.03 },
-  { type: 'housing', rate: 0.025 },
-  { type: 'education', rate: 0.03 },
+  { type: 'cpi', rate: 0.025 },
+  { type: 'medical', rate: 0.06 },
+  { type: 'housing', rate: 0.04 },
+  { type: 'education', rate: 0.05 },
 ]
 
 export const holdingTypeDefaultsSeed: Array<

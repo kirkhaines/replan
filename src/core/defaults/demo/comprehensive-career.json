@@ -25,10 +25,10 @@
         "correlationModel": "none",
         "inflationAssumptions": {
           "none": 0,
-          "cpi": 0.02,
-          "medical": 0.03,
-          "housing": 0.025,
-          "education": 0.03
+          "cpi": 0.025,
+          "medical": 0.06,
+          "housing": 0.04,
+          "education": 0.05
         },
         "inflationStdev": 0.01,
         "inflationPersistence": 0.5
