@@ -12,6 +12,8 @@ type AccountLookup = {
 type YearDetailMode = 'none' | 'month' | 'module'
 
 type RunResultsTimelineProps = {
+  showTimeline: boolean
+  onToggleTimeline: () => void
   filteredTimeline: SimulationResult['timeline']
   monthlyByYear: Map<number, MonthlyTimelinePoint[]>
   explanationsByMonth: Map<number, MonthExplanation>
@@ -125,6 +127,8 @@ const PieIcon = () => (
 )
 
 const RunResultsTimeline = ({
+  showTimeline,
+  onToggleTimeline,
   filteredTimeline,
   monthlyByYear,
   explanationsByMonth,
@@ -147,8 +151,18 @@ const RunResultsTimeline = ({
 
   return (
     <div className="card stack" id="section-timeline">
-  <h2>Timeline</h2>
-  <table className="table selectable">
+      <div className="row">
+        <h2>Timeline</h2>
+        <button
+          className="link-button"
+          type="button"
+          onClick={onToggleTimeline}
+        >
+          {showTimeline ? 'Hide' : 'Show'}
+        </button>
+      </div>
+      {showTimeline ? (
+        <table className="table selectable">
     <thead>
       <tr>
         <th>Year</th>
@@ -1420,9 +1434,10 @@ const RunResultsTimeline = ({
           </Fragment>
         )
       })}
-    </tbody>
-  </table>
-</div>
+        </tbody>
+      </table>
+      ) : null}
+    </div>
   )
 }
 

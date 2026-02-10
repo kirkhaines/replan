@@ -1375,7 +1375,7 @@ const RunResultsPage = () => {
       'Total ordinary income',
     ]
 
-    const rows = [header]
+    const rows: Array<Array<string | number>> = [header]
     years.forEach((year) => {
       const cashflowRow = cashflowByYear.get(year) ?? {}
       const totals = ordinaryTotalsByYear.get(year) ?? {
@@ -1407,7 +1407,7 @@ const RunResultsPage = () => {
         totals.pension +
         totals.taxDeferred
       const row = [
-        year,
+        String(year),
         balanceByYear.get(year) ?? '',
         ...cashflowColumns.map(([key]) => cashflowRow[key] ?? 0),
         totals.salary,
@@ -2078,39 +2078,28 @@ const RunResultsPage = () => {
                 ordinaryIncomeChart={ordinaryIncomeChart}
                 cashflowChart={cashflowChart}
                 shockRateChart={shockRateChart}
+                showShockChartInitially={Boolean(representativeSelection)}
                 formatAxisValue={formatAxisValue}
                 formatCurrency={formatCurrency}
                 formatSignedCurrency={formatSignedCurrency}
               />
 
-              <div className="timeline-collapsible stack">
-                <div className="row">
-                  <h2>Timeline</h2>
-                  <button
-                    className="link-button"
-                    type="button"
-                    onClick={() => setShowTimeline((current) => !current)}
-                  >
-                    {showTimeline ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                {showTimeline ? (
-                  <RunResultsTimeline
-                    filteredTimeline={filteredTimeline}
-                    monthlyByYear={monthlyByYear}
-                    explanationsByMonth={explanationsByMonth}
-                    addMonths={addMonths}
-                    formatCurrencyForDate={formatCurrencyForDate}
-                    formatSignedCurrencyForDate={formatSignedCurrencyForDate}
-                    formatSignedCurrency={formatSignedCurrency}
-                    getHoldingLabel={getHoldingLabel}
-                    getAccountLabel={getAccountLabel}
-                    accountLookup={accountLookup}
-                    initialBalances={initialBalances}
-                    adjustForInflation={adjustForInflation}
-                  />
-                ) : null}
-              </div>
+              <RunResultsTimeline
+                showTimeline={showTimeline}
+                onToggleTimeline={() => setShowTimeline((current) => !current)}
+                filteredTimeline={filteredTimeline}
+                monthlyByYear={monthlyByYear}
+                explanationsByMonth={explanationsByMonth}
+                addMonths={addMonths}
+                formatCurrencyForDate={formatCurrencyForDate}
+                formatSignedCurrencyForDate={formatSignedCurrencyForDate}
+                formatSignedCurrency={formatSignedCurrency}
+                getHoldingLabel={getHoldingLabel}
+                getAccountLabel={getAccountLabel}
+                accountLookup={accountLookup}
+                initialBalances={initialBalances}
+                adjustForInflation={adjustForInflation}
+              />
             </>
           ) : null}
         </div>
@@ -2119,6 +2108,15 @@ const RunResultsPage = () => {
           <div className="stack">
             <span className="muted">Jump to</span>
             <div className="run-results-toc-primary">
+              {run ? (
+                <Link
+                  className="link-button"
+                  to={`/scenarios/${run.scenarioId}`}
+                  state={{ from: location.pathname }}
+                >
+                  Back to scenario
+                </Link>
+              ) : null}
               <button
                 className="link-button"
                 type="button"

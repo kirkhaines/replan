@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { scaleSymlog } from 'd3-scale'
 import type { RechartsScale } from 'recharts/types/util/ChartUtils'
 import {
@@ -74,6 +74,7 @@ type RunResultsGraphsProps = {
   ordinaryIncomeChart: OrdinaryIncomeChart
   cashflowChart: CashflowChart
   shockRateChart: ShockRateChart
+  showShockChartInitially: boolean
   formatAxisValue: (value: number) => string
   formatCurrency: (value: number) => string
   formatSignedCurrency: (value: number) => string
@@ -87,6 +88,7 @@ const RunResultsGraphs = ({
   ordinaryIncomeChart,
   cashflowChart,
   shockRateChart,
+  showShockChartInitially,
   formatAxisValue,
   formatCurrency,
   formatSignedCurrency,
@@ -96,7 +98,7 @@ const RunResultsGraphs = ({
   const [showBalanceChart, setShowBalanceChart] = useState(true)
   const [showOrdinaryChart, setShowOrdinaryChart] = useState(true)
   const [showCashflowChart, setShowCashflowChart] = useState(true)
-  const [showShockChart, setShowShockChart] = useState(true)
+  const [showShockChart, setShowShockChart] = useState(showShockChartInitially)
   const [useBalanceLogScale, setUseBalanceLogScale] = useState(false)
   const lineKeys = useMemo(
     () => new Set(balanceOverTime.lineSeries?.map((entry) => entry.key) ?? []),
@@ -168,6 +170,10 @@ const RunResultsGraphs = ({
     return cashflowChart.series.filter((series) => series.bucket === bucketFilter)
   }, [bucketFilter, cashflowChart.series])
   const hasShockRates = shockRateChart.series.length > 0 && shockRateChart.data.length > 0
+
+  useEffect(() => {
+    setShowShockChart(showShockChartInitially)
+  }, [showShockChartInitially])
 
   return (
     <>
