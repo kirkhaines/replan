@@ -81,8 +81,9 @@ const PeopleAssetsSection = ({
   formatCurrency,
   getAgeInYearsAtDate,
   createUuid,
-}: PeopleAssetsSectionProps) => (
-  <div className="card stack" id="section-people-assets">
+}: PeopleAssetsSectionProps) => {
+  return (
+    <div className="card stack" id="section-people-assets">
     <div className="row">
       <h2>People and assets</h2>
     </div>
@@ -131,15 +132,42 @@ const PeopleAssetsSection = ({
                   <td>{person?.dateOfBirth ?? '-'}</td>
                   <td>
                     {futureWork
-                      ? `${futureWork.name} ${workEnd ? `(ends ${workEnd})` : '(does not end)'}`
+                      ? (
+                          <>
+                            <span>{futureWork.name}</span>
+                            <br />
+                            <span>
+                              {workEnd
+                                ? `(ends ${workEnd}${
+                                    person?.dateOfBirth
+                                      ? `, age ${getAgeInYearsAtDate(
+                                          person.dateOfBirth,
+                                          workEnd,
+                                        )}`
+                                      : ''
+                                  })`
+                                : '(does not end)'}
+                            </span>
+                          </>
+                        )
                       : '-'}
                   </td>
                   <td>
                     {person && socialSecurity?.startDate
-                      ? `${socialSecurity.startDate} (age ${getAgeInYearsAtDate(
-                          person.dateOfBirth,
-                          socialSecurity.startDate,
-                        )})`
+                      ? (
+                          <>
+                            <span>{socialSecurity.startDate}</span>
+                            <br />
+                            <span>
+                              (age{' '}
+                              {getAgeInYearsAtDate(
+                                person.dateOfBirth,
+                                socialSecurity.startDate,
+                              )}
+                              )
+                            </span>
+                          </>
+                        )
                       : '-'}
                   </td>
                   <td>{person?.lifeExpectancy ?? '-'}</td>
@@ -461,6 +489,7 @@ const PeopleAssetsSection = ({
       </div>
     </div>
   </div>
-)
+  )
+}
 
 export default PeopleAssetsSection

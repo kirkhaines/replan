@@ -16,6 +16,61 @@ import {
 } from '../defaults/defaultData'
 import { createUuid } from '../utils/uuid'
 
+const buildDefaultSnapshot = () => {
+  const bundle = createDefaultScenarioBundle()
+  const timestamp = Date.now()
+  return {
+    scenario: bundle.scenario,
+    people: [bundle.person],
+    personStrategies: [bundle.personStrategy],
+    socialSecurityStrategies: [bundle.socialSecurityStrategy],
+    socialSecurityEarnings: bundle.socialSecurityEarnings,
+    futureWorkStrategies: [bundle.futureWorkStrategy],
+    futureWorkPeriods: [bundle.futureWorkPeriod],
+    spendingStrategies: [bundle.spendingStrategy],
+    spendingLineItems: [bundle.spendingLineItem],
+    nonInvestmentAccounts: [bundle.nonInvestmentAccount],
+    investmentAccounts: [bundle.investmentAccount],
+    investmentAccountHoldings: [bundle.investmentAccountHolding],
+    ssaWageIndex: ssaWageIndexSeed.map((seed) => ({
+      id: createUuid(),
+      year: seed.year,
+      index: seed.index,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })),
+    ssaBendPoints: ssaBendPointSeed.map((seed) => ({
+      id: createUuid(),
+      year: seed.year,
+      first: seed.first,
+      second: seed.second,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })),
+    ssaRetirementAdjustments: ssaRetirementAdjustmentSeed.map((seed) => ({
+      id: createUuid(),
+      birthYearStart: seed.birthYearStart,
+      birthYearEnd: seed.birthYearEnd,
+      normalRetirementAgeMonths: seed.normalRetirementAgeMonths,
+      delayedRetirementCreditPerYear: seed.delayedRetirementCreditPerYear,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })),
+    contributionLimits: contributionLimitDefaultsSeed.map((seed) => ({
+      id: createUuid(),
+      type: seed.type,
+      year: seed.year,
+      amount: seed.amount,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })),
+    taxPolicies: taxPolicySeed,
+    socialSecurityProvisionalIncomeBrackets: socialSecurityProvisionalIncomeBracketsSeed,
+    irmaaTables: irmaaTableSeed,
+    rmdTable: rmdTableSeed,
+  }
+}
+
 describe('runSimulation', () => {
   it('produces deterministic balances', () => {
     const baseStrategies = createDefaultScenarioStrategies()
@@ -163,58 +218,7 @@ describe('runSimulation', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2024-01-01T00:00:00Z'))
     try {
-      const bundle = createDefaultScenarioBundle()
-      const timestamp = Date.now()
-      const snapshot = {
-        scenario: bundle.scenario,
-        people: [bundle.person],
-        personStrategies: [bundle.personStrategy],
-        socialSecurityStrategies: [bundle.socialSecurityStrategy],
-        socialSecurityEarnings: bundle.socialSecurityEarnings,
-        futureWorkStrategies: [bundle.futureWorkStrategy],
-        futureWorkPeriods: [bundle.futureWorkPeriod],
-        spendingStrategies: [bundle.spendingStrategy],
-        spendingLineItems: [bundle.spendingLineItem],
-        nonInvestmentAccounts: [bundle.nonInvestmentAccount],
-        investmentAccounts: [bundle.investmentAccount],
-        investmentAccountHoldings: [bundle.investmentAccountHolding],
-        ssaWageIndex: ssaWageIndexSeed.map((seed) => ({
-          id: createUuid(),
-          year: seed.year,
-          index: seed.index,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })),
-        ssaBendPoints: ssaBendPointSeed.map((seed) => ({
-          id: createUuid(),
-          year: seed.year,
-          first: seed.first,
-          second: seed.second,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })),
-        ssaRetirementAdjustments: ssaRetirementAdjustmentSeed.map((seed) => ({
-          id: createUuid(),
-          birthYearStart: seed.birthYearStart,
-          birthYearEnd: seed.birthYearEnd,
-          normalRetirementAgeMonths: seed.normalRetirementAgeMonths,
-          delayedRetirementCreditPerYear: seed.delayedRetirementCreditPerYear,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })),
-        contributionLimits: contributionLimitDefaultsSeed.map((seed) => ({
-          id: createUuid(),
-          type: seed.type,
-          year: seed.year,
-          amount: seed.amount,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })),
-        taxPolicies: taxPolicySeed,
-        socialSecurityProvisionalIncomeBrackets: socialSecurityProvisionalIncomeBracketsSeed,
-        irmaaTables: irmaaTableSeed,
-        rmdTable: rmdTableSeed,
-      }
+      const snapshot = buildDefaultSnapshot()
 
       const request = {
         startDate: '2024-01-01',
@@ -240,6 +244,44 @@ describe('runSimulation', () => {
       expect(result.monthlyTimeline?.length ?? 0).toBeGreaterThan(0)
       expect(result.explanations?.length ?? 0).toBeGreaterThan(0)
     } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('is timezone-invariant for deterministic runs', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2024-01-01T00:00:00Z'))
+    const previousTimeZone = process.env.TZ
+    try {
+      const snapshot = buildDefaultSnapshot()
+      snapshot.scenario.strategies.returnModel.mode = 'deterministic'
+      snapshot.scenario.strategies.returnModel.stochasticRuns = 0
+
+      const runForTimeZone = (timeZone: string) => {
+        process.env.TZ = timeZone
+        const input = buildSimulationInputFromRequest({
+          startDate: '2024-01-01',
+          snapshot: structuredClone(snapshot),
+        })
+        expect(input).not.toBeNull()
+        if (!input) {
+          throw new Error('Expected valid input')
+        }
+        return runSimulation(input as SimulationInput)
+      }
+
+      const utcRun = runForTimeZone('UTC')
+      const laRun = runForTimeZone('America/Los_Angeles')
+      const tokyoRun = runForTimeZone('Asia/Tokyo')
+
+      expect(laRun.summary).toEqual(utcRun.summary)
+      expect(tokyoRun.summary).toEqual(utcRun.summary)
+      expect(laRun.timeline).toEqual(utcRun.timeline)
+      expect(tokyoRun.timeline).toEqual(utcRun.timeline)
+      expect(laRun.monthlyTimeline).toEqual(utcRun.monthlyTimeline)
+      expect(tokyoRun.monthlyTimeline).toEqual(utcRun.monthlyTimeline)
+    } finally {
+      process.env.TZ = previousTimeZone
       vi.useRealTimers()
     }
   })

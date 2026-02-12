@@ -3,6 +3,7 @@ import { createExplainTracker } from '../explain'
 import { computeIrmaaSurcharge, selectIrmaaTable } from '../tax'
 import type { SimulationModule, SimulationSettings } from '../types'
 import { applyInflation } from '../../utils/inflation'
+import { getYearFromIsoDate } from '../../utils/date'
 
 export const createHealthcareModule = (
   snapshot: SimulationSnapshot,
@@ -165,7 +166,7 @@ export const createHealthcareModule = (
       if (isMedicare && strategy.applyIrmaa) {
         const table = selectIrmaaTable(
           snapshot.irmaaTables,
-          context.date.getFullYear(),
+          getYearFromIsoDate(context.dateIso) ?? 0,
           taxStrategy.filingStatus,
         )
         magiLookback = table?.lookbackYears ?? 0

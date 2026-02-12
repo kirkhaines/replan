@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import { isoDateStringSchema, simulationSnapshotSchema } from '../models'
+import {
+  addYearsToIsoDateUtc,
+  monthsBetweenIsoDates,
+  parseIsoDateUtc,
+} from '../utils/date'
 
 export const simulationRequestSchema = z.object({
   snapshot: simulationSnapshotSchema,
@@ -20,31 +25,6 @@ export const simulationConfigSchema = z.object({
 
 export type SimulationInput = z.infer<typeof simulationConfigSchema>
 
-const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
-
-const addYears = (isoDate: string, years: number) => {
-  const date = new Date(isoDate)
-  if (Number.isNaN(date.getTime())) {
-    return isoDate
-  }
-  date.setFullYear(date.getFullYear() + years)
-  return toIsoDate(date)
-}
-
-const monthsBetween = (startIso: string, endIso: string) => {
-  const start = new Date(startIso)
-  const end = new Date(endIso)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return 0
-  }
-  let months = (end.getFullYear() - start.getFullYear()) * 12
-  months += end.getMonth() - start.getMonth()
-  if (end.getDate() < start.getDate()) {
-    months -= 1
-  }
-  return Math.max(0, months)
-}
-
 export const buildSimulationInputFromRequest = (
   request: SimulationRequest,
 ): SimulationInput | null => {
@@ -63,20 +43,20 @@ export const buildSimulationInputFromRequest = (
   }
 
   const expectedDeathDates = people.map((person) =>
-    addYears(person.dateOfBirth, person.lifeExpectancy),
+    addYearsToIsoDateUtc(person.dateOfBirth, person.lifeExpectancy),
   )
   const endDate = expectedDeathDates.reduce((latest, candidate) => {
-    const latestDate = new Date(latest)
-    const candidateDate = new Date(candidate)
-    if (Number.isNaN(latestDate.getTime())) {
+    const latestDate = parseIsoDateUtc(latest)
+    const candidateDate = parseIsoDateUtc(candidate)
+    if (!latestDate) {
       return candidate
     }
-    if (Number.isNaN(candidateDate.getTime())) {
+    if (!candidateDate) {
       return latest
     }
     return candidateDate > latestDate ? candidate : latest
   }, expectedDeathDates[0])
-  const months = Math.max(1, monthsBetween(startDate, endDate))
+  const months = Math.max(1, monthsBetweenIsoDates(startDate, endDate))
 
   return {
     snapshot,

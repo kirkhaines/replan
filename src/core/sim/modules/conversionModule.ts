@@ -16,6 +16,7 @@ import type {
 } from '../types'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
 import { applyInflation } from '../../utils/inflation'
+import { getYearFromIsoDate } from '../../utils/date'
 
 export const createConversionModule = (
   snapshot: SimulationSnapshot,
@@ -68,7 +69,7 @@ export const createConversionModule = (
           indexByType: context.inflationIndexByType,
           indexStartDateIso: context.inflationIndexStartDateIso,
         })
-      const policyYear = context.date.getFullYear()
+      const policyYear = getYearFromIsoDate(context.dateIso) ?? 0
       const policy = selectTaxPolicy(snapshot.taxPolicies, policyYear, tax.filingStatus)
       if (!policy) {
         return { conversionAmount: 0 }
@@ -320,7 +321,7 @@ export const createConversionModule = (
           conversionCandidate = context.yearPlan.conversionAmount
           explain.addCheckpoint('Planned conversion', conversionCandidate)
         } else {
-          const policyYear = context.date.getFullYear()
+          const policyYear = getYearFromIsoDate(context.dateIso) ?? 0
           const socialSecurityBracket = selectSocialSecurityProvisionalIncomeBracket(
             snapshot.socialSecurityProvisionalIncomeBrackets,
             policyYear,

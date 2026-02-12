@@ -4,6 +4,7 @@ import { computeTax, selectSocialSecurityProvisionalIncomeBracket, selectTaxPoli
 import { computePayrollTaxes, selectPayrollTaxPolicy } from '../payrollTaxes'
 import { computeStateTax, selectStateTaxPolicy } from '../stateTaxes'
 import { applyInflation } from '../../utils/inflation'
+import { getMonthFromIsoDate, getYearFromIsoDate } from '../../utils/date'
 import type {
   CashflowSeriesEntry,
   SimulationContext,
@@ -68,7 +69,7 @@ export const createTaxModule = (
   }
 
   const buildTaxDue = (state: SimulationState, context: SimulationContext) => {
-    const taxYear = context.date.getFullYear()
+    const taxYear = getYearFromIsoDate(context.dateIso) ?? 0
     const policy = selectTaxPolicy(snapshot.taxPolicies, taxYear, taxStrategy.filingStatus)
     if (!policy) {
       return null
@@ -131,7 +132,8 @@ export const createTaxModule = (
     }
   }
 
-  const monthShouldPayTaxes = (context: SimulationContext) => context.date.getMonth() === 2
+  const monthShouldPayTaxes = (context: SimulationContext) =>
+    (getMonthFromIsoDate(context.dateIso) ?? 1) === 3
 
   return {
     id: 'taxes',
@@ -190,7 +192,7 @@ export const createTaxModule = (
       return entries
     },
     getCashflows: (state, context) => {
-      const taxYear = context.date.getFullYear()
+      const taxYear = getYearFromIsoDate(context.dateIso) ?? 0
       explain.addInput('Tax year', taxYear)
       explain.addInput('Filing status', taxStrategy.filingStatus)
       explain.addInput('State tax rate', taxStrategy.stateTaxRate)
@@ -201,7 +203,7 @@ export const createTaxModule = (
         explain.addCheckpoint('Taxes applied', false)
         return []
       }
-      const paymentYear = context.date.getFullYear() - 1
+      const paymentYear = taxYear - 1
       const dueEntries = state.pendingTaxDue.filter(
         (entry) => entry.taxYear <= paymentYear,
       )
@@ -245,7 +247,7 @@ export const createTaxModule = (
         explain.addCheckpoint('Withholding due', 0)
         return []
       }
-      const taxYear = context.date.getFullYear()
+      const taxYear = getYearFromIsoDate(context.dateIso) ?? 0
       const policy = selectTaxPolicy(snapshot.taxPolicies, taxYear, taxStrategy.filingStatus)
       if (!policy) {
         explain.addCheckpoint('Withholding due', 0)
@@ -257,7 +259,7 @@ export const createTaxModule = (
         taxYear,
         taxStrategy.filingStatus,
       )
-      const monthOfYear = context.date.getMonth() + 1
+      const monthOfYear = getMonthFromIsoDate(context.dateIso) ?? 1
       const scaleFactor = monthOfYear > 0 ? 12 / monthOfYear : 1
       const annualized = {
         ordinaryIncome: state.yearLedger.ordinaryIncome * scaleFactor,
@@ -326,7 +328,7 @@ export const createTaxModule = (
           label: 'Tax withholding',
           category: 'tax',
           cash: -withholdingDue,
-          taxYear: context.date.getFullYear(),
+          taxYear,
         },
       ]
     },

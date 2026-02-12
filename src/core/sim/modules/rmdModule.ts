@@ -7,6 +7,7 @@ import type {
   SimulationSettings,
   SimulationState,
 } from '../types'
+import { getYearFromIsoDate } from '../../utils/date'
 import { buildActionCashflowSeries } from './utils'
 
 export const createRmdModule = (
@@ -67,7 +68,7 @@ export const createRmdModule = (
           label: 'RMD withholding',
           category: 'tax',
           cash: -withholding,
-          taxYear: context.date.getFullYear(),
+          taxYear: getYearFromIsoDate(context.dateIso) ?? 0,
         },
       ]
     },

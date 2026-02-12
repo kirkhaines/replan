@@ -9,6 +9,15 @@ import type {
 } from '../models'
 import type { SimulationInput } from './input'
 import { createSimulationModules } from './modules'
+import {
+  addMonthsUtc,
+  getAgeInYearsAtIsoDate,
+  getMonthFromIsoDate,
+  getYearFromIsoDate,
+  monthsBetweenIsoDates,
+  parseIsoDateUtc,
+  toIsoDateUtc,
+} from '../utils/date'
 import type {
   ActionIntent,
   ActionRecord,
@@ -35,36 +44,6 @@ type MonthTotals = {
 
 type ActionIntentWithModule = ActionIntent & { moduleId: string }
 type ActionRecordWithModule = ActionRecord & { moduleId: string }
-
-const toIsoDate = (value: Date) => value.toISOString().slice(0, 10)
-
-const addMonths = (date: Date, months: number) => {
-  const year = date.getUTCFullYear()
-  const month = date.getUTCMonth()
-  const day = date.getUTCDate()
-  const targetMonthIndex = month + months
-  const targetYear = year + Math.floor(targetMonthIndex / 12)
-  const targetMonth = ((targetMonthIndex % 12) + 12) % 12
-  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
-  const clampedDay = Math.min(day, daysInTargetMonth)
-  return new Date(Date.UTC(targetYear, targetMonth, clampedDay))
-}
-
-const getCalendarYear = (dateIso: string) => Number(dateIso.slice(0, 4))
-
-const getCalendarMonth = (dateIso: string) => Number(dateIso.slice(5, 7))
-
-const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) => {
-  const birth = new Date(dateOfBirth)
-  const target = new Date(dateValue)
-  let months =
-    (target.getFullYear() - birth.getFullYear()) * 12 +
-    (target.getMonth() - birth.getMonth())
-  if (target.getDate() < birth.getDate()) {
-    months -= 1
-  }
-  return Math.max(0, Math.round((months / 12) * 10) / 10)
-}
 
 const createEmptyTotals = (): MonthTotals => ({
   income: 0,
@@ -189,21 +168,8 @@ const consumeCostBasisEntries = (
 }
 
 const sumSeasonedEntries = (entries: Array<{ date: string; amount: number }>, dateIso: string) => {
-  const current = new Date(`${dateIso}T00:00:00Z`)
-  if (Number.isNaN(current.getTime())) {
-    return 0
-  }
   return entries.reduce((sum, entry) => {
-    const entryDate = new Date(`${entry.date}T00:00:00Z`)
-    if (Number.isNaN(entryDate.getTime())) {
-      return sum
-    }
-    let months =
-      (current.getUTCFullYear() - entryDate.getUTCFullYear()) * 12 +
-      (current.getUTCMonth() - entryDate.getUTCMonth())
-    if (current.getUTCDate() < entryDate.getUTCDate()) {
-      months -= 1
-    }
+    const months = monthsBetweenIsoDates(entry.date, dateIso)
     return months >= 60 ? sum + entry.amount : sum
   }, 0)
 }
@@ -1008,8 +974,8 @@ export const runSimulation = (
   const explanations: MonthExplanation[] = []
 
   const primaryPerson = getPrimaryPerson(snapshot)
-  const start = new Date(settings.startDate)
-  const startCalendarYear = getCalendarYear(settings.startDate)
+  const start = parseIsoDateUtc(settings.startDate) ?? new Date(`${settings.startDate}T00:00:00Z`)
+  const startCalendarYear = getYearFromIsoDate(settings.startDate) ?? start.getUTCFullYear()
   const totalMonths = settings.months
   let minBalance = Number.POSITIVE_INFINITY
   let maxBalance = Number.NEGATIVE_INFINITY
@@ -1017,11 +983,12 @@ export const runSimulation = (
   const applyYearTotals = createEmptyTotals()
 
   const getYearContext = (dateIso: string, monthIndex: number) => {
-    const calendarMonth = getCalendarMonth(dateIso)
+    const calendarMonth = getMonthFromIsoDate(dateIso) ?? 1
     const isStartOfYear = calendarMonth === 1
     const isFinalMonth = monthIndex + settings.stepMonths >= totalMonths
     const isEndOfYear = calendarMonth === 12 || isFinalMonth
-    const yearIndex = getCalendarYear(dateIso) - startCalendarYear
+    const calendarYear = getYearFromIsoDate(dateIso) ?? startCalendarYear
+    const yearIndex = calendarYear - startCalendarYear
     return { yearIndex, isStartOfYear, isEndOfYear }
   }
 
@@ -1043,14 +1010,15 @@ export const runSimulation = (
     const yearTotals = record ? applyYearTotals : createEmptyTotals()
     for (let offset = 0; offset < monthsInYear; offset += settings.stepMonths) {
       const monthIndex = startMonthIndex + offset
-      const date = addMonths(start, monthIndex)
-      const dateIso = toIsoDate(date)
+      const date = addMonthsUtc(start, monthIndex)
+      const dateIso = toIsoDateUtc(date)
+      const calendarYear = getYearFromIsoDate(dateIso) ?? startCalendarYear
       const { yearIndex: calendarYearIndex, isStartOfYear, isEndOfYear } = getYearContext(
         dateIso,
         monthIndex,
       )
       const age = primaryPerson
-        ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, dateIso)
+        ? getAgeInYearsAtIsoDate(primaryPerson.dateOfBirth, dateIso)
         : calendarYearIndex
 
       if (isStartOfYear) {
@@ -1104,7 +1072,7 @@ export const runSimulation = (
         cashflows: module.getCashflows?.(state, context) ?? [],
       }))
       const cashflows = cashflowsByModule.flatMap((entry) => entry.cashflows)
-      applyCashflows(state, cashflows, monthTotals, context.date.getFullYear())
+      applyCashflows(state, cashflows, monthTotals, calendarYear)
       const extraCashflowsByModule = record ? new Map<string, CashflowItem[]>() : null
       const extraCashflows = modules.flatMap((module) => {
         const extras = module.onAfterCashflows?.(cashflows, state, context) ?? []
@@ -1114,7 +1082,7 @@ export const runSimulation = (
         return extras
       })
       if (extraCashflows.length > 0) {
-        applyCashflows(state, extraCashflows, monthTotals, context.date.getFullYear())
+        applyCashflows(state, extraCashflows, monthTotals, calendarYear)
       }
 
       const intentsByModule = modules.map((module) => ({
@@ -1256,9 +1224,9 @@ export const runSimulation = (
   let startMonthIndex = 0
   while (startMonthIndex < totalMonths) {
     const yearStartState = cloneState(state)
-    const yearStartDate = addMonths(start, startMonthIndex)
-    const yearStartIso = toIsoDate(yearStartDate)
-    const calendarMonth = getCalendarMonth(yearStartIso)
+    const yearStartDate = addMonthsUtc(start, startMonthIndex)
+    const yearStartIso = toIsoDateUtc(yearStartDate)
+    const calendarMonth = getMonthFromIsoDate(yearStartIso) ?? 1
     const monthsRemainingInCalendarYear = 12 - (calendarMonth - 1)
     const monthsInYear = Math.min(monthsRemainingInCalendarYear, totalMonths - startMonthIndex)
     const {
@@ -1267,7 +1235,7 @@ export const runSimulation = (
       isEndOfYear: yearStartIsEndOfYear,
     } = getYearContext(yearStartIso, startMonthIndex)
     const yearStartAge = primaryPerson
-      ? getAgeInYearsAtDate(primaryPerson.dateOfBirth, yearStartIso)
+      ? getAgeInYearsAtIsoDate(primaryPerson.dateOfBirth, yearStartIso)
       : yearStartYearIndex
     const yearStartContext: SimulationContext = {
       snapshot,

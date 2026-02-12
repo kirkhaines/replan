@@ -1,42 +1,24 @@
 import type { SimulationSnapshot } from '../../models'
 import type { InflationAssumptions, InflationType } from '../../utils/inflation'
 import { applyInflation } from '../../utils/inflation'
+import {
+  isSameMonthIsoDates,
+  monthsBetweenIsoDates,
+  parseIsoDateUtc,
+} from '../../utils/date'
 import type { ActionRecord, CashflowSeriesEntry, SimHolding } from '../types'
 
 export const toMonthlyRate = (annualRate: number) => Math.pow(1 + annualRate, 1 / 12) - 1
 
-const parseIsoDate = (value?: string | null) => {
-  if (!value) {
-    return null
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-  return date
-}
-
-export const monthsBetween = (startIso: string, endIso: string) => {
-  const start = parseIsoDate(startIso)
-  const end = parseIsoDate(endIso)
-  if (!start || !end) {
-    return 0
-  }
-  let months = (end.getFullYear() - start.getFullYear()) * 12
-  months += end.getMonth() - start.getMonth()
-  if (end.getDate() < start.getDate()) {
-    months -= 1
-  }
-  return Math.max(0, months)
-}
+export const monthsBetween = monthsBetweenIsoDates
 
 export const isWithinRange = (dateIso: string, start?: string | null, end?: string | null) => {
-  const date = parseIsoDate(dateIso)
+  const date = parseIsoDateUtc(dateIso)
   if (!date) {
     return false
   }
-  const startDate = parseIsoDate(start ?? null)
-  const endDate = parseIsoDate(end ?? null)
+  const startDate = parseIsoDateUtc(start ?? null)
+  const endDate = parseIsoDateUtc(end ?? null)
   if (startDate && date < startDate) {
     return false
   }
@@ -47,14 +29,7 @@ export const isWithinRange = (dateIso: string, start?: string | null, end?: stri
 }
 
 export const isSameMonth = (dateIso: string, targetIso: string) => {
-  const date = parseIsoDate(dateIso)
-  const target = parseIsoDate(targetIso)
-  if (!date || !target) {
-    return false
-  }
-  return (
-    date.getFullYear() === target.getFullYear() && date.getMonth() === target.getMonth()
-  )
+  return isSameMonthIsoDates(dateIso, targetIso)
 }
 
 export const inflateAmount = (

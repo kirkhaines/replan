@@ -2,6 +2,7 @@ import type { Scenario, SimulationRun, SimulationSnapshot } from '../models'
 import { inflationTypeSchema } from '../models/enums'
 import type { SimulationInput } from '../sim/input'
 import { createSeededRandom, hashStringToSeed, randomNormal } from '../sim/random'
+import { addMonthsUtc, monthsBetweenIsoDates, parseIsoDateUtc } from './date'
 
 export type InflationType = (typeof inflationTypeSchema.options)[number]
 export type InflationAssumptions =
@@ -23,44 +24,11 @@ type InflationContext = {
   indexStartDateIso?: string
 }
 
-export const parseIsoDate = (value?: string | null) => {
-  if (!value) {
-    return null
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-  return date
-}
+export const parseIsoDate = parseIsoDateUtc
 
-export const monthsBetween = (startIso: string, endIso: string) => {
-  const start = parseIsoDate(startIso)
-  const end = parseIsoDate(endIso)
-  if (!start || !end) {
-    return 0
-  }
-  let months = (end.getUTCFullYear() - start.getUTCFullYear()) * 12
-  months += end.getUTCMonth() - start.getUTCMonth()
-  if (end.getUTCDate() < start.getUTCDate()) {
-    months -= 1
-  }
-  return Math.max(0, months)
-}
+export const monthsBetween = monthsBetweenIsoDates
 
 export const toMonthlyRate = (annualRate: number) => Math.pow(1 + annualRate, 1 / 12) - 1
-
-const addMonthsUtc = (date: Date, months: number) => {
-  const year = date.getUTCFullYear()
-  const month = date.getUTCMonth()
-  const day = date.getUTCDate()
-  const targetMonthIndex = month + months
-  const targetYear = year + Math.floor(targetMonthIndex / 12)
-  const targetMonth = ((targetMonthIndex % 12) + 12) % 12
-  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
-  const clampedDay = Math.min(day, daysInTargetMonth)
-  return new Date(Date.UTC(targetYear, targetMonth, clampedDay))
-}
 
 export const buildInflationIndexByType = (
   snapshot: SimulationInput['snapshot'],

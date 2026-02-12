@@ -9,6 +9,7 @@ import type {
   SimulationState,
 } from '../types'
 import { applyInflation } from '../../utils/inflation'
+import { getYearFromIsoDate, monthsBetweenIsoDates } from '../../utils/date'
 import { getHoldingGain, sumMonthlySpending } from './utils'
 
 const sumSeasonedContributions = (
@@ -17,21 +18,8 @@ const sumSeasonedContributions = (
   taxType: SimulationState['holdings'][number]['taxType'],
 ) => {
   const filtered = entries.filter((entry) => entry.taxType === taxType)
-  const current = new Date(`${dateIso}T00:00:00Z`)
-  if (Number.isNaN(current.getTime())) {
-    return 0
-  }
   return filtered.reduce((sum, entry) => {
-    const entryDate = new Date(`${entry.date}T00:00:00Z`)
-    if (Number.isNaN(entryDate.getTime())) {
-      return sum
-    }
-    let months =
-      (current.getUTCFullYear() - entryDate.getUTCFullYear()) * 12 +
-      (current.getUTCMonth() - entryDate.getUTCMonth())
-    if (current.getUTCDate() < entryDate.getUTCDate()) {
-      months -= 1
-    }
+    const months = monthsBetweenIsoDates(entry.date, dateIso)
     return months >= 60 ? sum + entry.amount : sum
   }, 0)
 }
@@ -176,7 +164,7 @@ export const createCashBufferModule = (
     if (contributionLimits.length === 0) {
       return 0
     }
-    const year = context.date.getFullYear()
+    const year = getYearFromIsoDate(context.dateIso) ?? 0
     const sorted = [...contributionLimits]
       .filter((limit) => limit.type === type)
       .sort((a, b) => b.year - a.year)

@@ -200,7 +200,7 @@ const makeContext = (snapshot: SimulationSnapshot): SimulationContext => {
     monthIndex: 0,
     yearIndex: 0,
     age: 46,
-    date: new Date(dateIso),
+    date: new Date(`${dateIso}T00:00:00Z`),
     dateIso,
     isStartOfYear: true,
     isEndOfYear: false,

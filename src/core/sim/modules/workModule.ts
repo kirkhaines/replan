@@ -9,6 +9,7 @@ import type {
   SimulationSettings,
 } from '../types'
 import { applyInflation } from '../../utils/inflation'
+import { getYearFromIsoDate } from '../../utils/date'
 import { isWithinRange } from './utils'
 
 export const createWorkModule = (
@@ -43,7 +44,7 @@ export const createWorkModule = (
     if (contributionLimits.length === 0) {
       return 0
     }
-    const year = context.date.getFullYear()
+    const year = getYearFromIsoDate(context.dateIso) ?? 0
     const sorted = [...contributionLimits]
       .filter((limit) => limit.type === type)
       .sort((a, b) => b.year - a.year)

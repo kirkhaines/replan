@@ -10,6 +10,7 @@ import type {
 import { computeInheritanceTax, selectInheritanceTaxPolicy } from '../stateTaxes'
 import type { InheritanceTaxAssetTag } from '../stateTaxes/types'
 import { applyInflation } from '../../utils/inflation'
+import { getYearFromIsoDate } from '../../utils/date'
 import { getHoldingGain } from './utils'
 
 const funeralCostDefaults = {
@@ -153,7 +154,7 @@ export const createDeathModule = (
       const funeralCost = resolveFuneralCost(context)
       const estateTaxable = Math.max(0, grossEstate - strategy.estateTaxExemption)
       const estateTax = estateTaxable * strategy.estateTaxRate
-      const policyYear = taxStrategy.policyYear || context.date.getFullYear()
+      const policyYear = taxStrategy.policyYear || getYearFromIsoDate(context.dateIso) || 0
       const beneficiaries = normalizeShares(strategy.beneficiaries)
       const inheritanceAssets = buildInheritanceAssets(state)
       const taxableEstateByState = new Map<
@@ -232,7 +233,7 @@ export const createDeathModule = (
       const estateTaxable = Math.max(0, grossEstate - strategy.estateTaxExemption)
       const estateTax = estateTaxable * strategy.estateTaxRate
       const pendingIncomeTax = state.pendingTaxDue.reduce((sum, entry) => sum + entry.amount, 0)
-      const policyYear = taxStrategy.policyYear || context.date.getFullYear()
+      const policyYear = taxStrategy.policyYear || getYearFromIsoDate(context.dateIso) || 0
       const beneficiaries = normalizeShares(strategy.beneficiaries)
       const inheritanceAssets = buildInheritanceAssets(state)
       const taxableEstateByState = new Map<

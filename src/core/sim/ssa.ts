@@ -10,26 +10,15 @@ import type {
   SocialSecurityStrategy,
 } from '../models'
 import { applyInflation } from '../utils/inflation'
+import {
+  getAgeInMonthsAtIsoDate,
+  getYearFromIsoDate as getYearFromIsoDateUtc,
+  parseIsoDateUtc,
+} from '../utils/date'
 
-export const getYearFromIsoDate = (value?: string) => {
-  if (!value || value.length < 4) {
-    return null
-  }
-  const year = Number(value.slice(0, 4))
-  return Number.isFinite(year) ? year : null
-}
+export const getYearFromIsoDate = getYearFromIsoDateUtc
 
-const getAgeInMonthsAtDate = (dateOfBirth: string, dateValue: string) => {
-  const birth = new Date(dateOfBirth)
-  const target = new Date(dateValue)
-  let months =
-    (target.getFullYear() - birth.getFullYear()) * 12 +
-    (target.getMonth() - birth.getMonth())
-  if (target.getDate() < birth.getDate()) {
-    months -= 1
-  }
-  return Math.max(0, months)
-}
+const getAgeInMonthsAtDate = getAgeInMonthsAtIsoDate
 
 const getAgeInYearsAtDate = (dateOfBirth: string, dateValue: string) =>
   Math.max(0, Math.round((getAgeInMonthsAtDate(dateOfBirth, dateValue) / 12) * 10) / 10)
@@ -39,19 +28,23 @@ const getMonthsWorkedForYear = (
   year: number,
   cutoffDate?: Date,
 ) => {
-  const startRaw = period.startDate ? new Date(period.startDate) : null
-  const endRaw = period.endDate ? new Date(period.endDate) : null
+  const startRaw = parseIsoDateUtc(period.startDate)
+  const endRaw = parseIsoDateUtc(period.endDate)
   const start =
-    startRaw && !Number.isNaN(startRaw.getTime()) ? startRaw : new Date(year, 0, 1)
+    startRaw && !Number.isNaN(startRaw.getTime())
+      ? startRaw
+      : new Date(Date.UTC(year, 0, 1))
   const end =
-    endRaw && !Number.isNaN(endRaw.getTime()) ? endRaw : new Date(year + 1, 0, 1)
-  if (year < start.getFullYear() || year > end.getFullYear()) {
+    endRaw && !Number.isNaN(endRaw.getTime())
+      ? endRaw
+      : new Date(Date.UTC(year + 1, 0, 1))
+  if (year < start.getUTCFullYear() || year > end.getUTCFullYear()) {
     return 0
   }
   let months = 0
   for (let month = 0; month < 12; month += 1) {
-    const monthStart = new Date(year, month, 1)
-    const monthEnd = new Date(year, month + 1, 1)
+    const monthStart = new Date(Date.UTC(year, month, 1))
+    const monthEnd = new Date(Date.UTC(year, month + 1, 1))
     if (monthEnd <= start) {
       continue
     }
@@ -67,12 +60,12 @@ const getMonthsWorkedForYear = (
 }
 
 const getMonthsBeforeDateInYear = (year: number, cutoffDate: Date) => {
-  if (cutoffDate.getFullYear() !== year) {
+  if (cutoffDate.getUTCFullYear() !== year) {
     return 12
   }
   let months = 0
   for (let month = 0; month < 12; month += 1) {
-    const monthStart = new Date(year, month, 1)
+    const monthStart = new Date(Date.UTC(year, month, 1))
     if (monthStart >= cutoffDate) {
       continue
     }
@@ -87,14 +80,17 @@ const getMonthsActiveForSpendingItemInYear = (
   year: number,
   cutoffDate?: Date,
 ) => {
-  const startRaw = item.startDate ? new Date(item.startDate) : null
-  const endRaw = item.endDate ? new Date(item.endDate) : null
-  const start = startRaw && !Number.isNaN(startRaw.getTime()) ? startRaw : new Date(year, 0, 1)
+  const startRaw = parseIsoDateUtc(item.startDate)
+  const endRaw = parseIsoDateUtc(item.endDate)
+  const start =
+    startRaw && !Number.isNaN(startRaw.getTime())
+      ? startRaw
+      : new Date(Date.UTC(year, 0, 1))
   const end = endRaw && !Number.isNaN(endRaw.getTime()) ? endRaw : null
   let months = 0
   for (let month = 0; month < 12; month += 1) {
-    const monthStart = new Date(year, month, 1)
-    const monthEnd = new Date(year, month + 1, 1)
+    const monthStart = new Date(Date.UTC(year, month, 1))
+    const monthEnd = new Date(Date.UTC(year, month + 1, 1))
     if (monthEnd <= start) {
       continue
     }
@@ -259,9 +255,11 @@ export const buildSsaEstimate = ({
   if (birthYear === null || claimYear === null) {
     return null
   }
-  const claimDate = new Date(socialStrategy.startDate)
-  const hasClaimDate = !Number.isNaN(claimDate.getTime())
-  const claimCutoffMonths = hasClaimDate ? getMonthsBeforeDateInYear(claimYear, claimDate) : 12
+  const claimDate = parseIsoDateUtc(socialStrategy.startDate)
+  const claimDateOrUndefined = claimDate ?? undefined
+  const claimCutoffMonths = claimDateOrUndefined
+    ? getMonthsBeforeDateInYear(claimYear, claimDateOrUndefined)
+    : 12
   const claimAgeMonths = Math.min(
     getAgeInMonthsAtDate(person.dateOfBirth, socialStrategy.startDate),
     70 * 12,
@@ -294,7 +292,7 @@ export const buildSsaEstimate = ({
 
   const preTaxItems = spendingLineItems.filter((item) => item.isPreTax)
   const inflationAssumptions = scenario.strategies.returnModel.inflationAssumptions
-  const currentYear = new Date().getFullYear()
+  const currentYear = new Date().getUTCFullYear()
 
   const grossByYear = new Map<number, number>()
   const monthsWorkedByYear = new Map<number, number>()
@@ -308,8 +306,8 @@ export const buildSsaEstimate = ({
     const effectiveStartYear = startYear ?? (Number.isFinite(lastEarningsYear) ? lastEarningsYear + 1 : endYear)
     for (let year = effectiveStartYear; year <= endYear; year += 1) {
       const monthsInYear =
-        year === claimYear && hasClaimDate
-          ? getMonthsWorkedForYear(period, year, claimDate)
+        year === claimYear && claimDateOrUndefined
+          ? getMonthsWorkedForYear(period, year, claimDateOrUndefined)
           : getMonthsWorkedForYear(period, year)
       if (monthsInYear === 0) {
         continue
@@ -335,7 +333,7 @@ export const buildSsaEstimate = ({
       return
     }
     const monthsWorked = Math.min(12, monthsWorkedByYear.get(year) ?? 0)
-    const cutoff = year === claimYear && hasClaimDate ? claimDate : undefined
+    const cutoff = year === claimYear ? claimDateOrUndefined : undefined
     const preTax = preTaxItems.reduce((total, item) => {
       const monthsActive = getMonthsActiveForSpendingItemInYear(item, year, cutoff)
       if (monthsActive <= 0) {
