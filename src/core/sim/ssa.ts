@@ -74,6 +74,9 @@ const getMonthsBeforeDateInYear = (year: number, cutoffDate: Date) => {
   return months
 }
 
+const PIA_FIRST_BEND_RATE = 0.9
+const PIA_SECOND_BEND_RATE = 0.32
+const PIA_THIRD_BEND_RATE = 0.15
 
 const getMonthsActiveForSpendingItemInYear = (
   item: SpendingLineItem,
@@ -280,22 +283,22 @@ export const buildSsaEstimate = ({
     Number.NEGATIVE_INFINITY,
   )
 
-  const earningsByYear = new Map<number, number>()
-  const monthsByYear = new Map<number, number>()
-  const sourceByYear = new Map<number, 'reported' | 'future'>()
+  const earningsByYear = new Map<
+    number,
+    { earnings: number; months: number; indexed: number; source: 'reported' | 'future' }
+  >()
   filteredEarnings.forEach((record) => {
-    const monthsFraction = Math.max(0, Math.min(1, record.months / 12))
-    earningsByYear.set(record.year, record.amount * monthsFraction)
-    monthsByYear.set(record.year, record.months)
-    sourceByYear.set(record.year, record.source)
+    earningsByYear.set(record.year, {
+      earnings: record.amount,
+      months: record.months,
+      indexed: 0,
+      source: record.source,
+    })
   })
 
   const preTaxItems = spendingLineItems.filter((item) => item.isPreTax)
   const inflationAssumptions = scenario.strategies.returnModel.inflationAssumptions
   const currentYear = new Date().getUTCFullYear()
-
-  const grossByYear = new Map<number, number>()
-  const monthsWorkedByYear = new Map<number, number>()
 
   futureWorkPeriods.forEach((period) => {
     const startYear = getYearFromIsoDate(period.startDate ?? undefined)
@@ -305,6 +308,9 @@ export const buildSsaEstimate = ({
     }
     const effectiveStartYear = startYear ?? (Number.isFinite(lastEarningsYear) ? lastEarningsYear + 1 : endYear)
     for (let year = effectiveStartYear; year <= endYear; year += 1) {
+      if (year <= lastEarningsYear || year > claimYear) {
+        continue
+      }
       const monthsInYear =
         year === claimYear && claimDateOrUndefined
           ? getMonthsWorkedForYear(period, year, claimDateOrUndefined)
@@ -321,31 +327,27 @@ export const buildSsaEstimate = ({
       })
       const proratedGross =
         (period.salary + period.bonus) * inflationFactor * (monthsInYear / 12)
-      const currentGross = grossByYear.get(year) ?? 0
-      grossByYear.set(year, currentGross + proratedGross)
-      const currentMonths = monthsWorkedByYear.get(year) ?? 0
-      monthsWorkedByYear.set(year, Math.min(12, currentMonths + monthsInYear))
-    }
-  })
+      const currentRecord = earningsByYear.get(year)
+      const updatedGross = (currentRecord?.earnings ?? 0) + proratedGross
+      const updatedMonths = Math.min(12, (currentRecord?.months ?? 0) + monthsInYear)
 
-  grossByYear.forEach((gross, year) => {
-    if (year <= lastEarningsYear || year > claimYear) {
-      return
+      const cutoff = year === claimYear ? claimDateOrUndefined : undefined
+      const preTax = preTaxItems.reduce((total, item) => {
+        const monthsActive = getMonthsActiveForSpendingItemInYear(item, year, cutoff)
+        if (monthsActive <= 0) {
+          return total
+        }
+        const annual = toAnnualAmount(item, year, inflationAssumptions)
+        const cappedMonths = Math.min(monthsActive, updatedMonths)
+        return total + annual * (cappedMonths / 12)
+      }, 0)
+      earningsByYear.set(year, {
+        earnings: Math.max(0, updatedGross - preTax),
+        months: updatedMonths,
+        indexed: currentRecord?.indexed ?? 0,
+        source: 'future',
+      })
     }
-    const monthsWorked = Math.min(12, monthsWorkedByYear.get(year) ?? 0)
-    const cutoff = year === claimYear ? claimDateOrUndefined : undefined
-    const preTax = preTaxItems.reduce((total, item) => {
-      const monthsActive = getMonthsActiveForSpendingItemInYear(item, year, cutoff)
-      if (monthsActive <= 0) {
-        return total
-      }
-      const annual = toAnnualAmount(item, year, inflationAssumptions)
-      const cappedMonths = Math.min(monthsActive, monthsWorked)
-      return total + annual * (cappedMonths / 12)
-    }, 0)
-    earningsByYear.set(year, Math.max(0, gross - preTax))
-    monthsByYear.set(year, monthsWorked)
-    sourceByYear.set(year, 'future')
   })
 
   const awiClaim = getAwiValue(claimYear - 2, wageIndex, inflationAssumptions)
@@ -353,19 +355,25 @@ export const buildSsaEstimate = ({
     return null
   }
 
-  const indexedByYear = Array.from(earningsByYear.entries())
-    .filter(([year]) => year <= claimYear)
-    .map(([year, amount]) => {
-      const awiYear = getAwiValue(year, wageIndex, inflationAssumptions)
-      if (!awiYear) {
-        return { year, indexed: 0 }
-      }
-      return { year, indexed: amount * (awiClaim / awiYear) }
-    })
-  const top35Indexed = [...indexedByYear].sort((a, b) => b.indexed - a.indexed).slice(0, 35)
-  const top35Years = new Set(top35Indexed.map((item) => item.year))
-  const totalIndexedWages = top35Indexed.reduce((total, item) => total + item.indexed, 0)
-  const aime = totalIndexedWages / (35 * 12)
+  earningsByYear.forEach((record, year) => {
+    if (year > claimYear) {
+      return
+    }
+    const awiYear = getAwiValue(year, wageIndex, inflationAssumptions)
+    record.indexed = awiYear ? record.earnings * (awiClaim / awiYear) : 0
+  })
+
+  const top35Indexed = Array.from(earningsByYear.entries())
+    .filter(([year, record]) => year <= claimYear && record.earnings > 0)
+    .sort(([, recordA], [, recordB]) => recordB.indexed - recordA.indexed)
+    .slice(0, 35)
+  const top35Years = new Set(top35Indexed.map(([year]) => year))
+  const totalIndexedWages = top35Indexed.reduce((total, [, record]) => total + record.indexed, 0)
+  const totalIncludedMonths = top35Indexed.reduce(
+    (total, [, record]) => total + Math.min(12, record.months),
+    0,
+  )
+  const aime = totalIncludedMonths > 0 ? totalIndexedWages / totalIncludedMonths : 0
 
   const bend = getBendPoints(claimYear, bendPoints, inflationAssumptions)
   if (!bend) {
@@ -375,7 +383,10 @@ export const buildSsaEstimate = ({
   const firstPiece = Math.min(aime, bend.first)
   const secondPiece = Math.min(Math.max(aime - bend.first, 0), bend.second - bend.first)
   const thirdPiece = Math.max(aime - bend.second, 0)
-  const pia = firstPiece * 0.9 + secondPiece * 0.32 + thirdPiece * 0.15
+  const firstTerm = firstPiece * PIA_FIRST_BEND_RATE
+  const secondTerm = secondPiece * PIA_SECOND_BEND_RATE
+  const thirdTerm = thirdPiece * PIA_THIRD_BEND_RATE
+  const pia = firstTerm + secondTerm + thirdTerm
 
   const adjustment = retirementAdjustments.find(
     (entry) => birthYear >= entry.birthYearStart && birthYear <= entry.birthYearEnd,
@@ -388,25 +399,25 @@ export const buildSsaEstimate = ({
   let creditPerMonth = 0
   let monthsEarly = 0
   let monthsDelayed = 0
+  let adjustmentFactor = 1
   if (claimAgeMonths < nraMonths) {
     monthsEarly = nraMonths - claimAgeMonths
     const firstSegment = Math.min(monthsEarly, 36)
     const remaining = Math.max(0, monthsEarly - 36)
     reduction = firstSegment * (5 / 9 / 100) + remaining * (5 / 12 / 100)
-    adjustedBenefit = pia * (1 - reduction)
+    adjustmentFactor = 1 - reduction
   } else if (claimAgeMonths > nraMonths && adjustment) {
     monthsDelayed = claimAgeMonths - nraMonths
     creditPerMonth = adjustment.delayedRetirementCreditPerYear / 12
-    adjustedBenefit = pia * (1 + monthsDelayed * creditPerMonth)
+    adjustmentFactor = 1 + monthsDelayed * creditPerMonth
   }
+  adjustedBenefit = pia * adjustmentFactor
 
   const earningsRows: SsaEstimateEarningsRow[] = Array.from(earningsByYear.entries())
     .filter(([year]) => year <= claimYear)
     .sort(([yearA], [yearB]) => yearA - yearB)
-    .map(([year, amount]) => {
-      const awiYear = getAwiValue(year, wageIndex, inflationAssumptions)
-      const indexedWages = awiYear ? amount * (awiClaim / awiYear) : 0
-      const source = sourceByYear.get(year) ?? 'reported'
+    .map(([year, record]) => {
+      const source = record.source
       const sourceLabel =
         source === 'reported'
           ? 'Reported SSA earnings'
@@ -414,30 +425,35 @@ export const buildSsaEstimate = ({
       return {
         year,
         age: getAgeInYearsAtDate(person.dateOfBirth, `${year}-12-31`),
-        earnings: amount,
-        monthsWorked: monthsByYear.get(year) ?? 0,
+        earnings: record.earnings,
+        monthsWorked: record.months,
         source,
         sourceLabel,
-        indexedWages,
+        indexedWages: record.indexed,
         includedInTop35: top35Years.has(year),
       }
     })
 
-  const applicableRows = earningsRows.filter((row) => row.includedInTop35)
-  const applicableMonths = applicableRows.reduce((total, row) => total + row.monthsWorked, 0)
-
   const bands: SsaEstimateBand[] = [
-    { label: 'First', amount: firstPiece, rate: 0.9, adjustedAmount: firstPiece * 0.9 },
-    { label: 'Second', amount: secondPiece, rate: 0.32, adjustedAmount: secondPiece * 0.32 },
-    { label: 'Third', amount: thirdPiece, rate: 0.15, adjustedAmount: thirdPiece * 0.15 },
+    {
+      label: 'First',
+      amount: firstPiece,
+      rate: PIA_FIRST_BEND_RATE,
+      adjustedAmount: firstTerm,
+    },
+    {
+      label: 'Second',
+      amount: secondPiece,
+      rate: PIA_SECOND_BEND_RATE,
+      adjustedAmount: secondTerm,
+    },
+    {
+      label: 'Third',
+      amount: thirdPiece,
+      rate: PIA_THIRD_BEND_RATE,
+      adjustedAmount: thirdTerm,
+    },
   ]
-
-  const adjustmentFactor =
-    claimAgeMonths < nraMonths
-      ? 1 - reduction
-      : claimAgeMonths > nraMonths && adjustment
-        ? 1 + monthsDelayed * creditPerMonth
-        : 1
 
   return {
     claimYear,
@@ -447,7 +463,7 @@ export const buildSsaEstimate = ({
       claimYear,
       claimAgeMonths,
       earningsRows,
-      applicableMonths,
+      applicableMonths: totalIncludedMonths,
       indexedWagesSum: totalIndexedWages,
       aime,
       bendPoints: bend,
