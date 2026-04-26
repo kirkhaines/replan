@@ -236,6 +236,18 @@ const assetClassLabel: Record<(typeof assetClasses)[number], string> = {
   other: 'Other',
 }
 
+const holdingTypeLabel: Record<string, string> = {
+  bonds: 'Bonds',
+  sp500: 'S&P 500',
+  nasdaq: 'Nasdaq',
+  dow: 'Dow',
+  non_us_developed: 'Non-US developed',
+  emerging_markets: 'Emerging markets',
+  real_estate: 'Real estate',
+  cash: 'Cash',
+  other: 'Other',
+}
+
 const toAssetClass = (holdingType?: string | null) => {
   switch (holdingType) {
     case 'bonds':
@@ -1086,15 +1098,39 @@ const RunResultsPage = () => {
 
   const shockRateChart = useMemo(() => {
     if (!displayRun?.snapshot || filteredMonthlyTimeline.length === 0) {
-      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+      return {
+        data: [],
+        series: [] as Array<{
+          key: string
+          label: string
+          color: string
+          category: 'inflation' | 'market'
+        }>,
+      }
     }
     const startDate = displayRun.result.monthlyTimeline?.[0]?.date
     if (!startDate) {
-      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+      return {
+        data: [],
+        series: [] as Array<{
+          key: string
+          label: string
+          color: string
+          category: 'inflation' | 'market'
+        }>,
+      }
     }
     const months = displayRun.result.monthlyTimeline?.length ?? 0
     if (months <= 0) {
-      return { data: [], series: [] as Array<{ key: string; label: string; color: string }> }
+      return {
+        data: [],
+        series: [] as Array<{
+          key: string
+          label: string
+          color: string
+          category: 'inflation' | 'market'
+        }>,
+      }
     }
     const endDate =
       displayRun.result.monthlyTimeline?.[months - 1]?.date ?? startDate
@@ -1144,6 +1180,7 @@ const RunResultsPage = () => {
       )
       const marketReturns = returnModule?.marketReturns ?? []
       const marketByAsset: Record<string, { start: number; amount: number }> = {}
+      const marketByHoldingType: Record<string, { start: number; amount: number }> = {}
       marketReturns.forEach((entry) => {
         if (entry.kind !== 'holding') {
           return
@@ -1157,8 +1194,19 @@ const RunResultsPage = () => {
         totals.start += entry.balanceStart
         totals.amount += entry.amount
         marketByAsset[key] = totals
+
+        const holdingType = entry.holdingType ?? 'other'
+        const holdingKey = `marketType:${holdingType}`
+        const holdingTotals = marketByHoldingType[holdingKey] ?? { start: 0, amount: 0 }
+        holdingTotals.start += entry.balanceStart
+        holdingTotals.amount += entry.amount
+        marketByHoldingType[holdingKey] = holdingTotals
       })
       Object.entries(marketByAsset).forEach(([key, totals]) => {
+        const rate = totals.start > 0 ? totals.amount / totals.start : 0
+        bucket.products[key] = (bucket.products[key] ?? 1) * (1 + rate)
+      })
+      Object.entries(marketByHoldingType).forEach(([key, totals]) => {
         const rate = totals.start > 0 ? totals.amount / totals.start : 0
         bucket.products[key] = (bucket.products[key] ?? 1) * (1 + rate)
       })
@@ -1181,11 +1229,44 @@ const RunResultsPage = () => {
         return row
       })
 
+    const scenarioHoldingTypes = new Set(
+      displayRun.snapshot.investmentAccountHoldings
+        .map((holding) => holding.holdingType)
+        .filter((type) => type !== 'cash'),
+    )
     const series = [
-      { key: 'market:equity', label: 'Market - Equity', color: colorForChartKey('shock:market:equity') },
-      { key: 'market:bonds', label: 'Market - Bonds', color: colorForChartKey('shock:market:bonds') },
-      { key: 'market:realEstate', label: 'Market - Real estate', color: colorForChartKey('shock:market:realEstate') },
-      { key: 'market:other', label: 'Market - Other', color: colorForChartKey('shock:market:other') },
+      {
+        key: 'market:equity',
+        label: 'Market - Equity',
+        color: colorForChartKey('shock:market:equity'),
+        category: 'market' as const,
+      },
+      {
+        key: 'market:bonds',
+        label: 'Market - Bonds',
+        color: colorForChartKey('shock:market:bonds'),
+        category: 'market' as const,
+      },
+      {
+        key: 'market:realEstate',
+        label: 'Market - Real estate',
+        color: colorForChartKey('shock:market:realEstate'),
+        category: 'market' as const,
+      },
+      {
+        key: 'market:other',
+        label: 'Market - Other',
+        color: colorForChartKey('shock:market:other'),
+        category: 'market' as const,
+      },
+      ...Array.from(scenarioHoldingTypes)
+        .sort((a, b) => a.localeCompare(b))
+        .map((holdingType) => ({
+          key: `marketType:${holdingType}`,
+          label: `Market - ${holdingTypeLabel[holdingType] ?? holdingType}`,
+          color: colorForChartKey(`shock:market:type:${holdingType}`),
+          category: 'market' as const,
+        })),
       ...inflationTypes.map((type) => {
         const label =
           type === 'cpi'
@@ -1202,12 +1283,17 @@ const RunResultsPage = () => {
             ? 'shock:inflation:cpi'
             : type === 'medical'
               ? 'shock:inflation:medical'
-              : type === 'housing'
-                ? 'shock:inflation:housing'
-                : type === 'education'
-                  ? 'shock:inflation:education'
-                  : 'shock:inflation:education'
-        return { key: `inflation:${type}`, label, color: colorForChartKey(colorKey) }
+            : type === 'housing'
+              ? 'shock:inflation:housing'
+              : type === 'education'
+                ? 'shock:inflation:education'
+                : 'shock:inflation:education'
+        return {
+          key: `inflation:${type}`,
+          label,
+          color: colorForChartKey(colorKey),
+          category: 'inflation' as const,
+        }
       }),
     ]
 

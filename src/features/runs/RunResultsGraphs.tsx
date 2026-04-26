@@ -16,6 +16,7 @@ import {
 } from 'recharts'
 
 type BalanceDetail = 'none' | 'seasoning' | 'asset'
+type ShockRateDetail = 'both' | 'inflation' | 'market'
 
 type ChartDatum = Record<string, unknown>
 
@@ -59,6 +60,7 @@ type ShockRateSeries = {
   key: string
   label: string
   color: string
+  category: 'inflation' | 'market'
 }
 
 type ShockRateChart = {
@@ -100,6 +102,9 @@ const RunResultsGraphs = ({
   const [showCashflowChart, setShowCashflowChart] = useState(true)
   const [showShockChart, setShowShockChart] = useState(showShockChartInitially)
   const [useBalanceLogScale, setUseBalanceLogScale] = useState(false)
+  const [shockRateDetail, setShockRateDetail] = useState<ShockRateDetail>('both')
+  const [useCumulativeShockRates, setUseCumulativeShockRates] = useState(false)
+  const [useShockRateLogScale, setUseShockRateLogScale] = useState(false)
   const lineKeys = useMemo(
     () => new Set(balanceOverTime.lineSeries?.map((entry) => entry.key) ?? []),
     [balanceOverTime.lineSeries],
@@ -169,7 +174,68 @@ const RunResultsGraphs = ({
     }
     return cashflowChart.series.filter((series) => series.bucket === bucketFilter)
   }, [bucketFilter, cashflowChart.series])
-  const hasShockRates = shockRateChart.series.length > 0 && shockRateChart.data.length > 0
+  const visibleShockRateSeries = useMemo(() => {
+    if (shockRateDetail === 'both') {
+      return shockRateChart.series.filter((series) => !series.key.startsWith('marketType:'))
+    }
+    return shockRateChart.series.filter((series) => series.category === shockRateDetail)
+  }, [shockRateChart.series, shockRateDetail])
+  const shockRateData = useMemo(() => {
+    if (!useCumulativeShockRates) {
+      return shockRateChart.data
+    }
+    const cumulativeByKey = new Map(visibleShockRateSeries.map((series) => [series.key, 1]))
+    return shockRateChart.data.map((row) => {
+      const next = { ...row } as ChartDatum
+      visibleShockRateSeries.forEach((series) => {
+        const value = Number(row[series.key] ?? 0)
+        const current = cumulativeByKey.get(series.key) ?? 1
+        const nextValue = current * (1 + (Number.isFinite(value) ? value : 0))
+        cumulativeByKey.set(series.key, nextValue)
+        next[series.key] = nextValue
+      })
+      return next
+    })
+  }, [shockRateChart.data, useCumulativeShockRates, visibleShockRateSeries])
+  const shockRateYAxisConfig = useMemo<{
+    scale: 'linear' | RechartsScale
+    ticks: number[] | undefined
+  }>(() => {
+    if (!useShockRateLogScale || !useCumulativeShockRates) {
+      return { scale: 'linear' as const, ticks: undefined as number[] | undefined }
+    }
+    let min = 0
+    let max = 0
+    shockRateData.forEach((row) => {
+      visibleShockRateSeries.forEach((series) => {
+        const value = Number(row[series.key])
+        if (!Number.isFinite(value)) {
+          return
+        }
+        min = Math.min(min, value)
+        max = Math.max(max, value)
+      })
+    })
+    if (min === max) {
+      return { scale: 'linear' as const, ticks: undefined as number[] | undefined }
+    }
+    const symlogConstant = 0.01
+    min = Math.min(min, -symlogConstant)
+    max = Math.max(max, symlogConstant)
+    const scale = scaleSymlog().constant(symlogConstant).domain([min, max])
+    const ticks = scale.ticks(10)
+    if (!ticks.includes(0)) {
+      ticks.push(0)
+    }
+    ticks.sort((a: number, b: number) => a - b)
+    return { scale: scale as unknown as RechartsScale, ticks }
+  }, [
+    shockRateData,
+    useCumulativeShockRates,
+    useShockRateLogScale,
+    visibleShockRateSeries,
+  ])
+  const hasShockRates = visibleShockRateSeries.length > 0 && shockRateData.length > 0
 
   useEffect(() => {
     setShowShockChart(showShockChartInitially)
@@ -350,6 +416,39 @@ const RunResultsGraphs = ({
         <div className="row">
           <h2>Inflation and return rates</h2>
           <div className="row" style={{ gap: '0.75rem' }}>
+            <label className="field">
+              <select
+                value={shockRateDetail}
+                onChange={(event) => setShockRateDetail(event.target.value as ShockRateDetail)}
+              >
+                <option value="both">Both</option>
+                <option value="inflation">Inflation</option>
+                <option value="market">Market</option>
+              </select>
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={useCumulativeShockRates}
+                onChange={(event) => {
+                  const checked = event.target.checked
+                  setUseCumulativeShockRates(checked)
+                  if (!checked) {
+                    setUseShockRateLogScale(false)
+                  }
+                }}
+              />
+              Cumulative $1
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={useShockRateLogScale}
+                disabled={!useCumulativeShockRates}
+                onChange={(event) => setUseShockRateLogScale(event.target.checked)}
+              />
+              Log y-axis
+            </label>
             <button
               className="link-button"
               type="button"
@@ -363,15 +462,26 @@ const RunResultsGraphs = ({
           hasShockRates ? (
             <div className="chart">
               <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={300}>
-                <LineChart data={shockRateChart.data}>
+                <LineChart data={shockRateData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="year" />
                   <YAxis
-                    tickFormatter={(value) => `${(Number(value) * 100).toFixed(1)}%`}
+                    tickFormatter={(value) =>
+                      useCumulativeShockRates
+                        ? `$${Number(value).toFixed(2)}`
+                        : `${(Number(value) * 100).toFixed(1)}%`
+                    }
                     width={70}
+                    scale={shockRateYAxisConfig.scale}
+                    domain={['auto', 'auto']}
+                    ticks={shockRateYAxisConfig.ticks}
                   />
                   <Legend verticalAlign="top" height={32} />
-                  <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="4 4" />
+                  <ReferenceLine
+                    y={useCumulativeShockRates ? 1 : 0}
+                    stroke="var(--text-muted)"
+                    strokeDasharray="4 4"
+                  />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload || payload.length === 0) {
@@ -396,14 +506,16 @@ const RunResultsGraphs = ({
                               <span style={{ color: entry.color }}>
                                 {entry.name ?? entry.dataKey}
                               </span>
-                              {`: ${(Number(entry.value) * 100).toFixed(2)}%`}
+                              {useCumulativeShockRates
+                                ? `: $${Number(entry.value).toFixed(4)}`
+                                : `: ${(Number(entry.value) * 100).toFixed(2)}%`}
                             </div>
                           ))}
                         </div>
                       )
                     }}
                   />
-                  {shockRateChart.series.map((series) => (
+                  {visibleShockRateSeries.map((series) => (
                     <Line
                       key={series.key}
                       type="monotone"
