@@ -42,6 +42,12 @@ const formatSignedCurrency = (value: number) => {
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`
 
+const guardrailBandColor = (value: number) => {
+  const clamped = Math.min(1, Math.max(0, value))
+  const hue = 20 + (140 - 20) * clamped
+  return `hsl(${hue}, 70%, 50%)`
+}
+
 const csvEscape = (value: string | number) => {
   const raw = String(value ?? '')
   if (raw.includes('"') || raw.includes(',') || raw.includes('\n')) {
@@ -1313,6 +1319,92 @@ const RunResultsPage = () => {
     return { data, series: filteredSeries }
   }, [displayRun, explanationsByMonth, filteredMonthlyTimeline])
 
+  const shockRateBands = useMemo(() => {
+    if (shockRateChart.data.length === 0) {
+      return [] as Array<{ key: string; label: string; values: Array<string | null> }>
+    }
+    const regimeByYear = new Map<number, 'downturn' | 'recovery' | null>()
+    filteredMonthlyTimeline.forEach((month) => {
+      const year = new Date(month.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return
+      }
+      const explanation = explanationsByMonth.get(month.monthIndex)
+      const returnsModule = explanation?.modules.find((module) => module.moduleId === 'returns-core')
+      const checkpoints = returnsModule?.checkpoints ?? []
+      const isDownturn = checkpoints.find((entry) => entry.label === 'Downturn period')?.value === true
+      const isRecovery = checkpoints.find((entry) => entry.label === 'Recovery period')?.value === true
+      const current = regimeByYear.get(year) ?? null
+      if (isDownturn) {
+        regimeByYear.set(year, 'downturn')
+      } else if (isRecovery && current !== 'downturn') {
+        regimeByYear.set(year, 'recovery')
+      }
+    })
+    const values = shockRateChart.data.map((row) => {
+      const year = Number(row.year)
+      const regime = regimeByYear.get(year) ?? null
+      if (regime === 'downturn') {
+        return '#f97316'
+      }
+      if (regime === 'recovery') {
+        return '#22c55e'
+      }
+      return null
+    })
+    return [{ key: 'market-regime', label: 'Regime', values }]
+  }, [explanationsByMonth, filteredMonthlyTimeline, shockRateChart.data])
+
+  const balanceBands = useMemo(() => {
+    if (balanceOverTime.data.length === 0) {
+      return [] as Array<{ key: string; label: string; values: Array<string | null> }>
+    }
+    const guardrailByYear = new Map<number, { sum: number; count: number; min: number }>()
+    filteredMonthlyTimeline.forEach((month) => {
+      const year = new Date(month.date).getFullYear()
+      if (Number.isNaN(year)) {
+        return
+      }
+      const explanation = explanationsByMonth.get(month.monthIndex)
+      const spendingModule = explanation?.modules.find((module) => module.moduleId === 'spending')
+      const factorValue =
+        spendingModule?.inputs?.find((entry) => entry.label === 'Guardrail factor')?.value ??
+        spendingModule?.checkpoints?.find((entry) => entry.label === 'Guardrail factor')?.value
+      const factor = Number(factorValue)
+      if (!Number.isFinite(factor)) {
+        return
+      }
+      const current = guardrailByYear.get(year)
+      if (!current) {
+        guardrailByYear.set(year, { sum: factor, count: 1, min: factor })
+        return
+      }
+      current.sum += factor
+      current.count += 1
+      current.min = Math.min(current.min, factor)
+    })
+    const avgValues = balanceOverTime.data.map((row) => {
+      const year = Number(row.year)
+      const entry = guardrailByYear.get(year)
+      if (!entry || entry.count === 0) {
+        return null
+      }
+      return guardrailBandColor(entry.sum / entry.count)
+    })
+    const minValues = balanceOverTime.data.map((row) => {
+      const year = Number(row.year)
+      const entry = guardrailByYear.get(year)
+      if (!entry) {
+        return null
+      }
+      return guardrailBandColor(entry.min)
+    })
+    return [
+      { key: 'guardrail-avg', label: 'Guardrail avg', values: avgValues },
+      { key: 'guardrail-min', label: 'Guardrail min', values: minValues },
+    ]
+  }, [balanceOverTime.data, explanationsByMonth, filteredMonthlyTimeline])
+
   const buildSummaryCsv = useCallback(() => {
     if (!run?.snapshot || !run.result.timeline || run.result.timeline.length === 0) {
       return null
@@ -2164,6 +2256,8 @@ const RunResultsPage = () => {
                 ordinaryIncomeChart={ordinaryIncomeChart}
                 cashflowChart={cashflowChart}
                 shockRateChart={shockRateChart}
+                balanceBands={balanceBands}
+                shockRateBands={shockRateBands}
                 showShockChartInitially={Boolean(representativeSelection)}
                 formatAxisValue={formatAxisValue}
                 formatCurrency={formatCurrency}

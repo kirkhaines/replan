@@ -113,6 +113,24 @@ const formatTargetWeights = (target: TargetWeights | null) => {
   ].join(', ')
 }
 
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
+
+const withBondTargetLimit = (target: TargetWeights, bondLimit: number): TargetWeights => {
+  const bond = clamp01(bondLimit)
+  const remaining = Math.max(0, 1 - bond)
+  const nonBondTotal = target.equity + target.realEstate + target.other
+  if (nonBondTotal <= 0) {
+    return { ...target, bonds: bond }
+  }
+  const scale = remaining / nonBondTotal
+  return {
+    equity: target.equity * scale,
+    bonds: bond,
+    realEstate: target.realEstate * scale,
+    other: target.other * scale,
+  }
+}
+
 export const createRebalancingModule = (
   snapshot: SimulationSnapshot,
   settings?: SimulationSettings,
@@ -193,7 +211,63 @@ export const createRebalancingModule = (
     getActionIntents: (state, context) => {
       const nonCashHoldings = state.holdings.filter((holding) => getNonCashAsset(holding))
       const targetWeights = resolveTargetWeights(nonCashHoldings, context)
-      const targetLabel = formatTargetWeights(targetWeights)
+      const signal = state.marketDownturn
+      const downturnModeEnabled = glidepath.sellBondsFirstInDownMarkets
+      const inDownturn = downturnModeEnabled && Boolean(signal?.inDownturn)
+      let inRecovery = downturnModeEnabled && Boolean(signal?.inRecovery)
+
+      if (downturnModeEnabled && signal?.pendingRecoveryBaseCapture) {
+        const totals = emptyTotals()
+        let nonCashTotal = 0
+        nonCashHoldings.forEach((holding) => {
+          const asset = getNonCashAsset(holding)
+          if (!asset) {
+            return
+          }
+          totals[asset] += holding.balance
+          nonCashTotal += holding.balance
+        })
+        signal.recoveryBaseBondFraction =
+          nonCashTotal > 0 ? totals.bonds / nonCashTotal : 0
+        signal.pendingRecoveryBaseCapture = false
+      }
+
+      let adjustedTargetWeights = targetWeights
+      if (adjustedTargetWeights && downturnModeEnabled) {
+        if (inDownturn) {
+          adjustedTargetWeights = withBondTargetLimit(adjustedTargetWeights, 0)
+        } else if (inRecovery && signal) {
+          const marketValue = signal.equityMarketValue
+          const recoveryBaseMarketValue = signal.recoveryBaseMarketValue
+          const recoveryBaseBondFraction = signal.recoveryBaseBondFraction
+          if (
+            marketValue > 0 &&
+            recoveryBaseMarketValue !== null &&
+            recoveryBaseBondFraction !== null
+          ) {
+            const recoveryLimit = clamp01(
+              recoveryBaseBondFraction +
+                (marketValue - recoveryBaseMarketValue) / marketValue,
+            )
+            if (recoveryLimit >= adjustedTargetWeights.bonds) {
+              signal.inRecovery = false
+              signal.recoveryBaseBondFraction = null
+              signal.recoveryBaseMarketValue = null
+              inRecovery = false
+            } else {
+              adjustedTargetWeights = withBondTargetLimit(
+                adjustedTargetWeights,
+                recoveryLimit,
+              )
+            }
+          }
+        }
+      }
+
+      const activeAssets: NonCashAsset[] = inDownturn
+        ? nonCashAssets.filter((asset) => asset !== 'bonds')
+        : [...nonCashAssets]
+      const targetLabel = formatTargetWeights(adjustedTargetWeights)
 
       const canRebalance = shouldRebalance(context)
       if (!canRebalance) {
@@ -208,7 +282,7 @@ export const createRebalancingModule = (
         return []
       }
 
-      if (!targetWeights) {
+      if (!adjustedTargetWeights) {
         explain.addInput('Frequency', rebalancing.frequency)
         explain.addInput('Tax aware', rebalancing.taxAware)
         explain.addInput('Use contributions', rebalancing.useContributions)
@@ -224,7 +298,7 @@ export const createRebalancingModule = (
       let totalBalance = 0
       nonCashHoldings.forEach((holding) => {
         const asset = getNonCashAsset(holding)
-        if (!asset) {
+        if (!asset || !activeAssets.includes(asset)) {
           return
         }
         totalsByAsset[asset] += holding.balance
@@ -243,9 +317,9 @@ export const createRebalancingModule = (
         return []
       }
 
-      const driftExceeded = nonCashAssets.some((asset) => {
+      const driftExceeded = activeAssets.some((asset) => {
         const currentWeight = totalsByAsset[asset] / totalBalance
-        return Math.abs(currentWeight - targetWeights[asset]) > rebalancing.driftThreshold
+        return Math.abs(currentWeight - adjustedTargetWeights[asset]) > rebalancing.driftThreshold
       })
       if (rebalancing.frequency === 'threshold' && !driftExceeded) {
         return []
@@ -256,8 +330,8 @@ export const createRebalancingModule = (
 
       const buyRemaining: TargetWeights = emptyTotals()
       const sellRemaining: TargetWeights = emptyTotals()
-      nonCashAssets.forEach((asset) => {
-        const targetAmount = targetWeights[asset] * totalBalance
+      activeAssets.forEach((asset) => {
+        const targetAmount = adjustedTargetWeights[asset] * totalBalance
         const currentAmount = totalsByAsset[asset]
         const delta = targetAmount - currentAmount
         if (Math.abs(delta) < rebalancing.minTradeAmount) {
@@ -270,8 +344,8 @@ export const createRebalancingModule = (
         }
       })
 
-      const totalBuys = nonCashAssets.reduce((sum, asset) => sum + buyRemaining[asset], 0)
-      const totalSells = nonCashAssets.reduce((sum, asset) => sum + sellRemaining[asset], 0)
+      const totalBuys = activeAssets.reduce((sum, asset) => sum + buyRemaining[asset], 0)
+      const totalSells = activeAssets.reduce((sum, asset) => sum + sellRemaining[asset], 0)
       if (totalBuys <= 0 || totalSells <= 0) {
         return []
       }
@@ -279,7 +353,7 @@ export const createRebalancingModule = (
       const referenceByAsset = new Map<NonCashAsset, SimHolding>()
       nonCashHoldings.forEach((holding) => {
         const asset = getNonCashAsset(holding)
-        if (!asset || referenceByAsset.has(asset)) {
+        if (!asset || !activeAssets.includes(asset) || referenceByAsset.has(asset)) {
           return
         }
         referenceByAsset.set(asset, holding)
@@ -287,6 +361,10 @@ export const createRebalancingModule = (
 
       const holdingsByAccount = new Map<string, SimHolding[]>()
       nonCashHoldings.forEach((holding) => {
+        const asset = getNonCashAsset(holding)
+        if (!asset || !activeAssets.includes(asset)) {
+          return
+        }
         const list = holdingsByAccount.get(holding.investmentAccountId) ?? []
         list.push(holding)
         holdingsByAccount.set(holding.investmentAccountId, list)
@@ -341,7 +419,7 @@ export const createRebalancingModule = (
       const pickNextBuyAsset = (): NonCashAsset | null => {
         let candidate: NonCashAsset | null = null
         let best = 0
-        nonCashAssets.forEach((asset) => {
+        activeAssets.forEach((asset) => {
           const remaining = buyRemaining[asset]
           if (remaining > best) {
             best = remaining
@@ -360,23 +438,23 @@ export const createRebalancingModule = (
 
       const actions: ActionIntent[] = []
       accountList.forEach(({ accountId, holdings }) => {
-        if (nonCashAssets.every((asset) => sellRemaining[asset] <= 0)) {
+        if (activeAssets.every((asset) => sellRemaining[asset] <= 0)) {
           return
         }
-        if (nonCashAssets.every((asset) => buyRemaining[asset] <= 0)) {
+        if (activeAssets.every((asset) => buyRemaining[asset] <= 0)) {
           return
         }
         const holdingsByAsset = new Map<NonCashAsset, SimHolding[]>()
-        nonCashAssets.forEach((asset) => holdingsByAsset.set(asset, []))
+        activeAssets.forEach((asset) => holdingsByAsset.set(asset, []))
         holdings.forEach((holding) => {
           const asset = getNonCashAsset(holding)
-          if (!asset) {
+          if (!asset || !activeAssets.includes(asset)) {
             return
           }
           holdingsByAsset.get(asset)?.push(holding)
         })
 
-        nonCashAssets.forEach((asset) => {
+        activeAssets.forEach((asset) => {
           if (sellRemaining[asset] <= 0) {
             return
           }

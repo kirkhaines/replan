@@ -42,6 +42,8 @@ export const allocationTargetSchema = z.object({
 export const glidepathStrategySchema = z.object({
   mode: z.enum(['age', 'year']),
   scope: z.enum(['global', 'per_account']),
+  sellBondsFirstInDownMarkets: z.boolean(),
+  sellBondsBelowHighThreshold: z.number().min(0).max(1),
   targets: z.array(allocationTargetSchema).min(0),
 })
 
@@ -241,6 +243,8 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
   glidepath: {
     mode: 'age',
     scope: 'global',
+    sellBondsFirstInDownMarkets: false,
+    sellBondsBelowHighThreshold: 0.85,
     targets: [
       { age: 40, equity: 0.8, bonds: 0.18, realEstate: 0.02, other: 0 },
       { age: 60, equity: 0.6, bonds: 0.35, realEstate: 0.05, other: 0 },

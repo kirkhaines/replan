@@ -4,11 +4,27 @@ import { createSeededRandom, hashStringToSeed, randomNormal } from '../random'
 import type { SimulationContext, SimulationModule, SimulationSettings, SimHolding } from '../types'
 import { toAssetClass, toMonthlyRate, type AssetClass } from './utils'
 
+const toMarketAssetClass = (holdingType?: string | null): AssetClass => {
+  switch (holdingType) {
+    case 'bonds':
+      return 'bonds'
+    case 'cash':
+      return 'cash'
+    case 'real_estate':
+      return 'realEstate'
+    case 'other':
+      return 'other'
+    default:
+      return 'equity'
+  }
+}
+
 export const createReturnModule = (
   snapshot: SimulationSnapshot,
   settings: SimulationSettings,
 ): SimulationModule => {
   const returnModel = snapshot.scenario.strategies.returnModel
+  const glidepath = snapshot.scenario.strategies.glidepath
   const explain = createExplainTracker(!settings.summaryOnly)
   const seed =
     returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${settings.startDate}`)
@@ -120,7 +136,7 @@ export const createReturnModule = (
         holding.balance *= 1 + realized
       })
     },
-    onMarketReturns: (marketReturns) => {
+    onMarketReturns: (marketReturns, state) => {
       const totals = marketReturns.reduce(
         (sum, entry) => {
           if (entry.kind === 'cash') {
@@ -133,9 +149,74 @@ export const createReturnModule = (
         },
         { cash: 0, holdings: 0, total: 0 },
       )
+      const equityTotals = marketReturns.reduce(
+        (sum, entry) => {
+          if (entry.kind !== 'holding') {
+            return sum
+          }
+          if (toMarketAssetClass(entry.holdingType) !== 'equity') {
+            return sum
+          }
+          sum.start += entry.balanceStart
+          sum.amount += entry.amount
+          return sum
+        },
+        { start: 0, amount: 0 },
+      )
+      const equityRate =
+        equityTotals.start > 0 ? equityTotals.amount / equityTotals.start : 0
+      const signal = state.marketDownturn ?? {
+        equityMarketValue: 1,
+        equityMarketHigh: 1,
+        downturnHighBeforeDrop: null,
+        inDownturn: false,
+        inRecovery: false,
+        pendingRecoveryBaseCapture: false,
+        recoveryBaseBondFraction: null,
+        recoveryBaseMarketValue: null,
+      }
+      signal.equityMarketValue *= 1 + equityRate
+      if (signal.equityMarketValue > signal.equityMarketHigh) {
+        signal.equityMarketHigh = signal.equityMarketValue
+      }
+      if (glidepath.sellBondsFirstInDownMarkets) {
+        const threshold = glidepath.sellBondsBelowHighThreshold
+        const thresholdValue = signal.equityMarketHigh * threshold
+        const nowInDownturn = signal.equityMarketValue < thresholdValue
+        if (!signal.inDownturn && nowInDownturn) {
+          signal.inDownturn = true
+          signal.inRecovery = false
+          signal.pendingRecoveryBaseCapture = false
+          signal.recoveryBaseBondFraction = null
+          signal.recoveryBaseMarketValue = null
+          signal.downturnHighBeforeDrop = signal.equityMarketHigh
+        } else if (signal.inDownturn && !nowInDownturn) {
+          const highBeforeDrop = signal.downturnHighBeforeDrop ?? signal.equityMarketHigh
+          signal.inDownturn = false
+          signal.inRecovery = true
+          signal.pendingRecoveryBaseCapture = true
+          signal.recoveryBaseBondFraction = null
+          signal.recoveryBaseMarketValue = highBeforeDrop * threshold
+          signal.downturnHighBeforeDrop = null
+        } else if (!nowInDownturn && !signal.inRecovery) {
+          signal.downturnHighBeforeDrop = null
+        }
+      } else {
+        signal.inDownturn = false
+        signal.inRecovery = false
+        signal.pendingRecoveryBaseCapture = false
+        signal.recoveryBaseBondFraction = null
+        signal.recoveryBaseMarketValue = null
+        signal.downturnHighBeforeDrop = null
+      }
+      state.marketDownturn = signal
       explain.addCheckpoint('Cash return', totals.cash)
       explain.addCheckpoint('Holding return', totals.holdings)
       explain.addCheckpoint('Total return', totals.total)
+      explain.addCheckpoint('Equity market value', signal.equityMarketValue)
+      explain.addCheckpoint('Equity market high', signal.equityMarketHigh)
+      explain.addCheckpoint('Downturn period', signal.inDownturn)
+      explain.addCheckpoint('Recovery period', signal.inRecovery)
     },
   }
 }

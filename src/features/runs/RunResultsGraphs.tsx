@@ -68,6 +68,12 @@ type ShockRateChart = {
   series: ShockRateSeries[]
 }
 
+type TimelineBandRow = {
+  key: string
+  label: string
+  values: Array<string | null>
+}
+
 type RunResultsGraphsProps = {
   balanceDetail: BalanceDetail
   balanceDetailOptions: ReadonlyArray<{ value: BalanceDetail; label: string }>
@@ -76,10 +82,17 @@ type RunResultsGraphsProps = {
   ordinaryIncomeChart: OrdinaryIncomeChart
   cashflowChart: CashflowChart
   shockRateChart: ShockRateChart
+  balanceBands: TimelineBandRow[]
+  shockRateBands: TimelineBandRow[]
   showShockChartInitially: boolean
   formatAxisValue: (value: number) => string
   formatCurrency: (value: number) => string
   formatSignedCurrency: (value: number) => string
+}
+
+const chartPlotInset = {
+  left: 75,
+  right: 5,
 }
 
 const RunResultsGraphs = ({
@@ -90,6 +103,8 @@ const RunResultsGraphs = ({
   ordinaryIncomeChart,
   cashflowChart,
   shockRateChart,
+  balanceBands,
+  shockRateBands,
   showShockChartInitially,
   formatAxisValue,
   formatCurrency,
@@ -241,6 +256,73 @@ const RunResultsGraphs = ({
     setShowShockChart(showShockChartInitially)
   }, [showShockChartInitially])
 
+  const renderTimelineBands = (
+    rows: TimelineBandRow[],
+    columns: number,
+  ) => {
+    if (rows.length === 0 || columns <= 0) {
+      return null
+    }
+    return (
+      <div
+        style={{
+          marginTop: '0.25rem',
+          display: 'grid',
+          gap: '0.25rem',
+        }}
+      >
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            style={{
+              display: 'grid',
+              gap: '0.15rem',
+            }}
+          >
+            <span
+              className="muted"
+              style={{
+                fontSize: '0.72rem',
+                lineHeight: 1,
+                marginLeft: `${chartPlotInset.left}px`,
+              }}
+            >
+              {row.label}
+            </span>
+            <div
+              style={{
+                paddingLeft: `${chartPlotInset.left}px`,
+                paddingRight: `${chartPlotInset.right}px`,
+              }}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  minHeight: '9px',
+                }}
+              >
+                {Array.from({ length: columns }, (_, index) => (
+                  <div
+                    key={`${row.key}-${index}`}
+                    style={{
+                      background: row.values[index] ?? 'transparent',
+                      borderRight:
+                        index < columns - 1 ? '1px solid color-mix(in srgb, var(--border) 55%, transparent)' : 'none',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <>
       <div className="card" id="section-balance">
@@ -362,6 +444,7 @@ const RunResultsGraphs = ({
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+            {renderTimelineBands(balanceBands, balanceOverTime.data.length)}
             <div
               style={{
                 display: 'flex',
@@ -460,75 +543,78 @@ const RunResultsGraphs = ({
         </div>
         {showShockChart ? (
           hasShockRates ? (
-            <div className="chart">
-              <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={300}>
-                <LineChart data={shockRateData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" />
-                  <YAxis
-                    tickFormatter={(value) =>
-                      useCumulativeShockRates
-                        ? `$${Number(value).toFixed(2)}`
-                        : `${(Number(value) * 100).toFixed(1)}%`
-                    }
-                    width={70}
-                    scale={shockRateYAxisConfig.scale}
-                    domain={['auto', 'auto']}
-                    ticks={shockRateYAxisConfig.ticks}
-                  />
-                  <Legend verticalAlign="top" height={32} />
-                  <ReferenceLine
-                    y={useCumulativeShockRates ? 1 : 0}
-                    stroke="var(--text-muted)"
-                    strokeDasharray="4 4"
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload || payload.length === 0) {
-                        return null
+            <>
+              <div className="chart">
+                <ResponsiveContainer width="100%" height="100%" minHeight={280} minWidth={300}>
+                  <LineChart data={shockRateData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="year" />
+                    <YAxis
+                      tickFormatter={(value) =>
+                        useCumulativeShockRates
+                          ? `$${Number(value).toFixed(2)}`
+                          : `${(Number(value) * 100).toFixed(1)}%`
                       }
-                      const row = payload[0]?.payload as { year?: number } | undefined
-                      return (
-                        <div
-                          style={{
-                            background: 'var(--surface)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '10px',
-                            boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
-                            padding: '10px 12px',
-                          }}
-                        >
-                          <div className="tooltip-label">
-                            {row?.year ?? 'Year'}
-                          </div>
-                          {payload.map((entry) => (
-                            <div key={String(entry.dataKey)} style={{ fontSize: '12px' }}>
-                              <span style={{ color: entry.color }}>
-                                {entry.name ?? entry.dataKey}
-                              </span>
-                              {useCumulativeShockRates
-                                ? `: $${Number(entry.value).toFixed(4)}`
-                                : `: ${(Number(entry.value) * 100).toFixed(2)}%`}
-                            </div>
-                          ))}
-                        </div>
-                      )
-                    }}
-                  />
-                  {visibleShockRateSeries.map((series) => (
-                    <Line
-                      key={series.key}
-                      type="monotone"
-                      dataKey={series.key}
-                      stroke={series.color}
-                      strokeWidth={2}
-                      dot={false}
-                      name={series.label}
+                      width={70}
+                      scale={shockRateYAxisConfig.scale}
+                      domain={['auto', 'auto']}
+                      ticks={shockRateYAxisConfig.ticks}
                     />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+                    <Legend verticalAlign="top" height={32} />
+                    <ReferenceLine
+                      y={useCumulativeShockRates ? 1 : 0}
+                      stroke="var(--text-muted)"
+                      strokeDasharray="4 4"
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) {
+                          return null
+                        }
+                        const row = payload[0]?.payload as { year?: number } | undefined
+                        return (
+                          <div
+                            style={{
+                              background: 'var(--surface)',
+                              border: '1px solid var(--border)',
+                              borderRadius: '10px',
+                              boxShadow: '0 12px 24px rgba(25, 32, 42, 0.12)',
+                              padding: '10px 12px',
+                            }}
+                          >
+                            <div className="tooltip-label">
+                              {row?.year ?? 'Year'}
+                            </div>
+                            {payload.map((entry) => (
+                              <div key={String(entry.dataKey)} style={{ fontSize: '12px' }}>
+                                <span style={{ color: entry.color }}>
+                                  {entry.name ?? entry.dataKey}
+                                </span>
+                                {useCumulativeShockRates
+                                  ? `: $${Number(entry.value).toFixed(4)}`
+                                  : `: ${(Number(entry.value) * 100).toFixed(2)}%`}
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }}
+                    />
+                    {visibleShockRateSeries.map((series) => (
+                      <Line
+                        key={series.key}
+                        type="monotone"
+                        dataKey={series.key}
+                        stroke={series.color}
+                        strokeWidth={2}
+                        dot={false}
+                        name={series.label}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              {renderTimelineBands(shockRateBands, shockRateData.length)}
+            </>
           ) : (
             <p className="muted">No stochastic rate data available yet.</p>
           )

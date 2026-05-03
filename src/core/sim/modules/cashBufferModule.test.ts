@@ -19,6 +19,10 @@ const makeHolding = (
   taxType: InvestmentAccountHolding['taxType'],
   balance: number,
   costBasisEntries: InvestmentAccountHolding['costBasisEntries'],
+  options?: {
+    investmentAccountId?: string
+    holdingType?: InvestmentAccountHolding['holdingType']
+  },
 ): InvestmentAccountHolding => ({
   id,
   name: `Holding ${id}`,
@@ -27,10 +31,11 @@ const makeHolding = (
   taxType,
   balance,
   costBasisEntries,
-  holdingType: 'sp500',
+  holdingType: options?.holdingType ?? 'sp500',
   returnRate: 0,
   returnStdDev: 0,
-  investmentAccountId: '00000000-0000-4000-8000-000000000003',
+  investmentAccountId:
+    options?.investmentAccountId ?? '00000000-0000-4000-8000-000000000003',
 })
 
 const makeSnapshot = ({
@@ -164,19 +169,19 @@ const makeState = (
       interestRate: 0,
     },
   ],
-  investmentAccounts: [
-    {
-      id: '00000000-0000-4000-8000-000000000003',
-      contributionEntries: holdings
-        .filter((holding) => holding.taxType === 'roth')
-        .flatMap((holding) =>
-          holding.costBasisEntries.map((entry) => ({
-            ...entry,
-            taxType: 'roth' as const,
-          })),
-        ),
-    },
-  ],
+  investmentAccounts: Array.from(
+    new Set(holdings.map((holding) => holding.investmentAccountId)),
+  ).map((accountId) => ({
+    id: accountId,
+    contributionEntries: holdings
+      .filter((holding) => holding.investmentAccountId === accountId && holding.taxType === 'roth')
+      .flatMap((holding) =>
+        holding.costBasisEntries.map((entry) => ({
+          ...entry,
+          taxType: 'roth' as const,
+        })),
+      ),
+  })),
   holdings: holdings.map((holding) => ({
     id: holding.id,
     investmentAccountId: holding.investmentAccountId,
@@ -215,6 +220,16 @@ const makeState = (
   guardrailFactorMin: Number.POSITIVE_INFINITY,
   guardrailFactorCount: 0,
   guardrailFactorBelowCount: 0,
+  marketDownturn: {
+    equityMarketValue: 1,
+    equityMarketHigh: 1,
+    downturnHighBeforeDrop: null,
+    inDownturn: false,
+    inRecovery: false,
+    pendingRecoveryBaseCapture: false,
+    recoveryBaseBondFraction: null,
+    recoveryBaseMarketValue: null,
+  },
 })
 
 const makeContext = (snapshot: SimulationSnapshot, age: number): SimulationContext => {
@@ -416,5 +431,107 @@ describe('cashBufferModule', () => {
     const actionTypes = mapActionTypes(actions ?? [], holdings)
     expect(actionTypes).toEqual(['taxable', 'roth_basis', 'traditional'])
     expect(actions?.map((action) => action.amount)).toEqual([100, 120, 30])
+  })
+
+  it('sells bonds first within the same account during downturn periods', () => {
+    const holdings = [
+      makeHolding('holding-equity', 'taxable', 100, [], {
+        holdingType: 'sp500',
+      }),
+      makeHolding('holding-bonds', 'taxable', 80, [], {
+        holdingType: 'bonds',
+      }),
+    ]
+    const snapshot = makeSnapshot({
+      monthlyNeed: 90,
+      holdings,
+      scenarioOverrides: {
+        strategies: {
+          cashBuffer: { targetMonths: 1, minMonths: 1, maxMonths: 1 },
+          glidepath: {
+            mode: 'age',
+            scope: 'global',
+            sellBondsFirstInDownMarkets: true,
+            sellBondsBelowHighThreshold: 0.85,
+            targets: [],
+          },
+          withdrawal: {
+            order: ['taxable', 'traditional', 'roth', 'hsa', 'roth_basis'],
+            useCashFirst: true,
+            guardrailPct: 0,
+            avoidEarlyPenalty: false,
+            taxableGainHarvestTarget: 0,
+          },
+        },
+      },
+    })
+    const state = makeState(0, holdings)
+    if (state.marketDownturn) {
+      state.marketDownturn.inDownturn = true
+    }
+    const actions = createCashBufferModule(snapshot).getActionIntents?.(
+      state,
+      makeContext(snapshot, 65),
+    )
+    const withdrawals = (actions ?? []).filter((action) => action.kind === 'withdraw')
+    expect(withdrawals.map((action) => action.sourceHoldingId)).toEqual([
+      'holding-bonds',
+      'holding-equity',
+    ])
+    expect(withdrawals.map((action) => action.amount)).toEqual([80, 10])
+  })
+
+  it('offsets downturn equity sales with bond-to-equity rebalances across accounts', () => {
+    const holdings = [
+      makeHolding('holding-equity-a', 'taxable', 100, [], {
+        investmentAccountId: '00000000-0000-4000-8000-000000000003',
+        holdingType: 'sp500',
+      }),
+      makeHolding('holding-bonds-b', 'taxable', 70, [], {
+        investmentAccountId: '00000000-0000-4000-8000-000000000004',
+        holdingType: 'bonds',
+      }),
+      makeHolding('holding-equity-b', 'taxable', 30, [], {
+        investmentAccountId: '00000000-0000-4000-8000-000000000004',
+        holdingType: 'sp500',
+      }),
+    ]
+    const snapshot = makeSnapshot({
+      monthlyNeed: 60,
+      holdings,
+      scenarioOverrides: {
+        strategies: {
+          cashBuffer: { targetMonths: 1, minMonths: 1, maxMonths: 1 },
+          glidepath: {
+            mode: 'age',
+            scope: 'global',
+            sellBondsFirstInDownMarkets: true,
+            sellBondsBelowHighThreshold: 0.85,
+            targets: [],
+          },
+          withdrawal: {
+            order: ['taxable', 'traditional', 'roth', 'hsa', 'roth_basis'],
+            useCashFirst: true,
+            guardrailPct: 0,
+            avoidEarlyPenalty: false,
+            taxableGainHarvestTarget: 0,
+          },
+        },
+      },
+    })
+    const state = makeState(0, holdings)
+    if (state.marketDownturn) {
+      state.marketDownturn.inDownturn = true
+    }
+    const actions = createCashBufferModule(snapshot).getActionIntents?.(
+      state,
+      makeContext(snapshot, 65),
+    )
+    expect(actions?.map((action) => action.kind)).toEqual(['withdraw', 'rebalance'])
+    expect(actions?.[0]?.sourceHoldingId).toBe('holding-equity-a')
+    expect(actions?.[0]?.amount).toBe(60)
+    expect(actions?.[1]?.sourceHoldingId).toBe('holding-bonds-b')
+    expect(actions?.[1]?.targetHoldingId).toBe('holding-equity-b')
+    expect(actions?.[1]?.amount).toBe(60)
   })
 })

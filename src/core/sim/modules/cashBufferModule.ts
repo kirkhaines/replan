@@ -10,7 +10,7 @@ import type {
 } from '../types'
 import { applyInflation } from '../../utils/inflation'
 import { getYearFromIsoDate, monthsBetweenIsoDates } from '../../utils/date'
-import { getHoldingGain, sumMonthlySpending } from './utils'
+import { getHoldingGain, sumMonthlySpending, toAssetClass } from './utils'
 
 const sumSeasonedContributions = (
   entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
@@ -202,6 +202,7 @@ export const createCashBufferModule = (
     const intents: ActionIntent[] = []
     let remaining = amount
     let priority = priorityBase
+    let equitySalesInDownturn = 0
     const holdingBalances = new Map(state.holdings.map((holding) => [holding.id, holding.balance]))
     const basisRemaining = new Map(
       state.investmentAccounts.map((account) => [
@@ -209,6 +210,47 @@ export const createCashBufferModule = (
         sumSeasonedContributions(account.contributionEntries, context.dateIso, 'roth'),
       ]),
     )
+    const orderedAccountIds: string[] = []
+    const pushAccount = (accountId: string) => {
+      if (!orderedAccountIds.includes(accountId)) {
+        orderedAccountIds.push(accountId)
+      }
+    }
+    const isDownturnBondPriorityActive =
+      scenario.strategies.glidepath.sellBondsFirstInDownMarkets &&
+      Boolean(state.marketDownturn?.inDownturn)
+    const sortHoldingsForTaxType = (
+      holdings: SimulationState['holdings'],
+      resolvedTaxType: string,
+      shouldHarvest: boolean,
+    ) =>
+      resolvedTaxType === 'taxable'
+        ? [...holdings].sort((a, b) => {
+            const gainDelta = getHoldingGain(b) - getHoldingGain(a)
+            if (shouldHarvest) {
+              return gainDelta
+            }
+            if (taxableLot.harvestLosses) {
+              return -gainDelta
+            }
+            return b.balance - a.balance
+          })
+        : [...holdings].sort((a, b) => b.balance - a.balance)
+    const pushWithdrawIntent = (
+      sourceHoldingId: string,
+      withdrawAmount: number,
+      nextLabel: string,
+    ) => {
+      intents.push({
+        id: `cash-buffer-${sourceHoldingId}-${priority}`,
+        kind: 'withdraw',
+        amount: withdrawAmount,
+        sourceHoldingId,
+        priority,
+        label: nextLabel,
+      })
+      priority += 1
+    }
 
     order.forEach((taxType) => {
       if (remaining <= 0) {
@@ -217,42 +259,73 @@ export const createCashBufferModule = (
       const isRothBasis = taxType === 'roth_basis'
       const resolvedTaxType = isRothBasis ? 'roth' : taxType
       const holdings = state.holdings.filter((holding) => holding.taxType === resolvedTaxType)
-      const sortedHoldings =
-        resolvedTaxType === 'taxable'
-          ? [...holdings].sort((a, b) => {
-              const gainDelta = getHoldingGain(b) - getHoldingGain(a)
-              if (shouldHarvestGains) {
-                return gainDelta
-              }
-              if (taxableLot.harvestLosses) {
-                return -gainDelta
-              }
-              return b.balance - a.balance
-            })
-          : [...holdings].sort((a, b) => b.balance - a.balance)
+      const sortedHoldings = sortHoldingsForTaxType(holdings, resolvedTaxType, shouldHarvestGains)
       sortedHoldings.forEach((holding) => {
         if (remaining <= 0) {
           return
         }
-      const balanceRemaining = holdingBalances.get(holding.id) ?? holding.balance
-      const basisLimit = isRothBasis
-        ? basisRemaining.get(holding.investmentAccountId) ?? 0
-        : balanceRemaining
-      const withdrawAmount = Math.min(remaining, balanceRemaining, basisLimit)
+        pushAccount(holding.investmentAccountId)
+
+        let remainingForThisHolding = remaining
+        const holdingAsset = toAssetClass(holding)
+        if (isDownturnBondPriorityActive && holdingAsset === 'equity') {
+          const sameAccountBondHoldings = sortHoldingsForTaxType(
+            holdings.filter(
+              (entry) =>
+                entry.investmentAccountId === holding.investmentAccountId &&
+                toAssetClass(entry) === 'bonds',
+            ),
+            resolvedTaxType,
+            shouldHarvestGains,
+          )
+          sameAccountBondHoldings.forEach((bondHolding) => {
+            if (remainingForThisHolding <= 0) {
+              return
+            }
+            const bondBalance = holdingBalances.get(bondHolding.id) ?? bondHolding.balance
+            const basisLimit = isRothBasis
+              ? basisRemaining.get(bondHolding.investmentAccountId) ?? 0
+              : bondBalance
+            const withdrawAmount = Math.min(remainingForThisHolding, bondBalance, basisLimit)
+            if (withdrawAmount <= 0) {
+              return
+            }
+            pushWithdrawIntent(
+              bondHolding.id,
+              withdrawAmount,
+              isRothBasis ? `${label} (roth contributions)` : label,
+            )
+            remaining -= withdrawAmount
+            remainingForThisHolding -= withdrawAmount
+            holdingBalances.set(bondHolding.id, bondBalance - withdrawAmount)
+            if (bondHolding.taxType === 'roth') {
+              const remainingBasis = basisRemaining.get(bondHolding.investmentAccountId) ?? 0
+              basisRemaining.set(
+                bondHolding.investmentAccountId,
+                Math.max(0, remainingBasis - withdrawAmount),
+              )
+            }
+          })
+        }
+
+        const balanceRemaining = holdingBalances.get(holding.id) ?? holding.balance
+        const basisLimit = isRothBasis
+          ? basisRemaining.get(holding.investmentAccountId) ?? 0
+          : balanceRemaining
+        const withdrawAmount = Math.min(remainingForThisHolding, balanceRemaining, basisLimit)
         if (withdrawAmount <= 0) {
           return
         }
-        intents.push({
-          id: `cash-buffer-${holding.id}`,
-          kind: 'withdraw',
-          amount: withdrawAmount,
-          sourceHoldingId: holding.id,
-          priority,
-          label: isRothBasis ? `${label} (roth contributions)` : label,
-        })
-        priority += 1
+        pushWithdrawIntent(
+          holding.id,
+          withdrawAmount,
+          isRothBasis ? `${label} (roth contributions)` : label,
+        )
         remaining -= withdrawAmount
         holdingBalances.set(holding.id, balanceRemaining - withdrawAmount)
+        if (isDownturnBondPriorityActive && holdingAsset === 'equity') {
+          equitySalesInDownturn += withdrawAmount
+        }
         if (holding.taxType === 'roth') {
           const remainingBasis = basisRemaining.get(holding.investmentAccountId) ?? 0
           basisRemaining.set(
@@ -262,6 +335,70 @@ export const createCashBufferModule = (
         }
       })
     })
+
+    if (isDownturnBondPriorityActive && equitySalesInDownturn > 0) {
+      let offsetRemaining = equitySalesInDownturn
+      const allAccountIds = state.holdings.map((holding) => holding.investmentAccountId)
+      const accountPriority = [
+        ...orderedAccountIds,
+        ...allAccountIds.filter((accountId) => !orderedAccountIds.includes(accountId)),
+      ]
+      accountPriority.forEach((accountId) => {
+        if (offsetRemaining <= 0) {
+          return
+        }
+        const bondHoldings = state.holdings
+          .filter(
+            (holding) =>
+              holding.investmentAccountId === accountId && toAssetClass(holding) === 'bonds',
+          )
+          .sort(
+            (a, b) =>
+              (holdingBalances.get(b.id) ?? b.balance) - (holdingBalances.get(a.id) ?? a.balance),
+          )
+        const equityHoldings = state.holdings.filter(
+          (holding) =>
+            holding.investmentAccountId === accountId && toAssetClass(holding) === 'equity',
+        )
+        if (bondHoldings.length === 0 || equityHoldings.length === 0) {
+          return
+        }
+        bondHoldings.forEach((bondHolding) => {
+          if (offsetRemaining <= 0) {
+            return
+          }
+          const sourceRemaining = holdingBalances.get(bondHolding.id) ?? bondHolding.balance
+          if (sourceRemaining <= 0) {
+            return
+          }
+          const preferredTarget = equityHoldings.find(
+            (holding) => holding.taxType === bondHolding.taxType,
+          )
+          const targetHolding = preferredTarget ?? equityHoldings[0]
+          if (!targetHolding) {
+            return
+          }
+          const amount = Math.min(offsetRemaining, sourceRemaining)
+          if (amount <= 0) {
+            return
+          }
+          intents.push({
+            id: `cash-buffer-downturn-offset-${bondHolding.id}-${targetHolding.id}-${priority}`,
+            kind: 'rebalance',
+            amount,
+            sourceHoldingId: bondHolding.id,
+            targetHoldingId: targetHolding.id,
+            priority,
+            label: 'Downturn bond-to-equity offset',
+          })
+          priority += 1
+          offsetRemaining -= amount
+          holdingBalances.set(bondHolding.id, sourceRemaining - amount)
+          const targetBalance = holdingBalances.get(targetHolding.id) ?? targetHolding.balance
+          holdingBalances.set(targetHolding.id, targetBalance + amount)
+        })
+      })
+    }
 
     if (intents.length === 0) {
       intents.push({

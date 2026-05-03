@@ -465,6 +465,16 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     guardrailFactorMin: Number.POSITIVE_INFINITY,
     guardrailFactorCount: 0,
     guardrailFactorBelowCount: 0,
+    marketDownturn: {
+      equityMarketValue: 1,
+      equityMarketHigh: 1,
+      downturnHighBeforeDrop: null,
+      inDownturn: false,
+      inRecovery: false,
+      pendingRecoveryBaseCapture: false,
+      recoveryBaseBondFraction: null,
+      recoveryBaseMarketValue: null,
+    },
   }
 }
 
@@ -493,6 +503,7 @@ const cloneState = (state: SimulationState): SimulationState => ({
   guardrailFactorMin: state.guardrailFactorMin,
   guardrailFactorCount: state.guardrailFactorCount,
   guardrailFactorBelowCount: state.guardrailFactorBelowCount,
+  marketDownturn: state.marketDownturn ? { ...state.marketDownturn } : undefined,
 })
 
 const getPrimaryPerson = (snapshot: SimulationInput['snapshot']): Person | null => {

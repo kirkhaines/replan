@@ -48,6 +48,23 @@ const AssetManagementSection = ({
             <option value="global">Global</option>
           </select>
         </label>
+        <label className="field checkbox">
+          <input
+            type="checkbox"
+            {...register('scenario.strategies.glidepath.sellBondsFirstInDownMarkets')}
+          />
+          <span>Sell bonds first in down markets</span>
+        </label>
+        <label className="field">
+          <span>Sell bonds first below high threshold</span>
+          <input
+            type="number"
+            step="0.01"
+            {...register('scenario.strategies.glidepath.sellBondsBelowHighThreshold', {
+              valueAsNumber: true,
+            })}
+          />
+        </label>
       </div>
     </div>
 

@@ -165,6 +165,16 @@ export type SimulationState = {
   guardrailFactorMin: number
   guardrailFactorCount: number
   guardrailFactorBelowCount: number
+  marketDownturn?: {
+    equityMarketValue: number
+    equityMarketHigh: number
+    downturnHighBeforeDrop: number | null
+    inDownturn: boolean
+    inRecovery: boolean
+    pendingRecoveryBaseCapture: boolean
+    recoveryBaseBondFraction: number | null
+    recoveryBaseMarketValue: number | null
+  }
 }
 
 export type SimulationContext = {
