@@ -21,17 +21,14 @@ import { hashStringToSeed } from '../../core/sim/random'
 
 // ignore-large-file-size
 const formatCurrency = (value: number) => {
+  const sigfigs = 3
+  const unit_prefix = ['', 'k', 'M', 'B', 'T', 'Q']
   const abs = Math.abs(value)
-  if (abs >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(1)}B`
-  }
-  if (abs >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(1)}M`
-  }
-  if (abs >= 1_000) {
-    return `$${(value / 1_000).toFixed(1)}k`
-  }
-  return `$${Math.round(value)}`
+  const digits = Math.floor(Math.max(Math.log10(abs), 0))
+  const unit = Math.floor(digits / 3)
+  const base = value / Math.pow(10, unit * 3)
+  const base_digits = sigfigs - (digits - unit * 3) - 1
+  return `$${base.toFixed(base_digits)}${unit_prefix[unit]}`
 }
 
 const formatSignedCurrency = (value: number) => {
@@ -2290,13 +2287,11 @@ const RunResultsPage = () => {
     if (!run) {
       return {
         endingBalance: 0,
-        minBalance: 0,
       }
     }
     if (mainFilteredTimeline.length === 0) {
       return {
         endingBalance: 0,
-        minBalance: 0,
       }
     }
     const balances = mainFilteredTimeline.map((point) =>
@@ -2304,7 +2299,6 @@ const RunResultsPage = () => {
     )
     return {
       endingBalance: balances.length > 0 ? balances[balances.length - 1] : 0,
-      minBalance: balances.length > 0 ? Math.min(...balances) : 0,
     }
   }, [adjustForInflation, mainFilteredTimeline, run, showPresentDay])
 
@@ -2435,6 +2429,55 @@ const RunResultsPage = () => {
     return null
   }, [percentileBalanceEta, percentileBalanceProgress])
 
+  const mainInitialBalance = useMemo(() => {
+    if (!run?.snapshot) {
+      return 0
+    }
+    const rawBalance =
+      run.snapshot.nonInvestmentAccounts.reduce((sum, account) => sum + account.balance, 0) +
+      run.snapshot.investmentAccountHoldings.reduce(
+        (sum, holding) => sum + holding.balance,
+        0,
+      )
+    return showPresentDay
+      ? adjustForInflation(rawBalance, representativeStartDate)
+      : rawBalance
+  }, [adjustForInflation, representativeStartDate, run?.snapshot, showPresentDay])
+
+  const summaryBalanceRows = useMemo(() => {
+    const rows = [
+      {
+        key: 'main',
+        label: 'Main run',
+        initialBalance: mainInitialBalance,
+        endingBalance: summary.endingBalance,
+        successPct: stochasticSuccessPct,
+      },
+    ]
+    percentileBalanceRuns.forEach((entry) => {
+      const finalPoint = entry.timeline.at(-1)
+      const endingBalance = finalPoint
+        ? adjustForInflation(finalPoint.balance, finalPoint.date)
+        : entry.endingBalance
+      rows.push({
+        key: String(entry.targetSuccessPct),
+        label: `${formatPercent(entry.targetSuccessPct)} target (${entry.multiplier.toFixed(
+          3,
+        )}x)`,
+        initialBalance: mainInitialBalance * entry.multiplier,
+        endingBalance,
+        successPct: entry.successPct,
+      })
+    })
+    return rows
+  }, [
+    adjustForInflation,
+    mainInitialBalance,
+    percentileBalanceRuns,
+    stochasticSuccessPct,
+    summary.endingBalance,
+  ])
+
   const timelineDecades = useMemo(() => {
     const decades = new Set<number>()
     filteredTimeline.forEach((point) => {
@@ -2539,23 +2582,29 @@ const RunResultsPage = () => {
                   placeholder="Untitled run"
                 />
               </label>
-              <div className="summary">
-                <div>
-                  <span className="muted">Ending balance</span>
-                  <strong>{formatCurrency(summary.endingBalance)}</strong>
-                </div>
-                <div>
-                  <span className="muted">Min balance</span>
-                  <strong>{formatCurrency(summary.minBalance)}</strong>
-                </div>
-                <div>
-                  <span className="muted">Success %</span>
-                  <strong>
-                    {stochasticSuccessPct === null
-                      ? '—'
-                      : formatPercent(stochasticSuccessPct)}
-                  </strong>
-                </div>
+              <div className="table-wrap">
+                <table className="table compact">
+                  <thead>
+                    <tr>
+                      <th>Run</th>
+                      <th>Initial balance</th>
+                      <th>Ending balance</th>
+                      <th>Success %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summaryBalanceRows.map((row) => (
+                      <tr key={row.key}>
+                        <td>{row.label}</td>
+                        <td>{formatCurrency(row.initialBalance)}</td>
+                        <td>{formatCurrency(row.endingBalance)}</td>
+                        <td>
+                          {row.successPct === null ? '—' : formatPercent(row.successPct)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               {progressLabel ? (
                 <div className="stack">
@@ -2647,21 +2696,6 @@ const RunResultsPage = () => {
                     </span>
                   ) : null}
                 </div>
-                {percentileBalanceRuns.length > 0 ? (
-                  <div className="summary">
-                    {percentileBalanceRuns.map((entry) => (
-                      <div key={entry.targetSuccessPct}>
-                        <span className="muted">
-                          {formatPercent(entry.targetSuccessPct)} balance factor
-                        </span>
-                        <strong>{entry.multiplier.toFixed(3)}x</strong>
-                        <span className="muted">
-                          actual {formatPercent(entry.successPct)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
               </div>
             </div>
           </div>
