@@ -117,12 +117,30 @@ const RunResultsGraphs = ({
   const [showCashflowChart, setShowCashflowChart] = useState(true)
   const [showShockChart, setShowShockChart] = useState(showShockChartInitially)
   const [useBalanceLogScale, setUseBalanceLogScale] = useState(false)
+  const [showPercentileBalanceLines, setShowPercentileBalanceLines] = useState(true)
   const [shockRateDetail, setShockRateDetail] = useState<ShockRateDetail>('both')
   const [useCumulativeShockRates, setUseCumulativeShockRates] = useState(false)
   const [useShockRateLogScale, setUseShockRateLogScale] = useState(false)
-  const lineKeys = useMemo(
-    () => new Set(balanceOverTime.lineSeries?.map((entry) => entry.key) ?? []),
+  const hasPercentileBalanceLines = useMemo(
+    () =>
+      Boolean(
+        balanceOverTime.lineSeries?.some((entry) =>
+          entry.key.startsWith('percentileBalanceRun:'),
+        ),
+      ),
     [balanceOverTime.lineSeries],
+  )
+  const visibleBalanceLineSeries = useMemo(() => {
+    if (showPercentileBalanceLines) {
+      return balanceOverTime.lineSeries ?? []
+    }
+    return (balanceOverTime.lineSeries ?? []).filter(
+      (entry) => !entry.key.startsWith('percentileBalanceRun:'),
+    )
+  }, [balanceOverTime.lineSeries, showPercentileBalanceLines])
+  const lineKeys = useMemo(
+    () => new Set(visibleBalanceLineSeries.map((entry) => entry.key)),
+    [visibleBalanceLineSeries],
   )
   const balanceYAxisConfig = useMemo<{
     scale: 'linear' | RechartsScale
@@ -351,6 +369,18 @@ const RunResultsGraphs = ({
               />
               Log y-axis
             </label>
+            {hasPercentileBalanceLines ? (
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={showPercentileBalanceLines}
+                  onChange={(event) =>
+                    setShowPercentileBalanceLines(event.target.checked)
+                  }
+                />
+                Percentile success lines
+              </label>
+            ) : null}
             <button
               className="link-button"
               type="button"
@@ -430,7 +460,7 @@ const RunResultsGraphs = ({
                       fill={`color-mix(in srgb, ${series.color} 35%, transparent)`}
                     />
                   ))}
-                  {balanceOverTime.lineSeries?.map((series) => (
+                  {visibleBalanceLineSeries.map((series) => (
                     <Line
                       key={series.key}
                       type="monotone"
@@ -473,7 +503,7 @@ const RunResultsGraphs = ({
                   {item.label}
                 </span>
               ))}
-              {balanceOverTime.lineSeries?.map((item) => (
+              {visibleBalanceLineSeries.map((item) => (
                 <span
                   key={item.key}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}

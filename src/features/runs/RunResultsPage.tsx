@@ -17,6 +17,7 @@ import {
   selectSocialSecurityProvisionalIncomeBracket,
   selectTaxPolicy,
 } from '../../core/sim/tax'
+import { hashStringToSeed } from '../../core/sim/random'
 
 // ignore-large-file-size
 const formatCurrency = (value: number) => {
@@ -111,6 +112,24 @@ const chartPalette = [
 ]
 const enableStochasticLogs = false
 
+const percentileBalanceTargets = [70, 75, 80, 85, 90] as const
+const percentileBalanceLineColors = ['#0891b2', '#16a34a', '#ca8a04', '#dc2626', '#9333ea']
+
+type PercentileBalanceRun = NonNullable<
+  SimulationRun['result']['percentileBalanceRuns']
+>[number]
+
+type PercentileBalanceProgress = {
+  status: 'idle' | 'running' | 'complete' | 'error'
+  completedTargets: number
+  targetSuccessPct: number | null
+  bestDiffPct: number | null
+  trialCompleted: number
+  trialTarget: number
+  startedAt: number | null
+  error: string | null
+}
+
 const chartKeyColors: Record<string, string> = {
   'spending:cash': '#ef4444',
   'taxes:ordinary': '#f97316',
@@ -153,6 +172,100 @@ const addMonths = (isoDate: string, months: number) => {
 }
 
 const addYears = (isoDate: string, years: number) => addMonths(isoDate, years * 12)
+
+const chunk = <T,>(items: T[], size: number): T[][] => {
+  if (size <= 0) {
+    return [items]
+  }
+  const batches: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    batches.push(items.slice(i, i + size))
+  }
+  return batches
+}
+
+const getStochasticBatchSize = (runCount: number) => {
+  if (runCount <= 0) {
+    return 0
+  }
+  const coreHint =
+    typeof navigator !== 'undefined' ? Number(navigator.hardwareConcurrency) : NaN
+  const workerHint = Number.isFinite(coreHint) ? Math.max(1, Math.round(coreHint * 0.8)) : 16
+  return Math.max(1, Math.ceil(runCount / workerHint))
+}
+
+const buildStochasticSeeds = (
+  snapshot: SimulationSnapshot,
+  startDate: string,
+  runCount: number,
+) => {
+  const returnModel = snapshot.scenario.strategies.returnModel
+  const baseSeed =
+    returnModel.seed ?? hashStringToSeed(`${snapshot.scenario.id}:${startDate}`)
+  return Array.from({ length: runCount }, (_, runIndex) => baseSeed + runIndex + 1)
+}
+
+const buildBalanceMultiplierSnapshot = (
+  snapshot: SimulationSnapshot,
+  multiplier: number,
+): SimulationSnapshot => {
+  const scale = (value: number) => value * multiplier
+  return {
+    ...snapshot,
+    nonInvestmentAccounts: snapshot.nonInvestmentAccounts.map((account) => ({
+      ...account,
+      balance: scale(account.balance),
+    })),
+    investmentAccounts: snapshot.investmentAccounts.map((account) => ({
+      ...account,
+      contributionEntries: (account.contributionEntries ?? []).map((entry) => ({
+        ...entry,
+        amount: scale(entry.amount),
+      })),
+    })),
+    investmentAccountHoldings: snapshot.investmentAccountHoldings.map((holding) => ({
+      ...holding,
+      balance: scale(holding.balance),
+      costBasisEntries: holding.costBasisEntries.map((entry) => ({
+        ...entry,
+        amount: scale(entry.amount),
+      })),
+    })),
+    scenario: {
+      ...snapshot.scenario,
+      strategies: {
+        ...snapshot.scenario.strategies,
+        returnModel: {
+          ...snapshot.scenario.strategies.returnModel,
+          mode: 'deterministic',
+        },
+        withdrawal: {
+          ...snapshot.scenario.strategies.withdrawal,
+          guardrailStrategy: 'none',
+          guardrailPct: 0,
+        },
+      },
+    },
+  }
+}
+
+const formatDuration = (ms: number) => {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return null
+  }
+  const totalSeconds = Math.max(1, Math.round(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes <= 0) {
+    return `${seconds}s`
+  }
+  if (minutes < 60) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`
+  }
+  const hours = Math.floor(minutes / 60)
+  const remainder = minutes % 60
+  return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`
+}
 
 const isIsoDate = (value?: string | null) => {
   if (!value) {
@@ -281,6 +394,17 @@ const RunResultsPage = () => {
   const [rangeKey, setRangeKey] = useState('all')
   const [balanceDetail, setBalanceDetail] = useState<BalanceDetail>('none')
   const [showTimeline, setShowTimeline] = useState(false)
+  const [percentileBalanceProgress, setPercentileBalanceProgress] =
+    useState<PercentileBalanceProgress>({
+      status: 'idle',
+      completedTargets: 0,
+      targetSuccessPct: null,
+      bestDiffPct: null,
+      trialCompleted: 0,
+      trialTarget: 0,
+      startedAt: null,
+      error: null,
+    })
   const [representativeState, setRepresentativeState] = useState<{
     runId: string | null
     selection: RepresentativeSelection | null
@@ -675,6 +799,30 @@ const RunResultsPage = () => {
         minBalanceByYear.set(yearIndex, value)
       })
     }
+    const percentileBalanceByKey = new Map<string, Map<number, number>>()
+    const percentileBalanceRuns = displayRun.result.percentileBalanceRuns ?? []
+    percentileBalanceRuns.forEach((percentileRun, index) => {
+      if (percentileRun.timeline.length === 0) {
+        return
+      }
+      const key = `percentileBalanceRun:${percentileRun.targetSuccessPct}`
+      registerLineSeries(
+        key,
+        `${formatPercent(percentileRun.targetSuccessPct)} success balance`,
+        percentileBalanceLineColors[index % percentileBalanceLineColors.length],
+      )
+      const byYear = new Map<number, number>()
+      percentileRun.timeline.forEach((point) => {
+        const yearIndex = point.date
+          ? getCalendarYearIndex(point.date)
+          : point.yearIndex
+        const value = point.date
+          ? adjustForInflation(point.balance, point.date)
+          : point.balance
+        byYear.set(yearIndex, value)
+      })
+      percentileBalanceByKey.set(key, byYear)
+    })
     const data = filteredTimeline.map((point) => {
       const year = point.date ? new Date(point.date).getFullYear() : undefined
       const monthly = monthlyByYear.get(point.yearIndex)
@@ -781,10 +929,20 @@ const RunResultsPage = () => {
         }
       }
       const minBalanceValue = minBalanceByYear.get(point.yearIndex)
+      const percentileValues = Array.from(percentileBalanceByKey.entries()).reduce<
+        Record<string, number>
+      >((acc, [key, values]) => {
+        const value = values.get(point.yearIndex)
+        if (value !== undefined) {
+          acc[key] = value
+        }
+        return acc
+      }, {})
       return {
         ...point,
         year,
         ...totals,
+        ...percentileValues,
         ...(minBalanceValue !== undefined ? { minBalanceRun: minBalanceValue } : {}),
       }
     })
@@ -1836,6 +1994,229 @@ const RunResultsPage = () => {
     setRun(updated)
   }, [run, storage])
 
+  const handleCalculatePercentileBalances = useCallback(async () => {
+    if (
+      !run?.snapshot ||
+      !representativeStartDate ||
+      stochasticTargetResolved <= 0 ||
+      percentileBalanceProgress.status === 'running'
+    ) {
+      return
+    }
+    const snapshot = run.snapshot
+    const seeds =
+      run.result.stochasticRuns && run.result.stochasticRuns.length === stochasticTargetResolved
+        ? run.result.stochasticRuns
+            .slice()
+            .sort((a, b) => a.runIndex - b.runIndex)
+            .map((entry) => entry.seed)
+        : buildStochasticSeeds(snapshot, representativeStartDate, stochasticTargetResolved)
+    if (seeds.length === 0) {
+      setPercentileBalanceProgress({
+        status: 'error',
+        completedTargets: 0,
+        targetSuccessPct: null,
+        bestDiffPct: null,
+        trialCompleted: 0,
+        trialTarget: 0,
+        startedAt: null,
+        error: 'No stochastic runs are configured for this scenario.',
+      })
+      return
+    }
+
+    const startedAt = Date.now()
+    setPercentileBalanceProgress({
+      status: 'running',
+      completedTargets: 0,
+      targetSuccessPct: percentileBalanceTargets[0],
+      bestDiffPct: null,
+      trialCompleted: 0,
+      trialTarget: seeds.length,
+      startedAt,
+      error: null,
+    })
+
+    const runStochasticSuccessTrial = async (
+      multiplier: number,
+      targetSuccessPct: number,
+      completedTargets: number,
+      bestDiffPct: number | null,
+    ) => {
+      const trialSnapshot = buildBalanceMultiplierSnapshot(snapshot, multiplier)
+      const batches = chunk(seeds, getStochasticBatchSize(seeds.length))
+      let completed = 0
+      let successCount = 0
+      setPercentileBalanceProgress((current) => ({
+        ...current,
+        targetSuccessPct,
+        bestDiffPct,
+        trialCompleted: 0,
+        trialTarget: seeds.length,
+        completedTargets,
+      }))
+      await Promise.all(
+        batches.map(async (batch) => {
+          const runs = await simClient.runScenarioBatch({
+            snapshot: trialSnapshot,
+            startDate: representativeStartDate,
+            seeds: batch,
+          })
+          const batchSuccessCount = runs.filter(
+            (entry) =>
+              entry.status === 'success' && entry.result.summary.endingBalance >= 0,
+          ).length
+          completed += batch.length
+          successCount += batchSuccessCount
+          setPercentileBalanceProgress((current) => ({
+            ...current,
+            targetSuccessPct,
+            trialCompleted: Math.min(completed, seeds.length),
+            trialTarget: seeds.length,
+          }))
+        }),
+      )
+      return (successCount / seeds.length) * 100
+    }
+
+    const findMultiplier = async (targetSuccessPct: number, completedTargets: number) => {
+      let best: { multiplier: number; successPct: number; diffPct: number } | null = null
+      const evaluate = async (multiplier: number) => {
+        const successPct = await runStochasticSuccessTrial(
+          multiplier,
+          targetSuccessPct,
+          completedTargets,
+          best?.diffPct ?? null,
+        )
+        const diffPct = Math.abs(successPct - targetSuccessPct)
+        if (!best || diffPct < best.diffPct) {
+          best = { multiplier, successPct, diffPct }
+          setPercentileBalanceProgress((current) => ({
+            ...current,
+            bestDiffPct: diffPct,
+          }))
+        }
+        return { multiplier, successPct, diffPct }
+      }
+
+      const zero = await evaluate(0)
+      if (zero.successPct >= targetSuccessPct) {
+        return best ?? zero
+      }
+
+      let low = zero.multiplier
+      let high: number | null = null
+      let current = await evaluate(1)
+      if (current.successPct >= targetSuccessPct) {
+        high = current.multiplier
+      } else {
+        low = current.multiplier
+        let multiplier = current.multiplier * 2
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          current = await evaluate(multiplier)
+          if (current.successPct >= targetSuccessPct) {
+            high = current.multiplier
+            break
+          }
+          low = current.multiplier
+          multiplier *= 2
+        }
+      }
+      if (high === null || !best) {
+        throw new Error(`Could not bracket ${formatPercent(targetSuccessPct)} success.`)
+      }
+      let highBound = high
+      for (let iteration = 0; iteration < 10; iteration += 1) {
+        const mid = (low + highBound) / 2
+        current = await evaluate(mid)
+        if (current.successPct >= targetSuccessPct) {
+          highBound = mid
+        } else {
+          low = mid
+        }
+      }
+      return best
+    }
+
+    try {
+      const results: PercentileBalanceRun[] = []
+      for (const targetSuccessPct of percentileBalanceTargets) {
+        const best = await findMultiplier(targetSuccessPct, results.length)
+        const deterministicRun = await simClient.runScenario({
+          snapshot: buildBalanceMultiplierSnapshot(snapshot, best.multiplier),
+          startDate: representativeStartDate,
+        })
+        if (deterministicRun.status !== 'success') {
+          throw new Error(
+            deterministicRun.errorMessage ??
+              `Deterministic ${formatPercent(targetSuccessPct)} run failed.`,
+          )
+        }
+        results.push({
+          targetSuccessPct,
+          multiplier: best.multiplier,
+          successPct: best.successPct,
+          endingBalance: deterministicRun.result.summary.endingBalance,
+          timeline: deterministicRun.result.timeline.map((point) => ({
+            yearIndex: point.yearIndex,
+            age: point.age,
+            balance: point.balance,
+            date: point.date,
+          })),
+        })
+        setPercentileBalanceProgress((current) => ({
+          ...current,
+          completedTargets: results.length,
+          targetSuccessPct:
+            results.length < percentileBalanceTargets.length
+              ? percentileBalanceTargets[results.length]
+              : null,
+          bestDiffPct: null,
+          trialCompleted: 0,
+          trialTarget: seeds.length,
+        }))
+      }
+
+      const latest = (await storage.runRepo.get(run.id)) ?? run
+      const updated: SimulationRun = {
+        ...latest,
+        result: {
+          ...latest.result,
+          percentileBalanceRuns: results,
+        },
+      }
+      await storage.runRepo.upsert(updated)
+      setRun(updated)
+      setPercentileBalanceProgress({
+        status: 'complete',
+        completedTargets: results.length,
+        targetSuccessPct: null,
+        bestDiffPct: null,
+        trialCompleted: 0,
+        trialTarget: seeds.length,
+        startedAt,
+        error: null,
+      })
+    } catch (error) {
+      console.error('[RunResults] Percentile balance calculation failed.', error)
+      setPercentileBalanceProgress((current) => ({
+        ...current,
+        status: 'error',
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Percentile balance calculation failed.',
+      }))
+    }
+  }, [
+    percentileBalanceProgress.status,
+    representativeStartDate,
+    run,
+    simClient,
+    stochasticTargetResolved,
+    storage,
+  ])
+
   const needsRunSync = Boolean(run) && !mainRunReady
 
   useEffect(() => {
@@ -2001,6 +2382,58 @@ const RunResultsPage = () => {
     const successCount = stochasticRuns.filter((entry) => entry.endingBalance >= 0).length
     return (successCount / stochasticRuns.length) * 100
   }, [run?.result.stochasticRuns])
+
+  const percentileBalanceRuns = useMemo(
+    () =>
+      (run?.result.percentileBalanceRuns ?? [])
+        .slice()
+        .sort((a, b) => a.targetSuccessPct - b.targetSuccessPct),
+    [run?.result.percentileBalanceRuns],
+  )
+  const percentileBalanceEta = useMemo(() => {
+    if (
+      percentileBalanceProgress.status !== 'running' ||
+      !percentileBalanceProgress.startedAt ||
+      percentileBalanceProgress.completedTargets <= 0
+    ) {
+      return null
+    }
+    const elapsed = Date.now() - percentileBalanceProgress.startedAt
+    const remainingTargets =
+      percentileBalanceTargets.length - percentileBalanceProgress.completedTargets
+    return formatDuration(
+      (elapsed / percentileBalanceProgress.completedTargets) * remainingTargets,
+    )
+  }, [percentileBalanceProgress])
+  const percentileBalanceStatusLabel = useMemo(() => {
+    if (percentileBalanceProgress.status === 'running') {
+      const targetLabel =
+        percentileBalanceProgress.targetSuccessPct === null
+          ? '—'
+          : formatPercent(percentileBalanceProgress.targetSuccessPct)
+      const diffLabel =
+        percentileBalanceProgress.bestDiffPct === null
+          ? '—'
+          : `${formatPercent(percentileBalanceProgress.bestDiffPct)} away`
+      const trialLabel =
+        percentileBalanceProgress.trialTarget > 0
+          ? `${percentileBalanceProgress.trialCompleted} of ${percentileBalanceProgress.trialTarget}`
+          : '—'
+      return [
+        `${percentileBalanceProgress.completedTargets} of ${percentileBalanceTargets.length} found`,
+        `target ${targetLabel}`,
+        `closest ${diffLabel}`,
+        `current trial ${trialLabel} runs`,
+        percentileBalanceEta ? `ETA ${percentileBalanceEta}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    }
+    if (percentileBalanceProgress.status === 'error') {
+      return percentileBalanceProgress.error ?? 'Percentile balance calculation failed.'
+    }
+    return null
+  }, [percentileBalanceEta, percentileBalanceProgress])
 
   const timelineDecades = useMemo(() => {
     const decades = new Set<number>()
@@ -2188,6 +2621,47 @@ const RunResultsPage = () => {
                     ))}
                   </select>
                 </label>
+              </div>
+              <div className="stack" style={{ gap: '0.75rem' }}>
+                <div className="row" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={handleCalculatePercentileBalances}
+                    disabled={
+                      !mainRunReady ||
+                      stochasticInProgress ||
+                      stochasticTargetResolved <= 0 ||
+                      percentileBalanceProgress.status === 'running'
+                    }
+                  >
+                    Calculate percentile success balances
+                  </button>
+                  {percentileBalanceStatusLabel ? (
+                    <span
+                      className={
+                        percentileBalanceProgress.status === 'error' ? 'error' : 'muted'
+                      }
+                    >
+                      {percentileBalanceStatusLabel}
+                    </span>
+                  ) : null}
+                </div>
+                {percentileBalanceRuns.length > 0 ? (
+                  <div className="summary">
+                    {percentileBalanceRuns.map((entry) => (
+                      <div key={entry.targetSuccessPct}>
+                        <span className="muted">
+                          {formatPercent(entry.targetSuccessPct)} balance factor
+                        </span>
+                        <strong>{entry.multiplier.toFixed(3)}x</strong>
+                        <span className="muted">
+                          actual {formatPercent(entry.successPct)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

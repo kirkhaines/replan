@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { isoDateStringSchema } from './common'
-import { minimumBalanceRunSchema } from './minimumBalanceRun'
+import {
+  minimumBalanceRunPointSchema,
+  minimumBalanceRunSchema,
+} from './minimumBalanceRun'
 import { holdingTypeSchema, taxTypeSchema } from './enums'
 import { simulationSnapshotSchema } from './simulationSnapshot'
 
@@ -198,6 +201,17 @@ export const simulationResultSchema = z.object({
   stochasticRunsCancelled: z.boolean().optional(),
   minBalanceRun: minimumBalanceRunSchema.optional(),
   minBalanceRunComplete: z.boolean().optional(),
+  percentileBalanceRuns: z
+    .array(
+      z.object({
+        targetSuccessPct: z.number(),
+        multiplier: z.number().min(0),
+        successPct: z.number(),
+        endingBalance: z.number(),
+        timeline: z.array(minimumBalanceRunPointSchema),
+      }),
+    )
+    .optional(),
   summary: z.object({
     endingBalance: z.number(),
     minBalance: z.number(),
