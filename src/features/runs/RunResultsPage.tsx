@@ -391,6 +391,7 @@ const RunResultsPage = () => {
   const [rangeKey, setRangeKey] = useState('all')
   const [balanceDetail, setBalanceDetail] = useState<BalanceDetail>('none')
   const [showTimeline, setShowTimeline] = useState(false)
+  const [selectedTargetSuccessPct, setSelectedTargetSuccessPct] = useState<number | null>(null)
   const [percentileBalanceProgress, setPercentileBalanceProgress] =
     useState<PercentileBalanceProgress>({
       status: 'idle',
@@ -425,6 +426,56 @@ const RunResultsPage = () => {
     updatedAt: number
   } | null>(null)
 
+  const selectedTargetRunData = useMemo(() => {
+    if (selectedTargetSuccessPct === null) {
+      return null
+    }
+    return (
+      run?.result.percentileBalanceRuns?.find(
+        (entry) => entry.targetSuccessPct === selectedTargetSuccessPct,
+      ) ?? null
+    )
+  }, [run?.result.percentileBalanceRuns, selectedTargetSuccessPct])
+  const selectedTargetRun = useMemo<SimulationRun | null>(() => {
+    if (!run?.snapshot || !selectedTargetRunData) {
+      return null
+    }
+    const snapshot = buildBalanceMultiplierSnapshot(
+      run.snapshot,
+      selectedTargetRunData.multiplier,
+    )
+    return {
+      ...run,
+      id: `${run.id}:${selectedTargetRunData.targetSuccessPct}`,
+      title: `${formatPercent(selectedTargetRunData.targetSuccessPct)} target success`,
+      result: {
+        ...run.result,
+        summary: selectedTargetRunData.summary ?? {
+          ...run.result.summary,
+          endingBalance: selectedTargetRunData.endingBalance,
+          minBalance:
+            selectedTargetRunData.timeline.length > 0
+              ? Math.min(...selectedTargetRunData.timeline.map((point) => point.balance))
+              : selectedTargetRunData.endingBalance,
+          maxBalance:
+            selectedTargetRunData.timeline.length > 0
+              ? Math.max(...selectedTargetRunData.timeline.map((point) => point.balance))
+              : selectedTargetRunData.endingBalance,
+        },
+        timeline: selectedTargetRunData.timeline.map((point) => ({
+          ...point,
+          contribution: 0,
+          spending: 0,
+        })),
+        monthlyTimeline: selectedTargetRunData.monthlyTimeline ?? [],
+        explanations: selectedTargetRunData.explanations ?? [],
+        stochasticRuns: selectedTargetRunData.stochasticRuns ?? [],
+        stochasticRunsCancelled: false,
+      },
+      snapshot,
+    }
+  }, [run, selectedTargetRunData])
+  const baseRun = selectedTargetRun ?? run
   const representativeSelection =
     representativeState.runId === id ? representativeState.selection : null
   const representativeRun =
@@ -436,7 +487,7 @@ const RunResultsPage = () => {
   const representativeError =
     representativeState.runId === id ? representativeState.error : null
 
-  const displayRun = representativeRun ?? run
+  const displayRun = representativeRun ?? baseRun
 
   const monthlyTimeline = useMemo(
     () => displayRun?.result.monthlyTimeline ?? [],
@@ -1792,11 +1843,11 @@ const RunResultsPage = () => {
   }, [id, storage])
 
   const representativeStartDate = useMemo(() => {
-    if (!run) {
+    if (!baseRun) {
       return null
     }
-    return run.result.monthlyTimeline?.[0]?.date ?? run.result.timeline?.[0]?.date ?? null
-  }, [run])
+    return baseRun.result.monthlyTimeline?.[0]?.date ?? baseRun.result.timeline?.[0]?.date ?? null
+  }, [baseRun])
 
   const handleRepresentativeSelect = useCallback(
     (selection: RepresentativeSelection | null) => {
@@ -1847,8 +1898,26 @@ const RunResultsPage = () => {
     [id],
   )
 
+  const clearRepresentativeSelection = useCallback(() => {
+    setRepresentativeState({
+      runId: null,
+      selection: null,
+      run: null,
+      runSeed: null,
+      loading: false,
+      error: null,
+    })
+  }, [])
+
+  const handleTargetScenarioSelect = useCallback((targetSuccessPct: number | null) => {
+    setSelectedTargetSuccessPct((current) =>
+      current === targetSuccessPct ? null : targetSuccessPct,
+    )
+    clearRepresentativeSelection()
+  }, [clearRepresentativeSelection])
+
   useEffect(() => {
-    if (!representativeSelection || !run?.snapshot || !representativeStartDate) {
+    if (!representativeSelection || !baseRun?.snapshot || !representativeStartDate) {
       return
     }
     const seed = representativeSelection.run.seed
@@ -1856,7 +1925,7 @@ const RunResultsPage = () => {
       return
     }
     let cancelled = false
-    const request = buildRepresentativeRequest(run.snapshot, representativeStartDate, seed)
+    const request = buildRepresentativeRequest(baseRun.snapshot, representativeStartDate, seed)
     simClient
       .runScenario(request)
       .then((nextRun) => {
@@ -1903,7 +1972,7 @@ const RunResultsPage = () => {
     representativeStartDate,
     representativeRun,
     representativeRunSeed,
-    run?.snapshot,
+    baseRun?.snapshot,
     simClient,
   ])
 
@@ -2042,8 +2111,10 @@ const RunResultsPage = () => {
     ) => {
       const trialSnapshot = buildBalanceMultiplierSnapshot(snapshot, multiplier)
       const batches = chunk(seeds, getStochasticBatchSize(seeds.length))
+      const seedIndexByValue = new Map(seeds.map((seed, index) => [seed, index]))
       let completed = 0
       let successCount = 0
+      const stochasticRuns: NonNullable<PercentileBalanceRun['stochasticRuns']> = []
       setPercentileBalanceProgress((current) => ({
         ...current,
         targetSuccessPct,
@@ -2063,6 +2134,19 @@ const RunResultsPage = () => {
             (entry) =>
               entry.status === 'success' && entry.result.summary.endingBalance >= 0,
           ).length
+          runs.forEach((stochasticRun, index) => {
+            const seed = batch[index]
+            stochasticRuns.push({
+              runIndex: seedIndexByValue.get(seed) ?? stochasticRuns.length,
+              seed,
+              endingBalance: stochasticRun.result.summary.endingBalance,
+              minBalance: stochasticRun.result.summary.minBalance,
+              maxBalance: stochasticRun.result.summary.maxBalance,
+              guardrailFactorAvg: stochasticRun.result.summary.guardrailFactorAvg,
+              guardrailFactorMin: stochasticRun.result.summary.guardrailFactorMin,
+              guardrailFactorBelowPct: stochasticRun.result.summary.guardrailFactorBelowPct,
+            })
+          })
           completed += batch.length
           successCount += batchSuccessCount
           setPercentileBalanceProgress((current) => ({
@@ -2073,27 +2157,36 @@ const RunResultsPage = () => {
           }))
         }),
       )
-      return (successCount / seeds.length) * 100
+      return {
+        successPct: (successCount / seeds.length) * 100,
+        stochasticRuns: stochasticRuns.sort((a, b) => a.runIndex - b.runIndex),
+      }
     }
 
     const findMultiplier = async (targetSuccessPct: number, completedTargets: number) => {
-      let best: { multiplier: number; successPct: number; diffPct: number } | null = null
+      let best: {
+        multiplier: number
+        successPct: number
+        diffPct: number
+        stochasticRuns: NonNullable<PercentileBalanceRun['stochasticRuns']>
+      } | null = null
       const evaluate = async (multiplier: number) => {
-        const successPct = await runStochasticSuccessTrial(
+        const trial = await runStochasticSuccessTrial(
           multiplier,
           targetSuccessPct,
           completedTargets,
           best?.diffPct ?? null,
         )
+        const { successPct } = trial
         const diffPct = Math.abs(successPct - targetSuccessPct)
         if (!best || diffPct < best.diffPct) {
-          best = { multiplier, successPct, diffPct }
+          best = { multiplier, successPct, diffPct, stochasticRuns: trial.stochasticRuns }
           setPercentileBalanceProgress((current) => ({
             ...current,
             bestDiffPct: diffPct,
           }))
         }
-        return { multiplier, successPct, diffPct }
+        return { multiplier, successPct, diffPct, stochasticRuns: trial.stochasticRuns }
       }
 
       const zero = await evaluate(0)
@@ -2154,12 +2247,16 @@ const RunResultsPage = () => {
           multiplier: best.multiplier,
           successPct: best.successPct,
           endingBalance: deterministicRun.result.summary.endingBalance,
+          summary: deterministicRun.result.summary,
           timeline: deterministicRun.result.timeline.map((point) => ({
             yearIndex: point.yearIndex,
             age: point.age,
             balance: point.balance,
             date: point.date,
           })),
+          monthlyTimeline: deterministicRun.result.monthlyTimeline,
+          explanations: deterministicRun.result.explanations,
+          stochasticRuns: best.stochasticRuns,
         })
         setPercentileBalanceProgress((current) => ({
           ...current,
@@ -2445,10 +2542,18 @@ const RunResultsPage = () => {
   }, [adjustForInflation, representativeStartDate, run?.snapshot, showPresentDay])
 
   const summaryBalanceRows = useMemo(() => {
-    const rows = [
+    const rows: Array<{
+      key: string
+      label: string
+      targetSuccessPct: number | null
+      initialBalance: number
+      endingBalance: number
+      successPct: number | null
+    }> = [
       {
         key: 'main',
         label: 'Main run',
+        targetSuccessPct: null,
         initialBalance: mainInitialBalance,
         endingBalance: summary.endingBalance,
         successPct: stochasticSuccessPct,
@@ -2464,6 +2569,7 @@ const RunResultsPage = () => {
         label: `${formatPercent(entry.targetSuccessPct)} target (${entry.multiplier.toFixed(
           3,
         )}x)`,
+        targetSuccessPct: entry.targetSuccessPct,
         initialBalance: mainInitialBalance * entry.multiplier,
         endingBalance,
         successPct: entry.successPct,
@@ -2477,6 +2583,20 @@ const RunResultsPage = () => {
     stochasticSuccessPct,
     summary.endingBalance,
   ])
+  const selectedTargetLabel = selectedTargetRunData
+    ? `${formatPercent(selectedTargetRunData.targetSuccessPct)} target success scenario (${selectedTargetRunData.multiplier.toFixed(
+        3,
+      )}x initial balance)`
+    : ''
+  const activeStochasticRuns = baseRun?.result.stochasticRuns ?? []
+  const activeStochasticCancelled = selectedTargetRun ? false : stochasticCancelled
+  const showDistributions =
+    selectedTargetRun !== null
+      ? activeStochasticRuns.length > 0
+      : !stochasticInProgress &&
+        (stochasticTargetResolved === 0 ||
+          stochasticCancelled ||
+          stochasticAvailable >= stochasticTargetResolved)
 
   const timelineDecades = useMemo(() => {
     const decades = new Set<number>()
@@ -2583,7 +2703,7 @@ const RunResultsPage = () => {
                 />
               </label>
               <div className="table-wrap">
-                <table className="table compact">
+                <table className="table compact selectable">
                   <thead>
                     <tr>
                       <th>Run</th>
@@ -2594,7 +2714,16 @@ const RunResultsPage = () => {
                   </thead>
                   <tbody>
                     {summaryBalanceRows.map((row) => (
-                      <tr key={row.key}>
+                      <tr
+                        key={row.key}
+                        className={
+                          row.targetSuccessPct === selectedTargetSuccessPct
+                            ? 'table-row-highlight'
+                            : undefined
+                        }
+                        onClick={() => handleTargetScenarioSelect(row.targetSuccessPct)}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <td>{row.label}</td>
                         <td>{formatCurrency(row.initialBalance)}</td>
                         <td>{formatCurrency(row.endingBalance)}</td>
@@ -2702,20 +2831,81 @@ const RunResultsPage = () => {
 
           {mainRunReady ? (
             <>
-              {!stochasticInProgress &&
-              (stochasticTargetResolved === 0 ||
-                stochasticCancelled ||
-                stochasticAvailable >= stochasticTargetResolved) ? (
+              {showDistributions ? (
                 <RunResultsDistributions
-                  stochasticRuns={run?.result.stochasticRuns}
+                  stochasticRuns={activeStochasticRuns}
                   formatAxisValue={formatAxisValue}
                   formatCurrency={formatCurrency}
-                  stochasticCancelled={stochasticCancelled}
+                  stochasticCancelled={activeStochasticCancelled}
                   onSelectRepresentative={handleRepresentativeSelect}
                 />
               ) : null}
 
-              {representativeSelection ? (
+              {selectedTargetRunData ? (
+                <div
+                  className="card"
+                  style={{
+                    position: 'sticky',
+                    top: '5.5rem',
+                    zIndex: 5,
+                    display: 'grid',
+                    gap: '0.75rem',
+                    background: '#eef7ff',
+                    borderColor: '#7cc4f8',
+                  }}
+                >
+                  <span className="muted">Displaying a target success scenario</span>
+                  <div
+                    className="row"
+                    style={{
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '1rem',
+                    }}
+                  >
+                    <div>{selectedTargetLabel}</div>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={() => handleTargetScenarioSelect(null)}
+                    >
+                      Return to main scenario run results
+                    </button>
+                  </div>
+                  {representativeSelection ? (
+                    <>
+                      <span className="muted">Displaying a representative run</span>
+                      <div
+                        className="row"
+                        style={{
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '1rem',
+                        }}
+                      >
+                        <div>{representativeBannerLabel}</div>
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={clearRepresentativeSelection}
+                        >
+                          Return to target success scenario
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                  {representativeLoading ? (
+                    <p className="muted">Loading representative run...</p>
+                  ) : null}
+                  {representativeError ? (
+                    <p className="error">{representativeError}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {!selectedTargetRunData && representativeSelection ? (
                 <div
                   className="card"
                   style={{
@@ -2742,7 +2932,7 @@ const RunResultsPage = () => {
                     <button
                       className="button secondary"
                       type="button"
-                      onClick={() => handleRepresentativeSelect(null)}
+                      onClick={clearRepresentativeSelection}
                     >
                       Return to main run
                     </button>

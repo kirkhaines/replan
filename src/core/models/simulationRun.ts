@@ -193,6 +193,15 @@ export const stochasticRunSummarySchema = z.object({
   guardrailFactorBelowPct: z.number(),
 })
 
+const simulationSummarySchema = z.object({
+  endingBalance: z.number(),
+  minBalance: z.number(),
+  maxBalance: z.number(),
+  guardrailFactorAvg: z.number(),
+  guardrailFactorMin: z.number(),
+  guardrailFactorBelowPct: z.number(),
+})
+
 export const simulationResultSchema = z.object({
   timeline: z.array(timelinePointSchema),
   monthlyTimeline: z.array(monthlyTimelinePointSchema).optional(),
@@ -208,18 +217,15 @@ export const simulationResultSchema = z.object({
         multiplier: z.number().min(0),
         successPct: z.number(),
         endingBalance: z.number(),
+        summary: simulationSummarySchema.optional(),
         timeline: z.array(minimumBalanceRunPointSchema),
+        monthlyTimeline: z.array(monthlyTimelinePointSchema).optional(),
+        explanations: z.array(monthExplanationSchema).optional(),
+        stochasticRuns: z.array(stochasticRunSummarySchema).optional(),
       }),
     )
     .optional(),
-  summary: z.object({
-    endingBalance: z.number(),
-    minBalance: z.number(),
-    maxBalance: z.number(),
-    guardrailFactorAvg: z.number(),
-    guardrailFactorMin: z.number(),
-    guardrailFactorBelowPct: z.number(),
-  }),
+  summary: simulationSummarySchema,
 })
 
 export const simulationRunSchema = z.object({
