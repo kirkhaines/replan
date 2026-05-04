@@ -26,6 +26,7 @@ export type SimHolding = {
   }>
   returnRate: number
   returnStdDev: number
+  taxableDistributionYield: number
 }
 
 export type SimInvestmentAccount = {

@@ -32,6 +32,7 @@ const investmentAccountHoldingSchemaBase = baseEntitySchema.extend({
   holdingType: holdingTypeSchema,
   returnRate: z.number(),
   returnStdDev: z.number(),
+  taxableDistributionYield: z.number().min(0).optional(),
   investmentAccountId: z.string().uuid(),
 })
 

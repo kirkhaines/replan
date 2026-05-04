@@ -69,6 +69,7 @@ const normalizeInvestmentAccountHolding = (
   return {
     ...holding,
     costBasisEntries: record.costBasisEntries ?? record.contributionBasisEntries ?? [],
+    taxableDistributionYield: record.taxableDistributionYield ?? 0,
   }
 }
 

@@ -1,7 +1,13 @@
 import type { SimulationSnapshot } from '../../models'
 import { createExplainTracker } from '../explain'
 import { createSeededRandom, hashStringToSeed, randomNormal } from '../random'
-import type { SimulationContext, SimulationModule, SimulationSettings, SimHolding } from '../types'
+import type {
+  CashflowItem,
+  SimulationContext,
+  SimulationModule,
+  SimulationSettings,
+  SimHolding,
+} from '../types'
 import { toAssetClass, toMonthlyRate, type AssetClass } from './utils'
 
 const toMarketAssetClass = (holdingType?: string | null): AssetClass => {
@@ -34,6 +40,52 @@ export const createReturnModule = (
   let monthShocksByAsset: Partial<Record<AssetClass, number>> = {}
   let yearShocksByAsset: Partial<Record<AssetClass, number>> = {}
   let yearShocksByHolding: Record<string, number> = {}
+
+  const buildTaxableDistributionCashflows = (
+    stateHoldings: SimHolding[],
+    context: SimulationContext,
+  ): CashflowItem[] =>
+    stateHoldings
+      .map((holding): CashflowItem | null => {
+        const annualYield = holding.taxableDistributionYield ?? 0
+        if (holding.taxType !== 'taxable' || annualYield <= 0 || holding.balance <= 0) {
+          return null
+        }
+        const amount = holding.balance * toMonthlyRate(annualYield)
+        if (amount <= 0) {
+          return null
+        }
+        return {
+          id: `returns-core-distribution:${holding.id}:${context.monthIndex}`,
+          label: `${holding.name} taxable distribution`,
+          category: 'other' as const,
+          cash: 0,
+          ordinaryIncome: amount,
+        }
+      })
+      .filter((flow): flow is CashflowItem => flow !== null)
+
+  const applyReinvestedTaxableDistributionBasis = (
+    stateHoldings: SimHolding[],
+    cashflows: CashflowItem[],
+    context: SimulationContext,
+  ) => {
+    cashflows.forEach((flow) => {
+      if (!flow.id.startsWith('returns-core-distribution:')) {
+        return
+      }
+      const amount = flow.ordinaryIncome ?? 0
+      if (amount <= 0) {
+        return
+      }
+      const holdingId = flow.id.slice('returns-core-distribution:'.length).split(':')[0]
+      const holding = stateHoldings.find((entry) => entry.id === holdingId)
+      if (!holding || holding.taxType !== 'taxable') {
+        return
+      }
+      holding.costBasisEntries.push({ date: context.dateIso, amount })
+    })
+  }
 
   const nextNormalShock = () => randomNormal(random)
 
@@ -75,6 +127,19 @@ export const createReturnModule = (
   return {
     id: 'returns-core',
     explain,
+    getCashflows: (state, context) => {
+      const cashflows = buildTaxableDistributionCashflows(state.holdings, context)
+      const ordinaryIncome = cashflows.reduce(
+        (sum, flow) => sum + (flow.ordinaryIncome ?? 0),
+        0,
+      )
+      explain.addCheckpoint('Taxable distributions', ordinaryIncome)
+      return cashflows
+    },
+    onAfterCashflows: (cashflows, state, context) => {
+      applyReinvestedTaxableDistributionBasis(state.holdings, cashflows, context)
+      return []
+    },
     getCashflowSeries: ({ marketReturns }) => {
       if (!marketReturns || marketReturns.length === 0) {
         return []

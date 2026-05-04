@@ -39,6 +39,7 @@ const HoldingDetailPage = () => {
       holdingType: 'sp500' as const,
       returnRate: 0,
       returnStdDev: 0,
+      taxableDistributionYield: 0,
       investmentAccountId: '',
       createdAt: 0,
       updatedAt: 0,
@@ -252,6 +253,18 @@ const HoldingDetailPage = () => {
               readOnly
               value={formatStdDevRange(returnRate ?? 0, returnStdDev ?? 0)}
             />
+          </label>
+
+          <label className="field">
+            <span>Taxable distribution yield</span>
+            <input
+              type="number"
+              step="0.001"
+              {...register('taxableDistributionYield', { valueAsNumber: true })}
+            />
+            {errors.taxableDistributionYield ? (
+              <span className="error">{errors.taxableDistributionYield.message}</span>
+            ) : null}
           </label>
         </div>
 

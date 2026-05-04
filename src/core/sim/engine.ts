@@ -428,6 +428,7 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
     costBasisEntries: holding.costBasisEntries.map((entry) => ({ ...entry })),
     returnRate: holding.returnRate,
     returnStdDev: holding.returnStdDev,
+    taxableDistributionYield: holding.taxableDistributionYield ?? 0,
   }))
   const initialBalance =
     cashAccounts.reduce((sum, account) => sum + account.balance, 0) +

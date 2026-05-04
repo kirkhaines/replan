@@ -399,6 +399,7 @@ export const createRebalancingModule = (
         const defaults = holdingTypeDefaultsByType.get(holdingType)
         const returnRate = reference?.returnRate ?? defaults?.returnRate ?? 0
         const returnStdDev = reference?.returnStdDev ?? defaults?.returnStdDev ?? 0
+        const taxableDistributionYield = reference?.taxableDistributionYield ?? 0
         const holding = {
           id: existingId ?? createUuid(),
           name,
@@ -409,6 +410,7 @@ export const createRebalancingModule = (
           costBasisEntries: [],
           returnRate,
           returnStdDev,
+          taxableDistributionYield,
         }
         createdHoldingIds.set(key, holding.id)
         state.holdings.push(holding)
