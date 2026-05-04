@@ -2211,7 +2211,8 @@ const RunResultsPage = () => {
       guardrailStrategy: snapshot.scenario.strategies.withdrawal.guardrailStrategy,
       hasMinBalanceRun: Boolean(snapshot.minBalanceRun),
     })
-    const tolerancePct = Math.max(0.1, 100 / seeds.length)
+    // we are comparing floats, so add just a little more tolerance
+    const tolerancePct = 1.01 * Math.max(0.1, 100 / seeds.length)
     const sortPairs = () => {
       evaluatedPairs.sort((a, b) => a.multiplier - b.multiplier)
     }
@@ -2233,6 +2234,66 @@ const RunResultsPage = () => {
             Math.abs(a.successPct - targetSuccessPct) -
             Math.abs(b.successPct - targetSuccessPct),
         )[0]
+    const findInverseQuadraticCandidate = ({
+      targetSuccessPct,
+      lowMultiplier,
+      highMultiplier,
+      fallbackMultiplier,
+      minStep,
+    }: {
+      targetSuccessPct: number
+      lowMultiplier: number
+      highMultiplier: number
+      fallbackMultiplier: number
+      minStep: number
+    }) => {
+      const distinctBySuccessPct: EvaluatedPair[] = []
+      evaluatedPairs
+        .slice()
+        .sort(
+          (a, b) =>
+            Math.abs(a.successPct - targetSuccessPct) -
+            Math.abs(b.successPct - targetSuccessPct),
+        )
+        .forEach((entry) => {
+          if (
+            distinctBySuccessPct.some(
+              (existing) => Math.abs(existing.successPct - entry.successPct) < 0.000_000_1,
+            )
+          ) {
+            return
+          }
+          distinctBySuccessPct.push(entry)
+        })
+      const points = distinctBySuccessPct.slice(0, 3)
+      if (points.length < 3) {
+        return null
+      }
+      const candidate = points.reduce((sum, point, index) => {
+        const basis = points.reduce((product, other, otherIndex) => {
+          if (index === otherIndex) {
+            return product
+          }
+          const denominator = point.successPct - other.successPct
+          if (Math.abs(denominator) < 0.000_000_1) {
+            return NaN
+          }
+          return product * ((targetSuccessPct - other.successPct) / denominator)
+        }, 1)
+        return sum + point.multiplier * basis
+      }, 0)
+      const bracketWidth = Math.abs(highMultiplier - lowMultiplier)
+      if (
+        !Number.isFinite(candidate) ||
+        candidate <= lowMultiplier + minStep ||
+        candidate >= highMultiplier - minStep ||
+        Math.abs(candidate - fallbackMultiplier) > bracketWidth * 0.85 ||
+        evaluatedPairs.some((entry) => Math.abs(entry.multiplier - candidate) < minStep)
+      ) {
+        return null
+      }
+      return candidate
+    }
 
     const evaluate = async (
       multiplier: number,
@@ -2307,7 +2368,7 @@ const RunResultsPage = () => {
           iteration += 1
         ) {
           const denominator = highValue - lowValue
-          let nextMultiplier =
+          const falsePositionMultiplier =
             denominator === 0
               ? NaN
               : lowPair.multiplier -
@@ -2317,6 +2378,21 @@ const RunResultsPage = () => {
             0.000_000_1,
             Math.abs(highPair.multiplier - lowPair.multiplier) * 0.001,
           )
+          const falsePositionIsUsable =
+            Number.isFinite(falsePositionMultiplier) &&
+            falsePositionMultiplier > lowPair.multiplier + minStep &&
+            falsePositionMultiplier < highPair.multiplier - minStep
+          const fallbackMultiplier = falsePositionIsUsable
+            ? falsePositionMultiplier
+            : midpoint
+          let nextMultiplier =
+            findInverseQuadraticCandidate({
+              targetSuccessPct,
+              lowMultiplier: lowPair.multiplier,
+              highMultiplier: highPair.multiplier,
+              fallbackMultiplier,
+              minStep,
+            }) ?? fallbackMultiplier
           if (
             !Number.isFinite(nextMultiplier) ||
             nextMultiplier <= lowPair.multiplier + minStep ||
