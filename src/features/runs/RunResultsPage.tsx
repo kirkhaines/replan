@@ -109,7 +109,7 @@ const chartPalette = [
 ]
 const enableStochasticLogs = false
 
-const percentileBalanceTargets = [70, 75, 80, 85, 90] as const
+const percentileBalanceTargets = [50, 70, 75, 80, 85, 90] as const
 const percentileBalanceLineColors = ['#0891b2', '#16a34a', '#ca8a04', '#dc2626', '#9333ea']
 
 type PercentileBalanceRun = NonNullable<
@@ -235,11 +235,6 @@ const buildBalanceMultiplierSnapshot = (
         returnModel: {
           ...snapshot.scenario.strategies.returnModel,
           mode: 'deterministic',
-        },
-        withdrawal: {
-          ...snapshot.scenario.strategies.withdrawal,
-          guardrailStrategy: 'none',
-          guardrailPct: 0,
         },
       },
     },
@@ -2092,10 +2087,43 @@ const RunResultsPage = () => {
     }
 
     const startedAt = Date.now()
+    const mainStochasticRuns = run.result.stochasticRuns ?? []
+    const mainSuccessPct =
+      mainStochasticRuns.length > 0
+        ? (mainStochasticRuns.filter((entry) => entry.endingBalance >= 0).length /
+            mainStochasticRuns.length) *
+          100
+        : 0
+    const targetSuccessPcts = percentileBalanceTargets.filter(
+      (targetSuccessPct) => targetSuccessPct > mainSuccessPct,
+    )
+    if (targetSuccessPcts.length === 0) {
+      const latest = (await storage.runRepo.get(run.id)) ?? run
+      const updated: SimulationRun = {
+        ...latest,
+        result: {
+          ...latest.result,
+          percentileBalanceRuns: [],
+        },
+      }
+      await storage.runRepo.upsert(updated)
+      setRun(updated)
+      setPercentileBalanceProgress({
+        status: 'complete',
+        completedTargets: 0,
+        targetSuccessPct: null,
+        bestDiffPct: null,
+        trialCompleted: 0,
+        trialTarget: seeds.length,
+        startedAt,
+        error: null,
+      })
+      return
+    }
     setPercentileBalanceProgress({
       status: 'running',
       completedTargets: 0,
-      targetSuccessPct: percentileBalanceTargets[0],
+      targetSuccessPct: targetSuccessPcts[0],
       bestDiffPct: null,
       trialCompleted: 0,
       trialTarget: seeds.length,
@@ -2163,74 +2191,179 @@ const RunResultsPage = () => {
       }
     }
 
-    const findMultiplier = async (targetSuccessPct: number, completedTargets: number) => {
-      let best: {
-        multiplier: number
-        successPct: number
-        diffPct: number
-        stochasticRuns: NonNullable<PercentileBalanceRun['stochasticRuns']>
-      } | null = null
-      const evaluate = async (multiplier: number) => {
-        const trial = await runStochasticSuccessTrial(
-          multiplier,
-          targetSuccessPct,
-          completedTargets,
-          best?.diffPct ?? null,
-        )
-        const { successPct } = trial
-        const diffPct = Math.abs(successPct - targetSuccessPct)
-        if (!best || diffPct < best.diffPct) {
-          best = { multiplier, successPct, diffPct, stochasticRuns: trial.stochasticRuns }
-          setPercentileBalanceProgress((current) => ({
-            ...current,
-            bestDiffPct: diffPct,
-          }))
-        }
-        return { multiplier, successPct, diffPct, stochasticRuns: trial.stochasticRuns }
-      }
+    type EvaluatedPair = {
+      multiplier: number
+      successPct: number
+      stochasticRuns: NonNullable<PercentileBalanceRun['stochasticRuns']>
+    }
+    const evaluatedPairs: EvaluatedPair[] = [
+      {
+        multiplier: 1,
+        successPct: mainSuccessPct,
+        stochasticRuns: mainStochasticRuns,
+      },
+    ]
+    console.info('[RunResults] Percentile balance multiplier evaluation.', {
+      ts: new Date().toISOString(),
+      multiplier: 1,
+      successPct: mainSuccessPct,
+      source: 'main-run',
+      guardrailStrategy: snapshot.scenario.strategies.withdrawal.guardrailStrategy,
+      hasMinBalanceRun: Boolean(snapshot.minBalanceRun),
+    })
+    const tolerancePct = Math.max(0.1, 100 / seeds.length)
+    const sortPairs = () => {
+      evaluatedPairs.sort((a, b) => a.multiplier - b.multiplier)
+    }
+    const findClosestBoundingPair = (targetSuccessPct: number) => {
+      sortPairs()
+      const lower = evaluatedPairs
+        .filter((entry) => entry.successPct <= targetSuccessPct)
+        .sort((a, b) => b.successPct - a.successPct)[0]
+      const upper = evaluatedPairs
+        .filter((entry) => entry.successPct >= targetSuccessPct)
+        .sort((a, b) => a.successPct - b.successPct)[0]
+      return { lower, upper }
+    }
+    const findClosestPair = (targetSuccessPct: number) =>
+      evaluatedPairs
+        .slice()
+        .sort(
+          (a, b) =>
+            Math.abs(a.successPct - targetSuccessPct) -
+            Math.abs(b.successPct - targetSuccessPct),
+        )[0]
 
-      const zero = await evaluate(0)
-      if (zero.successPct >= targetSuccessPct) {
-        return best ?? zero
+    const evaluate = async (
+      multiplier: number,
+      targetSuccessPct: number,
+      completedTargets: number,
+      bestDiffPct: number | null,
+    ) => {
+      const existing = evaluatedPairs.find(
+        (entry) => Math.abs(entry.multiplier - multiplier) < 0.000_000_1,
+      )
+      if (existing) {
+        return existing
       }
-
-      let low = zero.multiplier
-      let high: number | null = null
-      let current = await evaluate(1)
-      if (current.successPct >= targetSuccessPct) {
-        high = current.multiplier
-      } else {
-        low = current.multiplier
-        let multiplier = current.multiplier * 2
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          current = await evaluate(multiplier)
-          if (current.successPct >= targetSuccessPct) {
-            high = current.multiplier
-            break
-          }
-          low = current.multiplier
-          multiplier *= 2
-        }
+      const trial = await runStochasticSuccessTrial(
+        multiplier,
+        targetSuccessPct,
+        completedTargets,
+        bestDiffPct,
+      )
+      const pair = {
+        multiplier,
+        successPct: trial.successPct,
+        stochasticRuns: trial.stochasticRuns,
       }
-      if (high === null || !best) {
-        throw new Error(`Could not bracket ${formatPercent(targetSuccessPct)} success.`)
-      }
-      let highBound = high
-      for (let iteration = 0; iteration < 10; iteration += 1) {
-        const mid = (low + highBound) / 2
-        current = await evaluate(mid)
-        if (current.successPct >= targetSuccessPct) {
-          highBound = mid
-        } else {
-          low = mid
-        }
-      }
-      return best
+      console.info('[RunResults] Percentile balance multiplier evaluation.', {
+        ts: new Date().toISOString(),
+        multiplier,
+        successPct: pair.successPct,
+        targetSuccessPct,
+        guardrailStrategy: snapshot.scenario.strategies.withdrawal.guardrailStrategy,
+        hasMinBalanceRun: Boolean(snapshot.minBalanceRun),
+      })
+      evaluatedPairs.push(pair)
+      sortPairs()
+      return pair
     }
 
     try {
+      const highestTarget = targetSuccessPcts[targetSuccessPcts.length - 1]
+      let highPair = evaluatedPairs[0]
+      let multiplier = 2
+      for (let attempt = 0; attempt < 20 && highPair.successPct < highestTarget; attempt += 1) {
+        highPair = await evaluate(multiplier, highestTarget, 0, null)
+        multiplier *= 2
+      }
+      if (highPair.successPct < highestTarget) {
+        throw new Error(`Could not bracket ${formatPercent(highestTarget)} success.`)
+      }
+
+      const findMultiplier = async (targetSuccessPct: number, completedTargets: number) => {
+        let best = findClosestPair(targetSuccessPct)
+        let bestDiffPct = best ? Math.abs(best.successPct - targetSuccessPct) : Infinity
+        setPercentileBalanceProgress((current) => ({
+          ...current,
+          targetSuccessPct,
+          completedTargets,
+          bestDiffPct: Number.isFinite(bestDiffPct) ? bestDiffPct : null,
+        }))
+        const bounds = findClosestBoundingPair(targetSuccessPct)
+        if (!bounds.lower || !bounds.upper) {
+          throw new Error(`Could not bracket ${formatPercent(targetSuccessPct)} success.`)
+        }
+        let lowPair = bounds.lower
+        let highPair = bounds.upper
+        let lowValue = lowPair.successPct - targetSuccessPct
+        let highValue = highPair.successPct - targetSuccessPct
+        for (
+          let iteration = 0;
+          iteration < 10 &&
+          bestDiffPct > tolerancePct &&
+          Math.abs(highPair.multiplier - lowPair.multiplier) > 0.000_000_1;
+          iteration += 1
+        ) {
+          const denominator = highValue - lowValue
+          let nextMultiplier =
+            denominator === 0
+              ? NaN
+              : lowPair.multiplier -
+                (lowValue * (highPair.multiplier - lowPair.multiplier)) / denominator
+          const midpoint = (lowPair.multiplier + highPair.multiplier) / 2
+          const minStep = Math.max(
+            0.000_000_1,
+            Math.abs(highPair.multiplier - lowPair.multiplier) * 0.001,
+          )
+          if (
+            !Number.isFinite(nextMultiplier) ||
+            nextMultiplier <= lowPair.multiplier + minStep ||
+            nextMultiplier >= highPair.multiplier - minStep
+          ) {
+            nextMultiplier = midpoint
+          }
+          const current = await evaluate(
+            nextMultiplier,
+            targetSuccessPct,
+            completedTargets,
+            Number.isFinite(bestDiffPct) ? bestDiffPct : null,
+          )
+          const currentDiffPct = Math.abs(current.successPct - targetSuccessPct)
+          if (currentDiffPct < bestDiffPct) {
+            best = current
+            bestDiffPct = currentDiffPct
+            setPercentileBalanceProgress((progress) => ({
+              ...progress,
+              bestDiffPct,
+            }))
+          }
+          const currentValue = current.successPct - targetSuccessPct
+          if (currentValue < 0) {
+            lowPair = current
+            lowValue = currentValue
+            highValue /= 2
+          } else if (currentValue > 0) {
+            highPair = current
+            highValue = currentValue
+            lowValue /= 2
+          } else {
+            best = current
+            bestDiffPct = 0
+            break
+          }
+        }
+        return {
+          multiplier: best.multiplier,
+          successPct: best.successPct,
+          diffPct: bestDiffPct,
+          stochasticRuns: best.stochasticRuns,
+        }
+      }
+
       const results: PercentileBalanceRun[] = []
-      for (const targetSuccessPct of percentileBalanceTargets) {
+      for (const targetSuccessPct of targetSuccessPcts) {
         const best = await findMultiplier(targetSuccessPct, results.length)
         const deterministicRun = await simClient.runScenario({
           snapshot: buildBalanceMultiplierSnapshot(snapshot, best.multiplier),
@@ -2262,8 +2395,8 @@ const RunResultsPage = () => {
           ...current,
           completedTargets: results.length,
           targetSuccessPct:
-            results.length < percentileBalanceTargets.length
-              ? percentileBalanceTargets[results.length]
+            results.length < targetSuccessPcts.length
+              ? targetSuccessPcts[results.length]
               : null,
           bestDiffPct: null,
           trialCompleted: 0,
