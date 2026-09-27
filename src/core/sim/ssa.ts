@@ -350,8 +350,9 @@ export const buildSsaEstimate = ({
     }
   })
 
-  const awiClaim = getAwiValue(claimYear - 2, wageIndex, inflationAssumptions)
-  if (!awiClaim) {
+  const indexingYear = Math.min(birthYear + 60, claimYear - 2)
+  const awiIndexing = getAwiValue(indexingYear, wageIndex, inflationAssumptions)
+  if (!awiIndexing) {
     return null
   }
 
@@ -359,23 +360,28 @@ export const buildSsaEstimate = ({
     if (year > claimYear) {
       return
     }
-    const awiYear = getAwiValue(year, wageIndex, inflationAssumptions)
-    record.indexed = awiYear ? record.earnings * (awiClaim / awiYear) : 0
+    if (year < indexingYear) {
+      const awiYear = getAwiValue(year, wageIndex, inflationAssumptions)
+      record.indexed =
+        awiYear && awiYear > 0
+          ? record.earnings * Math.max(1, awiIndexing / awiYear)
+          : record.earnings
+    } else {
+      record.indexed = record.earnings
+    }
   })
 
-  const top35Indexed = Array.from(earningsByYear.entries())
+  const sortedIndexed = Array.from(earningsByYear.entries())
     .filter(([year, record]) => year <= claimYear && record.earnings > 0)
     .sort(([, recordA], [, recordB]) => recordB.indexed - recordA.indexed)
-    .slice(0, 35)
+  const top35Indexed = sortedIndexed.slice(0, 35)
   const top35Years = new Set(top35Indexed.map(([year]) => year))
   const totalIndexedWages = top35Indexed.reduce((total, [, record]) => total + record.indexed, 0)
-  const totalIncludedMonths = top35Indexed.reduce(
-    (total, [, record]) => total + Math.min(12, record.months),
-    0,
-  )
-  const aime = totalIncludedMonths > 0 ? totalIndexedWages / totalIncludedMonths : 0
+  const COMPUTATION_MONTHS = 35 * 12
+  const aime = Math.floor(totalIndexedWages / COMPUTATION_MONTHS)
 
-  const bend = getBendPoints(claimYear, bendPoints, inflationAssumptions)
+  const eligibilityYear = Math.min(birthYear + 62, claimYear)
+  const bend = getBendPoints(eligibilityYear, bendPoints, inflationAssumptions)
   if (!bend) {
     return null
   }
@@ -386,7 +392,20 @@ export const buildSsaEstimate = ({
   const firstTerm = firstPiece * PIA_FIRST_BEND_RATE
   const secondTerm = secondPiece * PIA_SECOND_BEND_RATE
   const thirdTerm = thirdPiece * PIA_THIRD_BEND_RATE
-  const pia = firstTerm + secondTerm + thirdTerm
+  const basePia = firstTerm + secondTerm + thirdTerm
+  const roundedBasePia = Math.floor(basePia * 10) / 10
+
+  const colaFactor =
+    claimYear > eligibilityYear
+      ? applyInflation({
+          amount: 1,
+          inflationType: 'cpi',
+          fromDateIso: `${eligibilityYear}-01-01`,
+          toDateIso: `${claimYear}-01-01`,
+          assumptions: inflationAssumptions,
+        })
+      : 1
+  const pia = Math.floor(roundedBasePia * colaFactor * 10) / 10
 
   const adjustment = retirementAdjustments.find(
     (entry) => birthYear >= entry.birthYearStart && birthYear <= entry.birthYearEnd,
@@ -394,7 +413,6 @@ export const buildSsaEstimate = ({
 
   const nraMonths = adjustment?.normalRetirementAgeMonths ?? 67 * 12
 
-  let adjustedBenefit = pia
   let reduction = 0
   let creditPerMonth = 0
   let monthsEarly = 0
@@ -405,13 +423,13 @@ export const buildSsaEstimate = ({
     const firstSegment = Math.min(monthsEarly, 36)
     const remaining = Math.max(0, monthsEarly - 36)
     reduction = firstSegment * (5 / 9 / 100) + remaining * (5 / 12 / 100)
-    adjustmentFactor = 1 - reduction
+    adjustmentFactor = Math.max(0, 1 - reduction)
   } else if (claimAgeMonths > nraMonths && adjustment) {
     monthsDelayed = claimAgeMonths - nraMonths
     creditPerMonth = adjustment.delayedRetirementCreditPerYear / 12
     adjustmentFactor = 1 + monthsDelayed * creditPerMonth
   }
-  adjustedBenefit = pia * adjustmentFactor
+  const adjustedBenefit = Math.max(0, Math.floor(pia * adjustmentFactor))
 
   const earningsRows: SsaEstimateEarningsRow[] = Array.from(earningsByYear.entries())
     .filter(([year]) => year <= claimYear)
@@ -439,19 +457,19 @@ export const buildSsaEstimate = ({
       label: 'First',
       amount: firstPiece,
       rate: PIA_FIRST_BEND_RATE,
-      adjustedAmount: firstTerm,
+      adjustedAmount: firstTerm * colaFactor,
     },
     {
       label: 'Second',
       amount: secondPiece,
       rate: PIA_SECOND_BEND_RATE,
-      adjustedAmount: secondTerm,
+      adjustedAmount: secondTerm * colaFactor,
     },
     {
       label: 'Third',
       amount: thirdPiece,
       rate: PIA_THIRD_BEND_RATE,
-      adjustedAmount: thirdTerm,
+      adjustedAmount: thirdTerm * colaFactor,
     },
   ]
 
@@ -463,7 +481,7 @@ export const buildSsaEstimate = ({
       claimYear,
       claimAgeMonths,
       earningsRows,
-      applicableMonths: totalIncludedMonths,
+      applicableMonths: COMPUTATION_MONTHS,
       indexedWagesSum: totalIndexedWages,
       aime,
       bendPoints: bend,

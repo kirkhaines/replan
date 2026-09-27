@@ -176,7 +176,7 @@ const SsaBenefitDetailsPage = () => {
         <h2>Indexed earnings totals</h2>
         <div className="summary">
           <div>
-            <span className="muted">Applicable months worked</span>
+            <span className="muted">Computation months (35 years)</span>
             <strong>{summary.applicableMonths}</strong>
           </div>
           <div>
