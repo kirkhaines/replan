@@ -1,6 +1,7 @@
-import type { UseFormRegister } from 'react-hook-form'
+import type { UseFormRegister, UseFormSetValue, UseFormWatch } from 'react-hook-form'
 import { taxTypeSchema } from '../../../core/models'
 import type { ScenarioEditorValues } from '../scenarioEditorTypes'
+import Sepp72tHelperForm from './Sepp72tHelperForm'
 
 type LadderSpendingRow = {
   startAgeLabel: string
@@ -13,6 +14,9 @@ type LadderSpendingRow = {
 
 type EarlyRetirementSectionProps = {
   register: UseFormRegister<ScenarioEditorValues>
+  setValue?: UseFormSetValue<ScenarioEditorValues>
+  watch?: UseFormWatch<ScenarioEditorValues>
+  traditionalBalance?: number
   rothConversionBrackets: Array<{ rate: number; upTo?: number | null }>
   formatCurrency: (value: number) => string
   rothConversionStartDate: string
@@ -28,6 +32,9 @@ type EarlyRetirementSectionProps = {
 
 const EarlyRetirementSection = ({
   register,
+  setValue,
+  watch,
+  traditionalBalance,
   rothConversionBrackets,
   formatCurrency,
   rothConversionStartDate,
@@ -60,10 +67,6 @@ const EarlyRetirementSection = ({
               valueAsNumber: true,
             })}
           />
-        </label>
-        <label className="field checkbox">
-          <input type="checkbox" {...register('scenario.strategies.earlyRetirement.use72t')} />
-          <span>Use 72(t)</span>
         </label>
         <label className="field">
           <span>Bridge cash years</span>
@@ -237,6 +240,54 @@ const EarlyRetirementSection = ({
           />
         </label>
       </div>
+    </div>
+
+    <div className="stack">
+      <h3>72(t) distributions</h3>
+      <div className="form-grid">
+        <label className="field checkbox">
+          <input type="checkbox" {...register('scenario.strategies.sepp72t.enabled')} />
+          <span>Enable 72(t) distributions</span>
+        </label>
+        <label className="field">
+          <span>Start age</span>
+          <input
+            type="number"
+            step="0.1"
+            {...register('scenario.strategies.sepp72t.startAge', { valueAsNumber: true })}
+          />
+        </label>
+        <label className="field">
+          <span>Annual distribution</span>
+          <input
+            type="number"
+            step="1"
+            {...register('scenario.strategies.sepp72t.annualDistribution', {
+              valueAsNumber: true,
+            })}
+          />
+        </label>
+      </div>
+
+      <Sepp72tHelperForm
+        regularAge={watch ? watch('scenario.strategies.sepp72t.startAge') : 0}
+        traditionalBalance={traditionalBalance ?? 0}
+        formatCurrency={formatCurrency}
+        onApplyAmount={(amount) => {
+          if (setValue) {
+            setValue('scenario.strategies.sepp72t.annualDistribution', amount, {
+              shouldDirty: true,
+            })
+          }
+        }}
+        onApplyStartAge={(age) => {
+          if (setValue) {
+            setValue('scenario.strategies.sepp72t.startAge', age, {
+              shouldDirty: true,
+            })
+          }
+        }}
+      />
     </div>
 
     <div className="stack">

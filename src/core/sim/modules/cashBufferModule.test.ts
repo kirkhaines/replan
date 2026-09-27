@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createCashBufferModule } from './cashBufferModule'
-import type { SimulationContext, SimulationSnapshot, SimulationState } from '../types'
-import type { InvestmentAccountHolding } from '../../models'
+import type { SimulationContext, SimulationState } from '../types'
+import type { InvestmentAccountHolding, SimulationSnapshot } from '../../models'
 import {
   contributionLimitDefaultsSeed,
   irmaaTableSeed,
@@ -306,6 +306,48 @@ describe('cashBufferModule', () => {
     expect(result?.order).toEqual(['taxable', 'roth_basis', 'traditional', 'roth', 'hsa'])
   })
 
+  it('pushes traditional to the end of withdrawal order when 72(t) is enabled in the scenario', () => {
+    const holdings: InvestmentAccountHolding[] = []
+    const snapshot = makeSnapshot({
+      monthlyNeed: 0,
+      holdings,
+      scenarioOverrides: {
+        strategies: {
+          withdrawal: {
+            order: ['taxable', 'roth_basis', 'traditional', 'roth', 'hsa'],
+            useCashFirst: true,
+            guardrailPct: 0,
+            avoidEarlyPenalty: true,
+            taxableGainHarvestTarget: 0,
+          },
+          taxableLot: {
+            costBasisMethod: 'average',
+            harvestLosses: false,
+            gainRealizationTarget: 0,
+          },
+          earlyRetirement: {
+            allowPenalty: true,
+            penaltyRate: 0.1,
+            use72t: false,
+            bridgeCashYears: 0,
+          },
+          sepp72t: {
+            enabled: true,
+            startAge: 45,
+            annualDistribution: 20000,
+          },
+        },
+      },
+    })
+    const state = makeState(0, holdings)
+    const module = createCashBufferModule(snapshot) as unknown as {
+      __test?: { buildWithdrawalOrder: (state: SimulationState, age: number) => { order: string[] } }
+    }
+    const result = module.__test?.buildWithdrawalOrder(state, 48)
+    expect(result).toBeDefined()
+    expect(result?.order).toEqual(['taxable', 'roth_basis', 'roth', 'hsa', 'traditional'])
+  })
+
   it('avoids penalized types when early penalties are disabled', () => {
     const holdings = [
       makeHolding('holding-taxable', 'taxable', 100, []),
@@ -430,6 +472,53 @@ describe('cashBufferModule', () => {
     expect(actions).toBeDefined()
     const actionTypes = mapActionTypes(actions ?? [], holdings)
     expect(actionTypes).toEqual(['taxable', 'roth_basis', 'traditional'])
+    expect(actions?.map((action) => action.amount)).toEqual([100, 120, 30])
+  })
+
+  it('avoids traditional when 72(t) is enabled, taking from roth before traditional', () => {
+    const holdings = [
+      makeHolding('holding-taxable', 'taxable', 100, []),
+      makeHolding(
+        'holding-roth',
+        'roth',
+        200,
+        [{ date: '2010-01-01', amount: 120 }],
+      ),
+      makeHolding('holding-hsa', 'hsa', 100, []),
+      makeHolding('holding-trad', 'traditional', 100, []),
+    ]
+    const snapshot = makeSnapshot({
+      monthlyNeed: 250,
+      holdings,
+      scenarioOverrides: {
+        strategies: {
+          cashBuffer: { targetMonths: 1, minMonths: 1, maxMonths: 1 },
+          withdrawal: {
+            order: ['taxable', 'roth_basis', 'traditional', 'roth', 'hsa'],
+            useCashFirst: true,
+            guardrailPct: 0,
+            avoidEarlyPenalty: true,
+            taxableGainHarvestTarget: 0,
+          },
+          earlyRetirement: {
+            allowPenalty: true,
+            penaltyRate: 0.1,
+            use72t: false,
+            bridgeCashYears: 0,
+          },
+          sepp72t: {
+            enabled: true,
+            startAge: 45,
+            annualDistribution: 20000,
+          },
+        },
+      },
+    })
+    const module = createCashBufferModule(snapshot)
+    const actions = module.getActionIntents?.(makeState(0, holdings), makeContext(snapshot, 50))
+    expect(actions).toBeDefined()
+    const actionTypes = mapActionTypes(actions ?? [], holdings)
+    expect(actionTypes).toEqual(['taxable', 'roth_basis', 'roth'])
     expect(actions?.map((action) => action.amount)).toEqual([100, 120, 30])
   })
 

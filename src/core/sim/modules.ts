@@ -1,6 +1,7 @@
 import type { SimulationSnapshot } from '../models'
 import type { SimulationModule, SimulationSettings } from './types'
 import { createCashBufferModule } from './modules/cashBufferModule'
+import { createSepp72tModule } from './modules/sepp72tModule'
 import { createCharitableModule } from './modules/charitableModule'
 import { createConversionModule } from './modules/conversionModule'
 import { createDeathModule } from './modules/deathModule'
@@ -27,6 +28,7 @@ export const createSimulationModules = (
     createCharitableModule(snapshot, settings),
     createWorkModule(snapshot, settings),
     createSocialSecurityModule(snapshot, settings),
+    createSepp72tModule(snapshot, settings),
     createCashBufferModule(snapshot, settings),
     createRebalancingModule(snapshot, settings),
     createConversionModule(snapshot, settings),

@@ -102,7 +102,7 @@ export const taxableLotStrategySchema = z.object({
 export const earlyRetirementStrategySchema = z.object({
   allowPenalty: z.boolean(),
   penaltyRate: z.number().min(0).max(1),
-  use72t: z.boolean(),
+  use72t: z.boolean().optional(),
   bridgeCashYears: z.number().min(0),
 })
 
@@ -124,6 +124,14 @@ export const rothLadderStrategySchema = z.object({
   targetAfterTaxSpending: z.number().min(0),
   annualConversion: z.number().min(0),
 })
+
+export const sepp72tStrategySchema = z.object({
+  enabled: z.boolean(),
+  startAge: z.number().min(0),
+  annualDistribution: z.number().min(0),
+})
+
+export type Sepp72tStrategy = z.infer<typeof sepp72tStrategySchema>
 
 export const rmdStrategySchema = z.object({
   enabled: z.boolean(),
@@ -215,6 +223,11 @@ export const scenarioStrategiesSchema = z.object({
   earlyRetirement: earlyRetirementStrategySchema,
   rothConversion: rothConversionStrategySchema,
   rothLadder: rothLadderStrategySchema,
+  sepp72t: sepp72tStrategySchema.optional().default({
+    enabled: false,
+    startAge: 0,
+    annualDistribution: 0,
+  }),
   rmd: rmdStrategySchema,
   charitable: charitableStrategySchema,
   healthcare: healthcareStrategySchema,
@@ -292,7 +305,6 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
   earlyRetirement: {
     allowPenalty: false,
     penaltyRate: 0.1,
-    use72t: false,
     bridgeCashYears: 0,
   },
   rothConversion: {
@@ -311,6 +323,11 @@ export const createDefaultScenarioStrategies = (): ScenarioStrategies => ({
     endAge: 59.5,
     targetAfterTaxSpending: 0,
     annualConversion: 0,
+  },
+  sepp72t: {
+    enabled: false,
+    startAge: 0,
+    annualDistribution: 0,
   },
   rmd: {
     enabled: true,
@@ -421,6 +438,14 @@ export const normalizeScenarioStrategies = (
     earlyRetirement: { ...defaults.earlyRetirement, ...strategies?.earlyRetirement },
     rothConversion: { ...defaults.rothConversion, ...strategies?.rothConversion },
     rothLadder: { ...defaults.rothLadder, ...strategies?.rothLadder },
+    sepp72t: {
+      ...defaults.sepp72t,
+      ...strategies?.sepp72t,
+      enabled:
+        strategies?.sepp72t?.enabled ??
+        (strategies?.earlyRetirement as { use72t?: boolean } | undefined)?.use72t ??
+        defaults.sepp72t.enabled,
+    },
     rmd: { ...defaults.rmd, ...strategies?.rmd },
     charitable: { ...defaults.charitable, ...strategies?.charitable },
     healthcare: { ...defaults.healthcare, ...strategies?.healthcare },

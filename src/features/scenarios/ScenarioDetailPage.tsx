@@ -633,6 +633,7 @@ const ScenarioDetailPage = () => {
   const [cashAccounts, setCashAccounts] = useState<NonInvestmentAccount[]>([])
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([])
   const [investmentBalances, setInvestmentBalances] = useState<Record<string, number>>({})
+  const [holdings, setHoldings] = useState<InvestmentAccountHolding[]>([])
   const [inflationDefaults, setInflationDefaults] = useState<InflationDefault[]>([])
   const [selectedCashAccountId, setSelectedCashAccountId] = useState('')
   const [selectedInvestmentAccountId, setSelectedInvestmentAccountId] = useState('')
@@ -698,6 +699,18 @@ const ScenarioDetailPage = () => {
     return policy?.ordinaryBrackets ?? []
   }, [taxFilingStatus, taxPolicyYear])
   const ladderConversionStart = Math.max(0, ladderStartAge - ladderLeadTimeYears)
+
+  const traditionalBalance = useMemo(() => {
+    const activeAccountIds = new Set(investmentAccountIds ?? [])
+    return holdings
+      .filter(
+        (h) =>
+          h.taxType === 'traditional' &&
+          (activeAccountIds.size === 0 || activeAccountIds.has(h.investmentAccountId)),
+      )
+      .reduce((sum, h) => sum + h.balance, 0)
+  }, [holdings, investmentAccountIds])
+
   const ladderConversionEnd = Math.max(0, ladderEndAge - ladderLeadTimeYears)
   const {
     fields: glidepathTargetFields,
@@ -962,6 +975,7 @@ const ScenarioDetailPage = () => {
       return acc
     }, {})
     setInvestmentBalances(balanceMap)
+    setHoldings(holdingData)
     setInflationDefaults(inflationData)
     return {
       peopleData,
@@ -2006,6 +2020,9 @@ const ScenarioDetailPage = () => {
 
             <EarlyRetirementSection
               register={register}
+              setValue={setValue}
+              watch={watch}
+              traditionalBalance={traditionalBalance}
               rothConversionBrackets={rothConversionBrackets}
               formatCurrency={formatCurrency}
               rothConversionStartDate={rothConversionStartDate}

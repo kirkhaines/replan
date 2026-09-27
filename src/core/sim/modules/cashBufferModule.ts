@@ -27,18 +27,15 @@ const sumSeasonedContributions = (
 const buildWithdrawalOrderForStrategy = (
   state: SimulationState,
   age: number,
-  strategy: Pick<ScenarioStrategies, 'withdrawal' | 'earlyRetirement' | 'taxableLot'>,
+  strategy: Pick<ScenarioStrategies, 'withdrawal' | 'earlyRetirement' | 'taxableLot'> & {
+    sepp72t?: ScenarioStrategies['sepp72t']
+  },
 ) => {
-  const { withdrawal, earlyRetirement: early, taxableLot } = strategy
+  const { withdrawal, earlyRetirement: early, taxableLot, sepp72t } = strategy
   const baseOrder = withdrawal.order
   let order = baseOrder
   if (age < 59.5) {
-    const penalizedTypes = new Set<string>()
-    if (!early.use72t) {
-      penalizedTypes.add('traditional')
-    }
-    penalizedTypes.add('roth')
-    penalizedTypes.add('hsa')
+    const penalizedTypes = new Set<string>(['traditional', 'roth', 'hsa'])
     if (!early.allowPenalty) {
       const withoutPenalty = order.filter((type) => !penalizedTypes.has(type))
       if (withoutPenalty.length > 0) {
@@ -49,6 +46,10 @@ const buildWithdrawalOrderForStrategy = (
         ...order.filter((type) => !penalizedTypes.has(type)),
         ...order.filter((type) => penalizedTypes.has(type)),
       ]
+    }
+    // Move traditional to the end of the list only if using 72(t) (since its penalty is retroactive with interest)
+    if (sepp72t?.enabled && order.includes('traditional')) {
+      order = [...order.filter((type) => type !== 'traditional'), 'traditional']
     }
   } else {
     const withoutPenalty = order.filter((type) => type !== 'roth_basis')
@@ -78,11 +79,12 @@ export const estimateCashBufferWithdrawals = (
   if (amount <= 0) {
     return { total: 0, byTaxType: {} }
   }
-  const { withdrawal, earlyRetirement, taxableLot } = snapshot.scenario.strategies
+  const { withdrawal, earlyRetirement, taxableLot, sepp72t } = snapshot.scenario.strategies
   const { order, shouldHarvestGains } = buildWithdrawalOrderForStrategy(state, context.age, {
     withdrawal,
     earlyRetirement,
     taxableLot,
+    sepp72t,
   })
   const holdingBalances = new Map(state.holdings.map((holding) => [holding.id, holding.balance]))
   const basisRemaining = new Map(
@@ -151,6 +153,7 @@ export const createCashBufferModule = (
   const withdrawal = scenario.strategies.withdrawal
   const early = scenario.strategies.earlyRetirement
   const taxableLot = scenario.strategies.taxableLot
+  const sepp72t = scenario.strategies.sepp72t
   const contributionLimits = snapshot.contributionLimits ?? []
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId && !item.isPreTax,
@@ -198,6 +201,7 @@ export const createCashBufferModule = (
       withdrawal,
       earlyRetirement: early,
       taxableLot,
+      sepp72t,
     })
     const intents: ActionIntent[] = []
     let remaining = amount
@@ -419,6 +423,7 @@ export const createCashBufferModule = (
         withdrawal,
         earlyRetirement: early,
         taxableLot,
+        sepp72t,
       }),
   }
 

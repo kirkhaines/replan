@@ -403,16 +403,16 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
       baseEntries.length > 0
         ? baseEntries
         : snapshot.investmentAccountHoldings
-            .filter(
-              (holding) =>
-                holding.investmentAccountId === account.id && holding.taxType === 'roth',
-            )
-            .flatMap((holding) =>
-              holding.costBasisEntries.map((entry) => ({
-                ...entry,
-                taxType: 'roth' as const,
-              })),
-            )
+          .filter(
+            (holding) =>
+              holding.investmentAccountId === account.id && holding.taxType === 'roth',
+          )
+          .flatMap((holding) =>
+            holding.costBasisEntries.map((entry) => ({
+              ...entry,
+              taxType: 'roth' as const,
+            })),
+          )
     return {
       id: account.id,
       contributionEntries: fallbackEntries.map((entry) => ({ ...entry })),
@@ -671,7 +671,7 @@ const applyHoldingWithdrawal = (
   const early = context.snapshot.scenario.strategies.earlyRetirement
   let penaltyAmount = 0
   if (!skipPenalty && context.age < 59.5) {
-    if (holding.taxType === 'traditional' && !early.use72t) {
+    if (holding.taxType === 'traditional') {
       penaltyAmount = withdrawal
     }
     if (holding.taxType === 'roth') {
@@ -820,24 +820,24 @@ const applyActions = (
       const applied =
         action.sourceHoldingId
           ? applyHoldingWithdrawal(
-              state,
-              action.sourceHoldingId,
-              action.resolvedAmount,
-              totals,
-              context,
-              action.taxTreatment,
-              skipPenalty,
-              skipRothContributionConsumption,
-            )
+            state,
+            action.sourceHoldingId,
+            action.resolvedAmount,
+            totals,
+            context,
+            action.taxTreatment,
+            skipPenalty,
+            skipRothContributionConsumption,
+          )
           : withdrawProRata(
-              state,
-              action.resolvedAmount,
-              totals,
-              context,
-              action.taxTreatment,
-              skipPenalty,
-              skipRothContributionConsumption,
-            )
+            state,
+            action.resolvedAmount,
+            totals,
+            context,
+            action.taxTreatment,
+            skipPenalty,
+            skipRothContributionConsumption,
+          )
       if (applied > 0) {
         applyCashToAccounts(state, applied)
       }

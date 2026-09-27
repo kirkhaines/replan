@@ -4,8 +4,9 @@ export {
   scenarioStrategiesSchema,
   createDefaultScenarioStrategies,
   normalizeScenarioStrategies,
+  sepp72tStrategySchema,
 } from './scenarioStrategies'
-export type { ScenarioStrategies } from './scenarioStrategies'
+export type { ScenarioStrategies, Sepp72tStrategy } from './scenarioStrategies'
 export { baseEntitySchema, isoDateStringSchema } from './common'
 export {
   taxTypeSchema,
