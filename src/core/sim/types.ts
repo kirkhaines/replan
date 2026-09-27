@@ -176,6 +176,21 @@ export type SimulationState = {
     recoveryBaseBondFraction: number | null
     recoveryBaseMarketValue: number | null
   }
+  sepp72tState?: Sepp72tState
+}
+
+export type Sepp72tDistribution = {
+  year: number
+  age: number
+  amount: number
+  dateIso: string
+  holdingId: string
+}
+
+export type Sepp72tState = {
+  isBusted: boolean
+  bustedYear?: number
+  distributions: Sepp72tDistribution[]
 }
 
 export type SimulationContext = {

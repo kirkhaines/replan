@@ -476,6 +476,10 @@ const createInitialState = (snapshot: SimulationInput['snapshot']): SimulationSt
       recoveryBaseBondFraction: null,
       recoveryBaseMarketValue: null,
     },
+    sepp72tState: {
+      isBusted: false,
+      distributions: [],
+    },
   }
 }
 
@@ -505,6 +509,13 @@ const cloneState = (state: SimulationState): SimulationState => ({
   guardrailFactorCount: state.guardrailFactorCount,
   guardrailFactorBelowCount: state.guardrailFactorBelowCount,
   marketDownturn: state.marketDownturn ? { ...state.marketDownturn } : undefined,
+  sepp72tState: state.sepp72tState
+    ? {
+        isBusted: state.sepp72tState.isBusted,
+        bustedYear: state.sepp72tState.bustedYear,
+        distributions: state.sepp72tState.distributions.map((entry) => ({ ...entry })),
+      }
+    : undefined,
 })
 
 const getPrimaryPerson = (snapshot: SimulationInput['snapshot']): Person | null => {
@@ -584,7 +595,9 @@ const applyCashflows = (
   })
 }
 
-const applyHoldingWithdrawal = (
+export const IRS_72T_DEFERRAL_INTEREST_RATE = 0.06
+
+export const applyHoldingWithdrawal = (
   state: SimulationState,
   holdingId: string,
   amount: number,
@@ -593,6 +606,7 @@ const applyHoldingWithdrawal = (
   taxTreatmentOverride?: ActionIntent['taxTreatment'],
   skipPenalty?: boolean,
   skipRothContributionConsumption?: boolean,
+  isSeppDistribution?: boolean,
 ) => {
   const holding = state.holdings.find((entry) => entry.id === holdingId)
   if (!holding || amount <= 0) {
@@ -669,18 +683,85 @@ const applyHoldingWithdrawal = (
   }
 
   const early = context.snapshot.scenario.strategies.earlyRetirement
-  let penaltyAmount = 0
-  if (!skipPenalty && context.age < 59.5) {
-    if (holding.taxType === 'traditional') {
-      penaltyAmount = withdrawal
+  const penaltyRate = early.penaltyRate ?? 0.1
+
+  // 72(t) SEPP tracking and violation detection
+  const sepp = context.snapshot.scenario.strategies.sepp72t
+  const seppConfigured = Boolean(
+    sepp?.enabled &&
+    (sepp.startAge ?? 0) > 0 &&
+    (sepp.annualDistribution ?? 0) > 0,
+  )
+  const seppEndAge = seppConfigured ? Math.max(59.5, (sepp.startAge ?? 0) + 5) : 0
+  const isWithinSeppWindow =
+    seppConfigured &&
+    context.age >= (sepp.startAge ?? 0) &&
+    context.age < seppEndAge
+
+  if (holding.taxType === 'traditional') {
+    if (isSeppDistribution) {
+      if (!state.sepp72tState?.isBusted) {
+        if (!state.sepp72tState) {
+          state.sepp72tState = { isBusted: false, distributions: [] }
+        }
+        state.sepp72tState.distributions.push({
+          year: context.yearIndex,
+          age: context.age,
+          amount: withdrawal,
+          dateIso: context.dateIso,
+          holdingId: holding.id,
+        })
+      } else {
+        // 72(t) plan was previously busted; subsequent distributions lose penalty exemption
+        if (context.age < 59.5) {
+          state.yearLedger.penalties += withdrawal * penaltyRate
+        }
+      }
+    } else {
+      // Non-72(t) withdrawal from traditional account
+      if (isWithinSeppWindow && !state.sepp72tState?.isBusted) {
+        // Modification of active 72(t) schedule violates IRS rules and busts the plan
+        if (!state.sepp72tState) {
+          state.sepp72tState = { isBusted: false, distributions: [] }
+        }
+        state.sepp72tState.isBusted = true
+        state.sepp72tState.bustedYear = context.yearIndex
+
+        // Under IRC §72(t)(4) & §6621: Recapture tax of 10% on all prior distributions
+        // that avoided the early withdrawal penalty (i.e. taken prior to age 59.5),
+        // plus statutory interest for the deferral period.
+        let recaptureTax = 0
+        for (const dist of state.sepp72tState.distributions) {
+          if (dist.age < 59.5) {
+            const basePenalty = dist.amount * penaltyRate
+            const deferralYears = Math.max(0, context.yearIndex - dist.year)
+            const interest =
+              deferralYears > 0
+                ? basePenalty * (Math.pow(1 + IRS_72T_DEFERRAL_INTEREST_RATE, deferralYears) - 1)
+                : 0
+            recaptureTax += basePenalty + interest
+          }
+        }
+        state.yearLedger.penalties += recaptureTax
+      }
+
+      // Early withdrawal penalty on current withdrawal (if under 59.5 and not skipped e.g. for Roth conversion)
+      if (!skipPenalty && context.age < 59.5) {
+        state.yearLedger.penalties += withdrawal * penaltyRate
+      }
     }
-    if (holding.taxType === 'roth') {
-      penaltyAmount = Math.max(0, withdrawal - seasonedRothBasis)
+  } else {
+    let penaltyAmount = 0
+    if (!skipPenalty && context.age < 59.5) {
+      if (holding.taxType === 'roth') {
+        penaltyAmount = Math.max(0, withdrawal - seasonedRothBasis)
+      }
+    }
+    if (penaltyAmount > 0) {
+      state.yearLedger.penalties += penaltyAmount * penaltyRate
     }
   }
-  if (penaltyAmount > 0) {
-    state.yearLedger.penalties += penaltyAmount * early.penaltyRate
-  }
+
   totals.withdrawals += withdrawal
   return withdrawal
 }
@@ -746,6 +827,7 @@ const withdrawProRata = (
   taxTreatmentOverride?: ActionIntent['taxTreatment'],
   skipPenalty?: boolean,
   skipRothContributionConsumption?: boolean,
+  isSeppDistribution?: boolean,
 ) => {
   const totalHoldings = sumHoldings(state)
   if (totalHoldings <= 0 || amount <= 0) {
@@ -768,6 +850,7 @@ const withdrawProRata = (
       taxTreatmentOverride,
       skipPenalty,
       skipRothContributionConsumption,
+      isSeppDistribution,
     )
     remaining -= applied
   })
@@ -817,6 +900,10 @@ const applyActions = (
     if (action.kind === 'withdraw') {
       const skipPenalty = action.skipPenalty || action.moduleId === 'rebalancing'
       const skipRothContributionConsumption = action.moduleId === 'rebalancing'
+      const isSeppDistribution =
+        action.moduleId === 'sepp72t' ||
+        Boolean(action.id?.startsWith('sepp72t')) ||
+        action.label === '72(t) distribution'
       const applied =
         action.sourceHoldingId
           ? applyHoldingWithdrawal(
@@ -828,6 +915,7 @@ const applyActions = (
             action.taxTreatment,
             skipPenalty,
             skipRothContributionConsumption,
+            isSeppDistribution,
           )
           : withdrawProRata(
             state,
@@ -837,6 +925,7 @@ const applyActions = (
             action.taxTreatment,
             skipPenalty,
             skipRothContributionConsumption,
+            isSeppDistribution,
           )
       if (applied > 0) {
         applyCashToAccounts(state, applied)
@@ -891,6 +980,8 @@ const applyActions = (
         context,
         'ordinary',
         true,
+        false,
+        false,
       )
       if (applied > 0) {
         const holding = state.holdings.find((entry) => entry.id === targetHolding)

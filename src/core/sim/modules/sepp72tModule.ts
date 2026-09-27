@@ -38,6 +38,10 @@ export const createSepp72tModule = (
       if (strategy.annualDistribution <= 0 || strategy.startAge <= 0) {
         return []
       }
+      if (state.sepp72tState?.isBusted) {
+        explain.addCheckpoint('72(t) plan busted', true)
+        return []
+      }
 
       // Under IRS rules, 72(t) SEPP distributions must continue until the later of
       // age 59.5 or 5 full years from the initial distribution.

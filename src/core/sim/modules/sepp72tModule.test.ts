@@ -213,4 +213,13 @@ describe('sepp72tModule', () => {
     const intentsAge62 = module.getActionIntents?.(state, makeContext(snapshot, 62))
     expect(intentsAge62).toEqual([])
   })
+
+  it('returns no intents when the 72(t) plan is busted', () => {
+    const snapshot = makeSnapshot({ startAge: 50, annualDistribution: 20000 })
+    const module = createSepp72tModule(snapshot)
+    const state = makeState([makeHolding('trad-1', 'traditional', 100000)])
+    state.sepp72tState = { isBusted: true, distributions: [] }
+    const intents = module.getActionIntents?.(state, makeContext(snapshot, 52))
+    expect(intents).toEqual([])
+  })
 })
