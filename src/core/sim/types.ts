@@ -104,6 +104,8 @@ export type ActionIntent = {
   label?: string
   taxTreatment?: 'ordinary' | 'capital_gains' | 'tax_exempt'
   skipPenalty?: boolean
+  isSeppDistribution?: boolean
+  isConversion?: boolean
 }
 
 export type ActionRecord = ActionIntent & {

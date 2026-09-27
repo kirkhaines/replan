@@ -83,6 +83,7 @@ export const createSepp72tModule = (
           priority,
           label: '72(t) distribution',
           skipPenalty: true, // Penalty-free 72(t) SEPP distribution
+          isSeppDistribution: true,
         })
         priority += 1
         remaining -= amount

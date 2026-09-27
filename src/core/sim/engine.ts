@@ -511,10 +511,10 @@ const cloneState = (state: SimulationState): SimulationState => ({
   marketDownturn: state.marketDownturn ? { ...state.marketDownturn } : undefined,
   sepp72tState: state.sepp72tState
     ? {
-        isBusted: state.sepp72tState.isBusted,
-        bustedYear: state.sepp72tState.bustedYear,
-        distributions: state.sepp72tState.distributions.map((entry) => ({ ...entry })),
-      }
+      isBusted: state.sepp72tState.isBusted,
+      bustedYear: state.sepp72tState.bustedYear,
+      distributions: state.sepp72tState.distributions.map((entry) => ({ ...entry })),
+    }
     : undefined,
 })
 
@@ -607,6 +607,7 @@ export const applyHoldingWithdrawal = (
   skipPenalty?: boolean,
   skipRothContributionConsumption?: boolean,
   isSeppDistribution?: boolean,
+  isConversion?: boolean,
 ) => {
   const holding = state.holdings.find((entry) => entry.id === holdingId)
   if (!holding || amount <= 0) {
@@ -717,6 +718,12 @@ export const applyHoldingWithdrawal = (
           state.yearLedger.penalties += withdrawal * penaltyRate
         }
       }
+    } else if (isConversion) {
+      // Under Treas. Reg. § 1.408A-4, Q&A-12: A Roth conversion from a traditional IRA
+      // is permitted during an active 72(t) SEPP plan and will NOT be treated as a
+      // distribution for purposes of determining whether a modification of the series
+      // of payments has occurred under section 72(t)(4).
+      // Roth conversions are also exempt from the 10% early withdrawal penalty under IRC § 408A(d)(3)(A)(ii).
     } else {
       // Non-72(t) withdrawal from traditional account
       if (isWithinSeppWindow && !state.sepp72tState?.isBusted) {
@@ -828,6 +835,7 @@ const withdrawProRata = (
   skipPenalty?: boolean,
   skipRothContributionConsumption?: boolean,
   isSeppDistribution?: boolean,
+  isConversion?: boolean,
 ) => {
   const totalHoldings = sumHoldings(state)
   if (totalHoldings <= 0 || amount <= 0) {
@@ -851,6 +859,7 @@ const withdrawProRata = (
       skipPenalty,
       skipRothContributionConsumption,
       isSeppDistribution,
+      isConversion,
     )
     remaining -= applied
   })
@@ -901,9 +910,11 @@ const applyActions = (
       const skipPenalty = action.skipPenalty || action.moduleId === 'rebalancing'
       const skipRothContributionConsumption = action.moduleId === 'rebalancing'
       const isSeppDistribution =
+        Boolean(action.isSeppDistribution) ||
         action.moduleId === 'sepp72t' ||
         Boolean(action.id?.startsWith('sepp72t')) ||
         action.label === '72(t) distribution'
+      const isConversion = Boolean(action.isConversion)
       const applied =
         action.sourceHoldingId
           ? applyHoldingWithdrawal(
@@ -916,6 +927,7 @@ const applyActions = (
             skipPenalty,
             skipRothContributionConsumption,
             isSeppDistribution,
+            isConversion,
           )
           : withdrawProRata(
             state,
@@ -926,6 +938,7 @@ const applyActions = (
             skipPenalty,
             skipRothContributionConsumption,
             isSeppDistribution,
+            isConversion,
           )
       if (applied > 0) {
         applyCashToAccounts(state, applied)
@@ -982,6 +995,7 @@ const applyActions = (
         true,
         false,
         false,
+        true,
       )
       if (applied > 0) {
         const holding = state.holdings.find((entry) => entry.id === targetHolding)

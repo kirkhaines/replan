@@ -171,6 +171,7 @@ describe('sepp72tModule', () => {
       sourceHoldingId: 'trad-1',
       skipPenalty: true,
       label: '72(t) distribution',
+      isSeppDistribution: true,
     })
   })
 

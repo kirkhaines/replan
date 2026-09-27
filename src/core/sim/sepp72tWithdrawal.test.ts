@@ -401,7 +401,7 @@ describe('applyHoldingWithdrawal with 72(t) rules and penalties', () => {
     expect(state.yearLedger.penalties).toBe(1000)
   })
 
-  it('busts plan and recaptures on Roth conversion from traditional during active 72(t), while conversion itself is penalty-free', () => {
+  it('does not bust 72(t) plan and does not assess penalties on Roth conversion under Treas. Reg. § 1.408A-4, Q&A-12', () => {
     const snapshot = makeSnapshot({ startAge: 50, annualDistribution: 20000 })
     const state = makeState([
       makeHolding('trad-1', 'traditional', 100000),
@@ -414,7 +414,7 @@ describe('applyHoldingWithdrawal with 72(t) rules and penalties', () => {
       ],
     }
 
-    // Roth conversion from traditional in year 1 (age 51) with skipPenalty: true
+    // Roth conversion from traditional in year 1 (age 51) with skipPenalty: true, isConversion: true
     const totals = makeTotals()
     const context = makeContext(snapshot, 51, 1)
 
@@ -428,12 +428,11 @@ describe('applyHoldingWithdrawal with 72(t) rules and penalties', () => {
       true, // skipPenalty is true for Roth conversion
       false,
       false,
+      true, // isConversion: true
     )
 
-    expect(state.sepp72tState?.isBusted).toBe(true)
-    // Recapture tax on Year 0 distribution + 1 year interest:
-    // 20,000 * 0.10 * 1.06 = 2,120.00
-    // Conversion itself is not penalized because skipPenalty is true
-    expect(state.yearLedger.penalties).toBeCloseTo(2120, 2)
+    // Under Treas. Reg. § 1.408A-4, Q&A-12, a Roth conversion does NOT constitute a modification under IRC §72(t)(4)
+    expect(state.sepp72tState?.isBusted).toBe(false)
+    expect(state.yearLedger.penalties).toBe(0)
   })
 })
