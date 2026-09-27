@@ -10,7 +10,7 @@ import type {
 } from '../types'
 import { applyInflation } from '../../utils/inflation'
 import { getYearFromIsoDate, monthsBetweenIsoDates } from '../../utils/date'
-import { getHoldingGain, sumMonthlySpending, toAssetClass } from './utils'
+import { getHoldingGain, isWithinRange, sumMonthlySpending, toAssetClass } from './utils'
 
 const sumSeasonedContributions = (
   entries: SimulationState['investmentAccounts'][number]['contributionEntries'],
@@ -106,15 +106,15 @@ export const estimateCashBufferWithdrawals = (
     const sortedHoldings =
       resolvedTaxType === 'taxable'
         ? [...holdings].sort((a, b) => {
-            const gainDelta = getHoldingGain(b) - getHoldingGain(a)
-            if (shouldHarvestGains) {
-              return gainDelta
-            }
-            if (taxableLot.harvestLosses) {
-              return -gainDelta
-            }
-            return b.balance - a.balance
-          })
+          const gainDelta = getHoldingGain(b) - getHoldingGain(a)
+          if (shouldHarvestGains) {
+            return gainDelta
+          }
+          if (taxableLot.harvestLosses) {
+            return -gainDelta
+          }
+          return b.balance - a.balance
+        })
         : [...holdings].sort((a, b) => b.balance - a.balance)
     sortedHoldings.forEach((holding) => {
       if (remaining <= 0) {
@@ -157,6 +157,16 @@ export const createCashBufferModule = (
   const contributionLimits = snapshot.contributionLimits ?? []
   const spendingItems = snapshot.spendingLineItems.filter(
     (item) => item.spendingStrategyId === scenario.spendingStrategyId && !item.isPreTax,
+  )
+  const activeStrategyIds = new Set(scenario.personStrategyIds)
+  const activePersonStrategies = (snapshot.personStrategies ?? []).filter((strategy) =>
+    activeStrategyIds.has(strategy.id),
+  )
+  const futureWorkStrategyIds = new Set(
+    activePersonStrategies.map((strategy) => strategy.futureWorkStrategyId),
+  )
+  const futureWorkPeriods = (snapshot.futureWorkPeriods ?? []).filter((period) =>
+    futureWorkStrategyIds.has(period.futureWorkStrategyId),
   )
   const explain = createExplainTracker(!settings?.summaryOnly)
 
@@ -230,15 +240,15 @@ export const createCashBufferModule = (
     ) =>
       resolvedTaxType === 'taxable'
         ? [...holdings].sort((a, b) => {
-            const gainDelta = getHoldingGain(b) - getHoldingGain(a)
-            if (shouldHarvest) {
-              return gainDelta
-            }
-            if (taxableLot.harvestLosses) {
-              return -gainDelta
-            }
-            return b.balance - a.balance
-          })
+          const gainDelta = getHoldingGain(b) - getHoldingGain(a)
+          if (shouldHarvest) {
+            return gainDelta
+          }
+          if (taxableLot.harvestLosses) {
+            return -gainDelta
+          }
+          return b.balance - a.balance
+        })
         : [...holdings].sort((a, b) => b.balance - a.balance)
     const pushWithdrawIntent = (
       sourceHoldingId: string,
@@ -539,7 +549,10 @@ export const createCashBufferModule = (
 
       if (cashBalance > max) {
         const excess = Math.max(0, cashBalance - target)
-        const iraLimit = getContributionLimit('ira', context)
+        const hasActiveWork = futureWorkPeriods.some((period) =>
+          isWithinRange(context.dateIso, period.startDate, period.endDate),
+        )
+        const iraLimit = hasActiveWork ? getContributionLimit('ira', context) : 0
         const iraUsed =
           state.yearContributionsByTaxType.roth + state.yearContributionsByTaxType.traditional
         const iraRemaining = Math.max(0, iraLimit - iraUsed)
@@ -549,7 +562,7 @@ export const createCashBufferModule = (
 
         const intents: ActionIntent[] = []
         let remaining = excess
-        if (iraRemaining > 0) {
+        if (hasActiveWork && iraRemaining > 0) {
           const iraTarget = [...state.holdings]
             .filter((holding) => holding.taxType === 'roth' || holding.taxType === 'traditional')
             .sort((a, b) => b.balance - a.balance)[0]

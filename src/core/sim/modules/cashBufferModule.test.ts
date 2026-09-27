@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { createCashBufferModule } from './cashBufferModule'
 import type { SimulationContext, SimulationState } from '../types'
-import type { InvestmentAccountHolding, SimulationSnapshot } from '../../models'
+import type {
+  FutureWorkPeriod,
+  InvestmentAccountHolding,
+  SimulationSnapshot,
+} from '../../models'
 import {
   contributionLimitDefaultsSeed,
   irmaaTableSeed,
@@ -42,12 +46,14 @@ const makeSnapshot = ({
   monthlyNeed,
   holdings,
   scenarioOverrides,
+  futureWorkPeriods,
 }: {
   monthlyNeed: number
   holdings: InvestmentAccountHolding[]
   scenarioOverrides?: {
     strategies?: Partial<SimulationSnapshot['scenario']['strategies']>
   }
+  futureWorkPeriods?: FutureWorkPeriod[]
 }): SimulationSnapshot => {
   const baseScenario = buildScenario()
   const scenario = {
@@ -99,7 +105,7 @@ const makeSnapshot = ({
         updatedAt: 0,
       },
     ],
-    futureWorkPeriods: [],
+    futureWorkPeriods: futureWorkPeriods ?? [],
     spendingStrategies: [
       {
         id: scenario.spendingStrategyId,
@@ -622,5 +628,84 @@ describe('cashBufferModule', () => {
     expect(actions?.[1]?.sourceHoldingId).toBe('holding-bonds-b')
     expect(actions?.[1]?.targetHoldingId).toBe('holding-equity-b')
     expect(actions?.[1]?.amount).toBe(60)
+  })
+
+  it('does not apply excess cash buffer to IRA accounts when not employed', () => {
+    const holdings = [
+      makeHolding('holding-ira', 'traditional', 1000, []),
+      makeHolding('holding-taxable', 'taxable', 500, []),
+    ]
+    const snapshot = makeSnapshot({
+      monthlyNeed: 100,
+      holdings,
+      scenarioOverrides: {
+        strategies: {
+          cashBuffer: { targetMonths: 1, minMonths: 1, maxMonths: 2 },
+        },
+      },
+      futureWorkPeriods: [], // Not employed
+    })
+    const state = makeState(500, holdings)
+    const actions = createCashBufferModule(snapshot).getActionIntents?.(
+      state,
+      makeContext(snapshot, 65),
+    )
+    expect(actions).toBeDefined()
+    expect(actions?.length).toBe(1)
+    expect(actions?.[0]?.kind).toBe('deposit')
+    expect(actions?.[0]?.targetHoldingId).toBe('holding-taxable')
+    expect(actions?.[0]?.amount).toBe(400)
+    expect(actions?.[0]?.fromCash).toBe(true)
+  })
+
+  it('applies excess cash buffer to IRA accounts when employed', () => {
+    const holdings = [
+      makeHolding('holding-ira', 'traditional', 1000, []),
+      makeHolding('holding-taxable', 'taxable', 500, []),
+    ]
+    const workPeriod: FutureWorkPeriod = {
+      id: '00000000-0000-4000-8000-000000000021',
+      futureWorkStrategyId: '00000000-0000-4000-8000-000000000020',
+      name: 'Job',
+      salary: 100000,
+      bonus: 0,
+      startDate: '2025-01-01',
+      endDate: '2030-01-01',
+      '401kContributionType': 'fixed',
+      '401kContributionAnnual': 0,
+      '401kContributionPct': 0,
+      '401kMatchPctCap': 0,
+      '401kMatchRatio': 0,
+      '401kInvestmentAccountHoldingId': '00000000-0000-4000-8000-000000000003',
+      '401kEmployerMatchHoldingId': '00000000-0000-4000-8000-000000000003',
+      hsaContributionAnnual: 0,
+      hsaEmployerContributionAnnual: 0,
+      hsaUseMaxLimit: false,
+      hsaInvestmentAccountHoldingId: null,
+      includesHealthInsurance: false,
+      createdAt: 0,
+      updatedAt: 0,
+    }
+    const snapshot = makeSnapshot({
+      monthlyNeed: 100,
+      holdings,
+      scenarioOverrides: {
+        strategies: {
+          cashBuffer: { targetMonths: 1, minMonths: 1, maxMonths: 2 },
+        },
+      },
+      futureWorkPeriods: [workPeriod], // Employed
+    })
+    const state = makeState(500, holdings)
+    const actions = createCashBufferModule(snapshot).getActionIntents?.(
+      state,
+      makeContext(snapshot, 45),
+    )
+    expect(actions).toBeDefined()
+    expect(actions?.length).toBe(1)
+    expect(actions?.[0]?.kind).toBe('deposit')
+    expect(actions?.[0]?.targetHoldingId).toBe('holding-ira')
+    expect(actions?.[0]?.amount).toBe(400)
+    expect(actions?.[0]?.fromCash).toBe(true)
   })
 })
